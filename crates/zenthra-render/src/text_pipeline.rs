@@ -1,71 +1,7 @@
 use bytemuck::{Pod, Zeroable};
 use wgpu::util::DeviceExt;
 
-/// One glyph OR one solid bg block on the GPU.
-/// bg blocks use uv0 == uv1 == [0,0] — shader detects this and renders solid bg_color.
-#[repr(C)]
-#[derive(Copy, Clone, Debug, Pod, Zeroable)]
-pub struct GlyphInstance {
-    pub pos: [f32; 2],
-    pub size: [f32; 2],
-    pub uv0: [f32; 2],
-    pub uv1: [f32; 2],
-    pub color: [f32; 4],
-    pub bg_color: [f32; 4],
-}
-
-impl GlyphInstance {
-    pub const fn desc() -> wgpu::VertexBufferLayout<'static> {
-        wgpu::VertexBufferLayout {
-            array_stride: std::mem::size_of::<GlyphInstance>() as u64,
-            step_mode: wgpu::VertexStepMode::Instance,
-            attributes: &[
-                wgpu::VertexAttribute {
-                    offset: 0,
-                    shader_location: 0,
-                    format: wgpu::VertexFormat::Float32x2,
-                },
-                wgpu::VertexAttribute {
-                    offset: 8,
-                    shader_location: 1,
-                    format: wgpu::VertexFormat::Float32x2,
-                },
-                wgpu::VertexAttribute {
-                    offset: 16,
-                    shader_location: 2,
-                    format: wgpu::VertexFormat::Float32x2,
-                },
-                wgpu::VertexAttribute {
-                    offset: 24,
-                    shader_location: 3,
-                    format: wgpu::VertexFormat::Float32x2,
-                },
-                wgpu::VertexAttribute {
-                    offset: 32,
-                    shader_location: 4,
-                    format: wgpu::VertexFormat::Float32x4,
-                },
-                wgpu::VertexAttribute {
-                    offset: 48,
-                    shader_location: 5,
-                    format: wgpu::VertexFormat::Float32x4,
-                },
-            ],
-        }
-    }
-
-    /// Solid background block — shader renders bg_color directly.
-    pub fn solid_bg(pos: [f32; 2], size: [f32; 2], color: [f32; 4]) -> Self {
-        Self {
-            pos,
-            size,
-            uv0: [0.0; 2],
-            uv1: [0.0; 2],
-            color: [0.0; 4],
-            bg_color: color,
-        }
-    }
-}
+use zenthra_core::GlyphInstance;
 
 #[repr(C)]
 #[derive(Copy, Clone, Pod, Zeroable)]

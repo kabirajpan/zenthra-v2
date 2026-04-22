@@ -11,5 +11,7 @@ zenthra-render = { workspace = true }
 zenthra-state  = { workspace = true }
 zenthra-theme  = { workspace = true }
 zenthra-text   = { workspace = true }
+zenthra-platform = { workspace = true }
+winit            = { workspace = true }
 glam           = { workspace = true }
 log            = { workspace = true }

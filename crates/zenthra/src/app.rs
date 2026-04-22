@@ -1,9 +1,9 @@
 use zenthra_platform::app::{App as PlatformApp, Frame};
-use zenthra_render::{GlyphInstance, RectPipeline, TextPipeline};
-use zenthra_text::shaper::TextFamily;
-use zenthra_text::{FontSystem, GlyphAtlas, ShapedText, TextLayout, TextProperties};
+use zenthra_render::{RectPipeline};
+use zenthra_text::prelude::*;
 use zenthra_widgets::ui::DrawCommand;
 use zenthra_widgets::Ui;
+use std::sync::{Arc, Mutex};
 
 pub struct App {
     platform: PlatformApp,
@@ -29,135 +29,71 @@ impl App {
     where
         F: FnMut(&mut Ui) + 'static,
     {
-        let font_system = std::sync::Arc::new(std::sync::Mutex::new(FontSystem::new()));
         let mut rect_pipeline: Option<RectPipeline> = None;
-        let mut text_pipeline: Option<TextPipeline> = None;
-        let mut glyph_atlas: Option<GlyphAtlas> = None;
+        let mut zentype: Option<Zentype> = None;
+        let mut focused_id: Option<u64> = None;
+        let mut mouse_pos: (f32, f32) = (0.0, 0.0);
 
         self.platform = self.platform.with_ui(move |frame: &mut Frame| {
-            let device = &frame.window.gpu.device;
+            let device = frame.window.gpu.device.clone();
             let queue = &frame.window.gpu.queue;
-            let format = frame.window.gpu.config.format;
+            let config = &frame.window.gpu.config;
             let width = frame.window.width();
             let height = frame.window.height();
+            let sf = frame.scale_factor() as f32;
 
-            let rp = rect_pipeline.get_or_insert_with(|| RectPipeline::new(device, format));
-            let tp = text_pipeline.get_or_insert_with(|| TextPipeline::new(device, format));
-            let ga = glyph_atlas.get_or_insert_with(|| {
-                let atlas = GlyphAtlas::new(device);
-                tp.set_atlas(device, &atlas.texture_view);
-                atlas
+            // Initialize or update the Zentype engine
+            let engine = zentype.get_or_insert_with(|| {
+                Zentype::new(device.clone(), queue, config)
             });
 
-            let mut ui = Ui::new(width, height, frame.scale_factor(), Some(font_system.clone()));
+            // Update persistent mouse pos from current frame events
+            for event in frame.events {
+                if let zenthra_platform::event::PlatformEvent::MouseMoved { x, y } = event {
+                    mouse_pos = (*x as f32 / sf, *y as f32 / sf);
+                }
+            }
+
+            // Ensure the engine's projection matrix matches the current window size
+            engine.resize(queue, width, height);
+
+            let rp = rect_pipeline.get_or_insert_with(|| RectPipeline::new(&device, config.format));
+            
+            // We need the font_system from the engine for Ui and widgets to measure
+            let font_system = engine.font_system(); // We'll add this accessor
+
+            let mut ui = Ui::new(
+                width,
+                height,
+                frame.scale_factor(),
+                Some(font_system),
+                frame.events.to_vec(),
+                focused_id,
+                mouse_pos,
+            );
+            
             f(&mut ui);
+            focused_id = ui.focused_id;
 
             let mut rect_instances = Vec::new();
-            let mut glyph_instances = Vec::new();
 
+            // Process draw commands
             for cmd in &ui.draws {
                 match cmd {
                     DrawCommand::Rect(r) => {
                         rect_instances.push(r.instance);
                     }
                     DrawCommand::Text(td) => {
-                        let props = TextProperties {
-                            text: td.text.clone(),
-                            font_size: td.font_size,
-                            color: td.color,
-                            weight: td.weight,
-                            italic: td.italic,
-                            family: match &td.family {
-                                TextFamily::Named(n) => TextFamily::Named(n.clone()),
-                                other => other.clone(),
-                            },
-                            ..Default::default()
-                        };
-
-                        let mut font_system = font_system.lock().unwrap();
-                        let shaped =
-                            ShapedText::shape(&mut font_system.inner, &props, td.max_width);
-                        let layout = TextLayout::from_buffer(&shaped.buffer);
-
-                        // ── Calculate grounding offset ──
-                        // We want the top of the first line's background to be exactly at td.y
-                        let font_size = td.font_size;
-                        let lh = 1.3_f32;
-                        let box_h = font_size * lh;
-                        let visual_ascent = font_size * (0.8 + (lh - 1.0) / 2.0);
-                        let v_slop = 4.0;
-                        
-                        let first_line_top = if let Some(line) = layout.lines.first() {
-                            line.y - visual_ascent - v_slop
-                        } else {
-                            0.0
-                        };
-                        let ground_offset = first_line_top;
-
-                        // ── bg highlight blocks ──
-                        if let Some(bg) = td.bg {
-                            let bg_rgba = bg.to_array();
-                            
-                            for line in &layout.lines {
-                                // Use max_width if full_width_bg is true (Standard Text)
-                                // Use line.width if full_width_bg is false (Headers)
-                                let base_w = if td.full_width_bg {
-                                    td.max_width.unwrap_or(layout.width)
-                                } else {
-                                    line.width
-                                };
-                                
-                                let uniform_w = base_w + td.padding_left + td.padding_right + 12.0;
-                                
-                                // bx adjustment: if full-width, we use widget x. 
-                                // If content-width, we use line.x to respect alignment.
-                                let bx = if td.full_width_bg {
-                                    td.x - 6.0
-                                } else {
-                                    td.x + line.x - 6.0
-                                };
-                                
-                                let by = td.y + (line.y - ground_offset) - visual_ascent - v_slop;
-                                let bh = box_h + (v_slop * 2.0);
-
-                                glyph_instances.push(GlyphInstance::solid_bg(
-                                    [bx, by],
-                                    [uniform_w, bh],
-                                    bg_rgba,
-                                ));
-                            }
-                        }
-
-                        // ── glyphs ──
-                        let color_rgba = [td.color.r, td.color.g, td.color.b, td.color.a];
-                        let bg_rgba = td.bg.map(|c| c.to_array()).unwrap_or([0.0; 4]);
-
-                        for glyph in &layout.glyphs {
-                            if let Some(ag) =
-                                ga.get_or_insert(&mut font_system.inner, glyph.cache_key)
-                            {
-                                // Apply the same ground_offset to glyphs
-                                let x = td.x + td.padding_left + glyph.x + ag.left as f32;
-                                let y = td.y + td.padding_top + (glyph.y - ground_offset) - ag.top as f32;
-                                
-                                glyph_instances.push(GlyphInstance {
-                                    pos: [x, y],
-                                    size: [ag.width as f32, ag.height as f32],
-                                    uv0: [ag.u0, ag.v0],
-                                    uv1: [ag.u1, ag.v1],
-                                    color: color_rgba,
-                                    bg_color: bg_rgba,
-                                });
-                            }
-                        }
+                        // Zentype handles all shaping, measurement, and background generation internally!
+                        engine.draw(queue, &td.text, td.pos, &td.options);
+                    }
+                    DrawCommand::Cursor(cd) => {
+                        engine.draw_rect([cd.x, cd.y], [2.0, cd.height], cd.color);
                     }
                 }
             }
 
-            ga.flush(queue);
-            rp.prepare(device, queue, width, height, &rect_instances);
-            tp.set_atlas(device, &ga.texture_view);
-            tp.prepare(device, queue, width, height, &glyph_instances);
+            rp.prepare(&device, queue, width, height, &rect_instances);
 
             let surface_texture = match frame.window.gpu.surface.get_current_texture() {
                 wgpu::CurrentSurfaceTexture::Success(t) => t,
@@ -196,7 +132,7 @@ impl App {
                 });
 
                 rp.draw(&mut pass);
-                tp.draw(&mut pass);
+                engine.render(&mut pass); // Clean!
             }
 
             queue.submit(std::iter::once(encoder.finish()));

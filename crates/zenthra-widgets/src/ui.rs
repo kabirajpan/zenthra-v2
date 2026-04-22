@@ -1,28 +1,22 @@
 use std::sync::{Arc, Mutex};
-use zenthra_text::FontSystem;
+use zenthra_text::prelude::*;
 use crate::container::{ContainerBuilder, Direction, Wrap};
 use crate::text::{CursorIcon, TextBuilder};
 use zenthra_core::Color;
 use zenthra_render::RectInstance;
-use zenthra_text::shaper::TextFamily;
+use zenthra_platform::event::PlatformEvent;
 
 pub struct TextDraw {
     pub text: String,
+    pub pos: [f32; 2],
+    pub options: TextOptions,
+}
+
+pub struct CursorDraw {
     pub x: f32,
     pub y: f32,
-    pub font_size: f32,
+    pub height: f32,
     pub color: Color,
-    pub max_width: Option<f32>,
-    pub weight: u16,
-    pub italic: bool,
-    pub family: TextFamily,
-    pub bg: Option<Color>,
-    pub bg_radius: f32,
-    pub padding_top: f32,
-    pub padding_bottom: f32,
-    pub padding_left: f32,
-    pub padding_right: f32,
-    pub full_width_bg: bool,
 }
 
 pub struct RectDraw {
@@ -32,8 +26,10 @@ pub struct RectDraw {
 pub enum DrawCommand {
     Rect(RectDraw),
     Text(TextDraw),
+    Cursor(CursorDraw),
 }
 
+use crate::input::InputBuilder;
 pub struct Ui {
     pub width: f32,
     pub height: f32,
@@ -53,20 +49,41 @@ pub struct Ui {
     pub child_draw_ranges: Vec<(usize, usize)>, // (start, end) index into draws
     pub last_w: f32,
     pub last_h: f32,
+    pub last_ascent: f32,
+    pub last_v_slop: f32,
+    pub last_box_h: f32,
     pub max_x: f32,
     pub max_y: f32,
     pub font_system: Option<Arc<Mutex<FontSystem>>>,
+    pub input_events: Vec<PlatformEvent>,
+    pub focused_id: Option<u64>,
+    pub id_counter: u64,
 }
 
 impl Ui {
-    pub fn new(width: u32, height: u32, scale_factor: f64, font_system: Option<Arc<Mutex<FontSystem>>>) -> Self {
+    pub fn new(
+        width: u32,
+        height: u32,
+        scale_factor: f64,
+        font_system: Option<Arc<Mutex<FontSystem>>>,
+        events: Vec<PlatformEvent>,
+        initial_focused_id: Option<u64>,
+        mouse_pos: (f32, f32),
+    ) -> Self {
+        let mouse_x = mouse_pos.0;
+        let mouse_y = mouse_pos.1;
+        let mouse_down = events.iter().any(|e| matches!(e, PlatformEvent::MouseButton { state: winit::event::ElementState::Pressed, .. }));
+
         Self {
             width: width as f32,
             height: height as f32,
             scale_factor: scale_factor as f32,
-            mouse_x: 0.0,
-            mouse_y: 0.0,
-            mouse_down: false,
+            mouse_x,
+            mouse_y,
+            mouse_down,
+            input_events: events,
+            focused_id: initial_focused_id,
+            id_counter: 0,
             cursor_icon: CursorIcon::Default,
             draws: Vec::new(),
             cursor_x: 0.0,
@@ -79,16 +96,34 @@ impl Ui {
             child_draw_ranges: Vec::new(),
             last_w: 0.0,
             last_h: 0.0,
+            last_ascent: 0.0,
+            last_v_slop: 0.0,
+            last_box_h: 0.0,
             max_x: width as f32,
             max_y: height as f32,
             font_system,
         }
     }
 
+    pub fn id(&mut self) -> u64 {
+        self.id_counter += 1;
+        self.id_counter
+    }
+
+    pub fn input<'a>(&'a mut self, buffer: &'a mut String) -> crate::input::InputBuilder<'a> {
+        let id = self.id();
+        crate::input::InputBuilder::new(self, buffer, id)
+    }
+
     pub fn set_mouse(&mut self, x: f32, y: f32, down: bool) {
         self.mouse_x = x;
         self.mouse_y = y;
         self.mouse_down = down;
+    }
+
+    pub fn mouse_in_rect(&self, x: f32, y: f32, w: f32, h: f32) -> bool {
+        self.mouse_x >= x && self.mouse_x <= x + w &&
+        self.mouse_y >= y && self.mouse_y <= y + h
     }
 
     /// Called by widgets after pushing their draws.
@@ -203,4 +238,9 @@ impl Ui {
             start_y,
         )
     }
+}
+
+/// A helper to get the default Zentype shaper for the current font system.
+pub fn get_shaper(font_system: &Arc<Mutex<FontSystem>>) -> CosmicFontProvider {
+    CosmicFontProvider::new_with_system(font_system.clone())
 }

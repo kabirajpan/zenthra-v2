@@ -43,6 +43,24 @@ impl EdgeInsets {
     }
 }
 
+impl From<f32> for EdgeInsets {
+    fn from(v: f32) -> Self {
+        Self::all(v)
+    }
+}
+
+impl From<f64> for EdgeInsets {
+    fn from(v: f64) -> Self {
+        Self::all(v as f32)
+    }
+}
+
+impl From<i32> for EdgeInsets {
+    fn from(v: i32) -> Self {
+        Self::all(v as f32)
+    }
+}
+
 /// Per-corner border radius.
 #[derive(Debug, Clone, Copy, PartialEq, Default)]
 pub struct BorderRadius {

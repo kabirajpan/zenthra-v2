@@ -34,3 +34,6 @@ path = "../../examples/containers/main.rs"
 [[example]]
 name = "nested_wrap"
 path = "../../examples/nested_wrap.rs"
+[[example]]
+name = "edit"
+path = "../../examples/edit/main.rs"

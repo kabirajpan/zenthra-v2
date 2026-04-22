@@ -2,6 +2,7 @@
 
 pub mod color;
 pub mod event;
+pub mod glyph;
 pub mod id;
 pub mod rect;
 pub mod style;
@@ -9,6 +10,7 @@ pub mod widget;
 
 pub use color::Color;
 pub use event::{Event, EventResponse};
+pub use glyph::GlyphInstance;
 pub use id::Id;
 pub use rect::{Point, Rect, Size};
 pub use style::{BorderRadius, EdgeInsets};

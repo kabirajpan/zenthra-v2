@@ -661,8 +661,14 @@ fn offset_draw(cmd: &mut DrawCommand, dx: f32, dy: f32) {
             r.instance.pos[1] += dy;
         }
         DrawCommand::Text(t) => {
-            t.x += dx;
-            t.y += dy;
+            t.pos[0] += dx;
+            t.pos[1] += dy;
+            t.options.x += dx;
+            t.options.y += dy;
+        }
+        DrawCommand::Cursor(c) => {
+            c.x += dx;
+            c.y += dy;
         }
     }
 }
@@ -670,6 +676,7 @@ fn offset_draw(cmd: &mut DrawCommand, dx: f32, dy: f32) {
 fn draw_origin(cmd: &DrawCommand) -> (f32, f32) {
     match cmd {
         DrawCommand::Rect(r) => (r.instance.pos[0], r.instance.pos[1]),
-        DrawCommand::Text(t) => (t.x, t.y),
+        DrawCommand::Text(t) => (t.pos[0], t.pos[1]),
+        DrawCommand::Cursor(c) => (c.x, c.y),
     }
 }

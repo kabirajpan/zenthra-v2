@@ -1,13 +1,15 @@
 use crate::window::Window;
+use crate::event::PlatformEvent;
 use winit::{
     application::ApplicationHandler,
-    event::WindowEvent,
+    event::{WindowEvent, MouseButton, ElementState},
     event_loop::{ActiveEventLoop, EventLoop},
     window::WindowId,
 };
 
 pub struct Frame<'a> {
     pub window: &'a mut Window,
+    pub events: &'a [PlatformEvent],
 }
 
 impl<'a> Frame<'a> {
@@ -66,6 +68,7 @@ impl App {
             height: self.height,
             draw_fn: self.draw_fn,
             window: None,
+            pending_events: Vec::new(),
         };
         event_loop.run_app(&mut runner).unwrap();
     }
@@ -77,6 +80,7 @@ struct AppRunner {
     height: u32,
     draw_fn: Option<Box<dyn FnMut(&mut Frame) + 'static>>,
     window: Option<Window>,
+    pending_events: Vec<PlatformEvent>,
 }
 
 impl AppRunner {
@@ -84,9 +88,13 @@ impl AppRunner {
         let Some(window) = &mut self.window else { return };
 
         if let Some(draw_fn) = &mut self.draw_fn {
-            let mut frame = Frame { window };
+            let mut frame = Frame { 
+                window,
+                events: &self.pending_events,
+            };
             draw_fn(&mut frame);
         }
+        self.pending_events.clear();
     }
 }
 
@@ -115,10 +123,28 @@ impl ApplicationHandler for AppRunner {
                     w.request_redraw();
                 }
             }
-            WindowEvent::ScaleFactorChanged { scale_factor, .. } => {
-                if let Some(w) = &mut self.window {
-                    w.gpu.scale_factor = scale_factor;
-                    w.request_redraw();
+            WindowEvent::CursorMoved { position, .. } => {
+                self.pending_events.push(PlatformEvent::MouseMoved {
+                    x: position.x,
+                    y: position.y,
+                });
+            }
+            WindowEvent::MouseInput { button, state, .. } => {
+                println!("MouseButton: {:?} {:?}", button, state); self.pending_events.push(PlatformEvent::MouseButton { button, state });
+            }
+            WindowEvent::KeyboardInput { event, .. } => {
+                if event.state == winit::event::ElementState::Pressed {
+                    if let winit::keyboard::PhysicalKey::Code(key) = event.physical_key {
+                         println!("KeyDown: {:?}", key); self.pending_events.push(PlatformEvent::KeyDown { key });
+                    }
+                    
+                    if let Some(text) = event.text {
+                        for c in text.chars() {
+                            if !c.is_control() {
+                                println!("CharTyped: {}", c); self.pending_events.push(PlatformEvent::CharTyped(c));
+                            }
+                        }
+                    }
                 }
             }
             WindowEvent::RedrawRequested => {

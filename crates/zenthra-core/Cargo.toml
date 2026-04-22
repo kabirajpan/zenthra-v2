@@ -8,3 +8,5 @@ license.workspace = true
 glam     = { workspace = true }
 log      = { workspace = true }
 rustc-hash = { workspace = true }
+wgpu     = { workspace = true }
+bytemuck = { workspace = true }
