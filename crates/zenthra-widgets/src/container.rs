@@ -1,3 +1,4 @@
+use crate::ui::DrawCommand;
 use crate::ui::{RectDraw, Ui};
 use zenthra_core::Color;
 use zenthra_render::RectInstance;
@@ -146,7 +147,7 @@ impl<'a> ContainerBuilder<'a> {
             let bc = self.border_color.unwrap_or(Color::TRANSPARENT);
             let sc = self.shadow_color.unwrap_or(Color::TRANSPARENT);
 
-            self.ui.rect_draws.push(RectDraw {
+            self.ui.draws.push(DrawCommand::Rect(RectDraw {
                 instance: RectInstance {
                     pos: [self.ui.cursor_x, self.ui.cursor_y],
                     size: [w, h],
@@ -162,7 +163,7 @@ impl<'a> ContainerBuilder<'a> {
                     brightness: 1.0,
                     opacity: self.opacity,
                 },
-            });
+            }));
         }
     }
 }

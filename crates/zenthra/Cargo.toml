@@ -22,3 +22,7 @@ wgpu              = { workspace = true }
 [[example]]
 name = "hello"
 path = "../../examples/hello/main.rs"
+
+[[example]]
+name = "text"
+path = "../../examples/text/main.rs"

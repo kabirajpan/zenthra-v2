@@ -1,7 +1,8 @@
 use bytemuck::{Pod, Zeroable};
 use wgpu::util::DeviceExt;
 
-/// One glyph instance on the GPU.
+/// One glyph OR one solid bg block on the GPU.
+/// bg blocks use uv0 == uv1 == [0,0] — shader detects this and renders solid bg_color.
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Pod, Zeroable)]
 pub struct GlyphInstance {
@@ -10,6 +11,7 @@ pub struct GlyphInstance {
     pub uv0: [f32; 2],
     pub uv1: [f32; 2],
     pub color: [f32; 4],
+    pub bg_color: [f32; 4],
 }
 
 impl GlyphInstance {
@@ -43,7 +45,24 @@ impl GlyphInstance {
                     shader_location: 4,
                     format: wgpu::VertexFormat::Float32x4,
                 },
+                wgpu::VertexAttribute {
+                    offset: 48,
+                    shader_location: 5,
+                    format: wgpu::VertexFormat::Float32x4,
+                },
             ],
+        }
+    }
+
+    /// Solid background block — shader renders bg_color directly.
+    pub fn solid_bg(pos: [f32; 2], size: [f32; 2], color: [f32; 4]) -> Self {
+        Self {
+            pos,
+            size,
+            uv0: [0.0; 2],
+            uv1: [0.0; 2],
+            color: [0.0; 4],
+            bg_color: color,
         }
     }
 }
@@ -164,7 +183,6 @@ impl TextPipeline {
         }
     }
 
-    /// Call once per frame with the atlas texture.
     pub fn set_atlas(&mut self, device: &wgpu::Device, view: &wgpu::TextureView) {
         let sampler = device.create_sampler(&wgpu::SamplerDescriptor {
             label: Some("Text Atlas Sampler"),
@@ -172,7 +190,6 @@ impl TextPipeline {
             min_filter: wgpu::FilterMode::Linear,
             ..Default::default()
         });
-
         self.atlas_bg = Some(device.create_bind_group(&wgpu::BindGroupDescriptor {
             label: Some("Text Atlas BG"),
             layout: &self.atlas_bgl,
@@ -227,7 +244,6 @@ impl TextPipeline {
             return;
         }
         let Some(buf) = &self.instance_buffer else { return };
-
         pass.set_pipeline(&self.pipeline);
         pass.set_bind_group(0, &self.uniform_bg, &[]);
         pass.set_bind_group(1, atlas_bg, &[]);
