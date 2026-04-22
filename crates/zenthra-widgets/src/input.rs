@@ -129,10 +129,12 @@ impl<'a> InputBuilder<'a> {
             let font_size = self.font_size;
             let lh = self.line_height;
             let box_height = font_size * lh;
-            let cursor_height = box_height; // Cursor height matches the text's line height
+            let cursor_height = box_height;
             
+            // Calculate visual_ascent and v_shift matching the rendering pipeline
+            let visual_ascent = font_size * (0.8 + (lh - 1.0) / 2.0);
+
             if self.buffer.is_empty() {
-                // For empty buffer, cursor starts after padding.top
                 let cx = self.x + self.padding.left;
                 let cy = self.y + self.padding.top; 
                 self.ui.draws.push(DrawCommand::Cursor(CursorDraw {
@@ -142,14 +144,18 @@ impl<'a> InputBuilder<'a> {
                     color: Color::WHITE,
                 }));
             } else if let Some(sb) = shaped_buffer {
-                // Find horizontal position
-                let lx = sb.glyphs()
+                let first_line_y = sb.lines().first().map(|l| l.y).unwrap_or(visual_ascent);
+                let v_shift = visual_ascent - first_line_y;
+
+                // Find horizontal and vertical position of the last character
+                let (lx, ly) = sb.glyphs()
                     .last()
-                    .map(|g| g.x + g.width)
-                    .unwrap_or(0.0);
+                    .map(|g| (g.x + g.width, g.y))
+                    .unwrap_or((0.0, first_line_y));
                 
                 let cx = lx + self.x + self.padding.left;
-                let cy = self.y + self.padding.top; // Start after padding.top
+                // Vertical position depends on the line's Y (ly)
+                let cy = ly + self.y + self.padding.top + v_shift - visual_ascent;
                 
                 self.ui.draws.push(DrawCommand::Cursor(CursorDraw {
                     x: cx,
