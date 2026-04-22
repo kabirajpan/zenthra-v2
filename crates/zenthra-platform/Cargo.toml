@@ -1,0 +1,15 @@
+[package]
+name    = "zenthra-platform"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+zenthra-core  = { workspace = true }
+zenthra-input = { workspace = true }
+zenthra-render = { workspace = true }
+winit         = { workspace = true }
+wgpu          = { workspace = true }
+glam          = { workspace = true }
+pollster      = { workspace = true }
+log           = { workspace = true }

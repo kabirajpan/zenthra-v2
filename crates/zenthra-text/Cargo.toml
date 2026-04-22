@@ -1,0 +1,16 @@
+[package]
+name    = "zenthra-text"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+zenthra-core = { workspace = true }
+zenthra-render = { workspace = true }
+cosmic-text  = { workspace = true }
+etagere      = { workspace = true }
+wgpu         = { workspace = true }
+bytemuck     = { workspace = true }
+glam         = { workspace = true }
+rustc-hash   = { workspace = true }
+log          = { workspace = true }

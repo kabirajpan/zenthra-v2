@@ -1,0 +1,48 @@
+[workspace]
+members = [
+    "crates/zenthra",
+    "crates/zenthra-core",
+    "crates/zenthra-render",
+    "crates/zenthra-layout",
+    "crates/zenthra-widgets",
+    "crates/zenthra-state",
+    "crates/zenthra-animation",
+    "crates/zenthra-text",
+    "crates/zenthra-input",
+    "crates/zenthra-platform",
+    "crates/zenthra-theme",
+]
+resolver = "2"
+
+[workspace.package]
+version    = "0.1.0"
+edition    = "2021"
+license    = "MIT"
+
+[workspace.dependencies]
+# ── Internal ─────────────────────────────────────────────
+zenthra-core      = { path = "crates/zenthra-core" }
+zenthra-render    = { path = "crates/zenthra-render" }
+zenthra-layout    = { path = "crates/zenthra-layout" }
+zenthra-widgets   = { path = "crates/zenthra-widgets" }
+zenthra-state     = { path = "crates/zenthra-state" }
+zenthra-animation = { path = "crates/zenthra-animation" }
+zenthra-text      = { path = "crates/zenthra-text" }
+zenthra-input     = { path = "crates/zenthra-input" }
+zenthra-platform  = { path = "crates/zenthra-platform" }
+zenthra-theme     = { path = "crates/zenthra-theme" }
+
+
+
+# ── External ─────────────────────────────────────────────
+winit        = "0.30"
+wgpu         = "29"
+bytemuck     = { version = "1.25", features = ["derive"] }
+glam         = "0.29"
+cosmic-text  = { version = "0.18", features = ["swash"] }
+etagere      = "0.3"
+taffy        = "0.10"
+rustc-hash   = "2.0"
+pollster     = "0.3"
+log          = "0.4"
+env_logger   = "0.11"

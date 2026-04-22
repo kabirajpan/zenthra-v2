@@ -1,0 +1,10 @@
+[package]
+name    = "zenthra-layout"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+zenthra-core = { workspace = true }
+taffy        = { workspace = true }
+glam         = { workspace = true }

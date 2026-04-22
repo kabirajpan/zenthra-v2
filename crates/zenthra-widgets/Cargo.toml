@@ -1,0 +1,15 @@
+[package]
+name    = "zenthra-widgets"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+zenthra-core   = { workspace = true }
+zenthra-layout = { workspace = true }
+zenthra-render = { workspace = true }
+zenthra-state  = { workspace = true }
+zenthra-theme  = { workspace = true }
+zenthra-text   = { workspace = true }
+glam           = { workspace = true }
+log            = { workspace = true }

@@ -1,0 +1,24 @@
+[package]
+name    = "zenthra"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+zenthra-core      = { workspace = true }
+zenthra-render    = { workspace = true }
+zenthra-layout    = { workspace = true }
+zenthra-widgets   = { workspace = true }
+zenthra-state     = { workspace = true }
+zenthra-animation = { workspace = true }
+zenthra-text      = { workspace = true }
+zenthra-input     = { workspace = true }
+zenthra-platform  = { workspace = true }
+zenthra-theme     = { workspace = true }
+log               = { workspace = true }
+wgpu              = { workspace = true }
+
+
+[[example]]
+name = "hello"
+path = "../../examples/hello/main.rs"
