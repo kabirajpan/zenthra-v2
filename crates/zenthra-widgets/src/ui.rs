@@ -1,3 +1,5 @@
+use std::sync::{Arc, Mutex};
+use zenthra_text::FontSystem;
 use crate::container::{ContainerBuilder, Direction, Wrap};
 use crate::text::{CursorIcon, TextBuilder};
 use zenthra_core::Color;
@@ -20,6 +22,7 @@ pub struct TextDraw {
     pub padding_bottom: f32,
     pub padding_left: f32,
     pub padding_right: f32,
+    pub full_width_bg: bool,
 }
 
 pub struct RectDraw {
@@ -50,10 +53,13 @@ pub struct Ui {
     pub child_draw_ranges: Vec<(usize, usize)>, // (start, end) index into draws
     pub last_w: f32,
     pub last_h: f32,
+    pub max_x: f32,
+    pub max_y: f32,
+    pub font_system: Option<Arc<Mutex<FontSystem>>>,
 }
 
 impl Ui {
-    pub fn new(width: u32, height: u32, scale_factor: f64) -> Self {
+    pub fn new(width: u32, height: u32, scale_factor: f64, font_system: Option<Arc<Mutex<FontSystem>>>) -> Self {
         Self {
             width: width as f32,
             height: height as f32,
@@ -73,6 +79,9 @@ impl Ui {
             child_draw_ranges: Vec::new(),
             last_w: 0.0,
             last_h: 0.0,
+            max_x: width as f32,
+            max_y: height as f32,
+            font_system,
         }
     }
 
@@ -106,7 +115,23 @@ impl Ui {
     }
 
     pub fn text<'a>(&'a mut self, content: &'a str) -> TextBuilder<'a> {
-        TextBuilder::new(self, content)
+        TextBuilder::new(self, content).full_width_bg(true)
+    }
+
+    pub fn h1<'a>(&'a mut self, content: &'a str) -> TextBuilder<'a> {
+        self.text(content).size(40.0).bold().full_width_bg(true)
+    }
+
+    pub fn h2<'a>(&'a mut self, content: &'a str) -> TextBuilder<'a> {
+        self.text(content).size(32.0).bold().full_width_bg(true)
+    }
+
+    pub fn h3<'a>(&'a mut self, content: &'a str) -> TextBuilder<'a> {
+        self.text(content).size(24.0).bold().full_width_bg(true)
+    }
+
+    pub fn h4<'a>(&'a mut self, content: &'a str) -> TextBuilder<'a> {
+        self.text(content).size(20.0).bold().full_width_bg(true)
     }
 
     pub fn row<F>(&mut self, f: F) -> ContainerBuilder<'_>

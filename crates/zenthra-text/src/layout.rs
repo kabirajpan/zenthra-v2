@@ -5,7 +5,10 @@ pub struct GlyphPosition {
     pub cache_key: CacheKey,
     pub x: f32,
     pub y: f32,
+    pub width: f32,
     pub color: [u8; 4],
+    pub start: usize,
+    pub end: usize,
 }
 
 /// Per-line metrics — used for bg highlight rect generation.
@@ -45,7 +48,10 @@ impl TextLayout {
                     cache_key: physical.cache_key,
                     x: glyph.x,
                     y: run.line_y,
+                    width: glyph.w,
                     color,
+                    start: glyph.start,
+                    end: glyph.end,
                 });
                 let right = glyph.x + glyph.w;
                 line_width = line_width.max(right);

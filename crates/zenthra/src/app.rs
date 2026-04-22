@@ -29,7 +29,7 @@ impl App {
     where
         F: FnMut(&mut Ui) + 'static,
     {
-        let mut font_system = FontSystem::new();
+        let font_system = std::sync::Arc::new(std::sync::Mutex::new(FontSystem::new()));
         let mut rect_pipeline: Option<RectPipeline> = None;
         let mut text_pipeline: Option<TextPipeline> = None;
         let mut glyph_atlas: Option<GlyphAtlas> = None;
@@ -49,7 +49,7 @@ impl App {
                 atlas
             });
 
-            let mut ui = Ui::new(width, height, frame.scale_factor());
+            let mut ui = Ui::new(width, height, frame.scale_factor(), Some(font_system.clone()));
             f(&mut ui);
 
             let mut rect_instances = Vec::new();
@@ -74,27 +74,55 @@ impl App {
                             ..Default::default()
                         };
 
+                        let mut font_system = font_system.lock().unwrap();
                         let shaped =
                             ShapedText::shape(&mut font_system.inner, &props, td.max_width);
                         let layout = TextLayout::from_buffer(&shaped.buffer);
 
-                        // ── bg highlight blocks — one per line, using real metrics ──
+                        // ── Calculate grounding offset ──
+                        // We want the top of the first line's background to be exactly at td.y
+                        let font_size = td.font_size;
+                        let lh = 1.3_f32;
+                        let box_h = font_size * lh;
+                        let visual_ascent = font_size * (0.8 + (lh - 1.0) / 2.0);
+                        let v_slop = 4.0;
+                        
+                        let first_line_top = if let Some(line) = layout.lines.first() {
+                            line.y - visual_ascent - v_slop
+                        } else {
+                            0.0
+                        };
+                        let ground_offset = first_line_top;
+
+                        // ── bg highlight blocks ──
                         if let Some(bg) = td.bg {
                             let bg_rgba = bg.to_array();
-                            let font_size = td.font_size;
-                            let lh = 1.2_f32; // line height multiplier
-                            let box_h = font_size * lh;
-                            let visual_ascent = font_size * (0.8 + (lh - 1.0) / 2.0);
-
+                            
                             for line in &layout.lines {
-                                let bx = td.x + line.x;
-                                let by = td.y + line.y - visual_ascent;
-                                let bw = line.width + td.padding_left + td.padding_right;
-                                let bh = box_h + td.padding_top + td.padding_bottom;
+                                // Use max_width if full_width_bg is true (Standard Text)
+                                // Use line.width if full_width_bg is false (Headers)
+                                let base_w = if td.full_width_bg {
+                                    td.max_width.unwrap_or(layout.width)
+                                } else {
+                                    line.width
+                                };
+                                
+                                let uniform_w = base_w + td.padding_left + td.padding_right + 12.0;
+                                
+                                // bx adjustment: if full-width, we use widget x. 
+                                // If content-width, we use line.x to respect alignment.
+                                let bx = if td.full_width_bg {
+                                    td.x - 6.0
+                                } else {
+                                    td.x + line.x - 6.0
+                                };
+                                
+                                let by = td.y + (line.y - ground_offset) - visual_ascent - v_slop;
+                                let bh = box_h + (v_slop * 2.0);
 
                                 glyph_instances.push(GlyphInstance::solid_bg(
                                     [bx, by],
-                                    [bw, bh],
+                                    [uniform_w, bh],
                                     bg_rgba,
                                 ));
                             }
@@ -108,8 +136,10 @@ impl App {
                             if let Some(ag) =
                                 ga.get_or_insert(&mut font_system.inner, glyph.cache_key)
                             {
+                                // Apply the same ground_offset to glyphs
                                 let x = td.x + td.padding_left + glyph.x + ag.left as f32;
-                                let y = td.y + td.padding_top + glyph.y - ag.top as f32;
+                                let y = td.y + td.padding_top + (glyph.y - ground_offset) - ag.top as f32;
+                                
                                 glyph_instances.push(GlyphInstance {
                                     pos: [x, y],
                                     size: [ag.width as f32, ag.height as f32],

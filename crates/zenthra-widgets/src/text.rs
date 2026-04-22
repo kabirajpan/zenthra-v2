@@ -1,3 +1,5 @@
+use std::sync::{Arc, Mutex};
+use zenthra_text::{TextProperties, ShapedText, TextLayout};
 use crate::ui::{DrawCommand, TextDraw, Ui};
 use zenthra_core::Color;
 use zenthra_text::shaper::TextFamily;
@@ -25,6 +27,7 @@ pub struct TextBuilder<'a> {
     bg_radius: f32,
     hover_bg: Option<Color>,
     cursor: CursorIcon,
+    full_width_bg: bool,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -39,6 +42,7 @@ impl<'a> TextBuilder<'a> {
     pub fn new(ui: &'a mut Ui, content: &str) -> Self {
         let x = ui.cursor_x;
         let y = ui.cursor_y;
+        let max_width = (ui.max_x - x).max(0.0);
         Self {
             ui,
             content: content.to_string(),
@@ -49,7 +53,7 @@ impl<'a> TextBuilder<'a> {
             family: TextFamily::SansSerif,
             x,
             y,
-            max_width: None,
+            max_width: Some(max_width),
             padding_top: 0.0,
             padding_bottom: 0.0,
             padding_left: 0.0,
@@ -62,6 +66,7 @@ impl<'a> TextBuilder<'a> {
             bg_radius: 0.0,
             hover_bg: None,
             cursor: CursorIcon::Default,
+            full_width_bg: true,
         }
     }
 
@@ -187,6 +192,10 @@ impl<'a> TextBuilder<'a> {
         self.bg_radius = r;
         self
     }
+    pub fn full_width_bg(mut self, b: bool) -> Self {
+        self.full_width_bg = b;
+        self
+    }
     pub fn hover_bg(mut self, c: Color) -> Self {
         self.hover_bg = Some(c);
         self
@@ -208,10 +217,45 @@ impl<'a> TextBuilder<'a> {
         let draw_x = self.x;
         let draw_y = self.y;
 
-        let est_w = self.content.len() as f32 * self.font_size * 0.6
-            + self.padding_left
-            + self.padding_right;
-        let est_h = self.font_size * 1.4 + self.padding_top + self.padding_bottom;
+        // Perform real measurement to prevent clipping and overlap
+        let (est_w, est_h) = if let Some(fs_mutex) = &self.ui.font_system {
+            let props = TextProperties {
+                text: self.content.clone(),
+                font_size: self.font_size,
+                weight: self.weight,
+                italic: self.italic,
+                family: match &self.family {
+                    zenthra_text::shaper::TextFamily::Named(n) => zenthra_text::shaper::TextFamily::Named(n.clone()),
+                    other => other.clone(),
+                },
+                ..Default::default()
+            };
+            
+            let mut font_system = fs_mutex.lock().unwrap();
+            let shaped = ShapedText::shape(&mut font_system.inner, &props, self.max_width);
+            let layout = TextLayout::from_buffer(&shaped.buffer);
+            drop(font_system);
+
+            let font_size = self.font_size;
+            let lh = 1.3_f32;
+            let box_h = font_size * lh;
+            let v_slop = 4.0;
+            
+            let w = layout.width + self.padding_left + self.padding_right + 12.0;
+            let h = if layout.lines.is_empty() {
+                 0.0
+            } else {
+                 let first_y = layout.lines[0].y;
+                 let last_y = layout.lines.last().unwrap().y;
+                 (last_y - first_y) + box_h + self.padding_top + self.padding_bottom + (v_slop * 2.0)
+            };
+            (w, h)
+        } else {
+            // Fallback estimation if no font system
+            let w = self.content.len() as f32 * self.font_size * 0.6 + self.padding_left + self.padding_right;
+            let h = self.font_size * 1.4 + self.padding_top + self.padding_bottom;
+            (w, h)
+        };
 
         let active_bg = self.bg.or(self.hover_bg.filter(|_| {
             let mx = self.ui.mouse_x;
@@ -238,6 +282,7 @@ impl<'a> TextBuilder<'a> {
             padding_bottom: self.padding_bottom,
             padding_left: self.padding_left,
             padding_right: self.padding_right,
+            full_width_bg: self.full_width_bg,
         }));
 
         self.ui.advance(est_w, est_h, draw_start);
