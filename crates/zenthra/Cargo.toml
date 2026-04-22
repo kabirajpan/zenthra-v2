@@ -26,3 +26,11 @@ path = "../../examples/hello/main.rs"
 [[example]]
 name = "text"
 path = "../../examples/text/main.rs"
+
+[[example]]
+name = "containers"
+path = "../../examples/containers/main.rs"
+
+[[example]]
+name = "nested_wrap"
+path = "../../examples/nested_wrap.rs"

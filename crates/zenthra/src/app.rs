@@ -87,8 +87,8 @@ impl App {
                             let visual_ascent = font_size * (0.8 + (lh - 1.0) / 2.0);
 
                             for line in &layout.lines {
-                                let bx = td.x + line.x - td.padding_left;
-                                let by = td.y + line.y - visual_ascent - td.padding_top;
+                                let bx = td.x + line.x;
+                                let by = td.y + line.y - visual_ascent;
                                 let bw = line.width + td.padding_left + td.padding_right;
                                 let bh = box_h + td.padding_top + td.padding_bottom;
 
@@ -108,8 +108,8 @@ impl App {
                             if let Some(ag) =
                                 ga.get_or_insert(&mut font_system.inner, glyph.cache_key)
                             {
-                                let x = td.x + glyph.x + ag.left as f32;
-                                let y = td.y + glyph.y - ag.top as f32;
+                                let x = td.x + td.padding_left + glyph.x + ag.left as f32;
+                                let y = td.y + td.padding_top + glyph.y - ag.top as f32;
                                 glyph_instances.push(GlyphInstance {
                                     pos: [x, y],
                                     size: [ag.width as f32, ag.height as f32],

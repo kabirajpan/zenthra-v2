@@ -205,19 +205,22 @@ impl<'a> TextBuilder<'a> {
     }
 
     pub fn show(self) {
-        // text draws at margin + padding offset
-        let draw_x = self.x + self.margin_left + self.padding_left;
-        let draw_y = self.y + self.margin_top + self.padding_top;
+        let draw_x = self.x;
+        let draw_y = self.y;
 
-        // bg is passed through — rendered in app.rs after shaping with real metrics
+        let est_w = self.content.len() as f32 * self.font_size * 0.6
+            + self.padding_left
+            + self.padding_right;
+        let est_h = self.font_size * 1.4 + self.padding_top + self.padding_bottom;
+
         let active_bg = self.bg.or(self.hover_bg.filter(|_| {
-            // rough hover check — will be replaced with real bounds post-shape
             let mx = self.ui.mouse_x;
             let my = self.ui.mouse_y;
-            let est_w = self.content.len() as f32 * self.font_size * 0.6;
-            let est_h = self.font_size * 1.4;
             mx >= self.x && mx <= self.x + est_w && my >= self.y && my <= self.y + est_h
         }));
+
+        // record draw start BEFORE pushing
+        let draw_start = self.ui.draws.len();
 
         self.ui.draws.push(DrawCommand::Text(TextDraw {
             text: self.content,
@@ -236,5 +239,7 @@ impl<'a> TextBuilder<'a> {
             padding_left: self.padding_left,
             padding_right: self.padding_right,
         }));
+
+        self.ui.advance(est_w, est_h, draw_start);
     }
 }
