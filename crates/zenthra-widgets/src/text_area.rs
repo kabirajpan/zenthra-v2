@@ -224,24 +224,54 @@ impl<'u, 'a, 'b> TextAreaBuilder<'u, 'a, 'b> {
 
                                     let mut target_x = 0.0;
                                     let mut target_y = first_line_y;
-                                    for g in sb.glyphs() {
-                                        if g.cluster <= cursor_index {
-                                            target_x = g.x;
-                                            target_y = g.y;
+                                    let row_threshold = (self.font_size * self.line_height) * 0.5;
+
+                                    // 1. Find which line the cursor is currently on using start_clusters
+                                    let mut active_line = None;
+                                    for line in sb.lines() {
+                                        if line.start_cluster <= cursor_index {
+                                            active_line = Some(line);
                                         } else {
                                             break;
+                                        }
+                                    }
+
+                                    if let Some(line) = active_line {
+                                        target_y = line.y;
+                                        // 2. Find horizontal position on THIS line
+                                        let mut found_g = None;
+                                        for g in sb.glyphs() {
+                                            if (g.y - target_y).abs() < row_threshold {
+                                                if g.cluster <= cursor_index {
+                                                    found_g = Some(g);
+                                                } else {
+                                                    break;
+                                                }
+                                            }
+                                        }
+
+                                        if let Some(g) = found_g {
+                                            if g.cluster < cursor_index {
+                                                target_x = g.x + g.width;
+                                            } else {
+                                                target_x = g.x;
+                                            }
+                                        } else {
+                                            target_x = 0.0;
                                         }
                                     }
                                     
                                     if cursor_index == self.buffer.len() {
                                         if let Some(lg) = sb.glyphs().last() {
-                                            target_x = lg.x + lg.width;
-                                            target_y = lg.y;
+                                            if lg.cluster < cursor_index {
+                                                target_x = lg.x + lg.width;
+                                                target_y = lg.y;
+                                            }
                                         }
                                     }
                                     
                                     let prev_line_y = sb.lines().iter()
-                                        .filter(|l| l.y < target_y - 2.0)
+                                        .filter(|l| l.y < target_y - row_threshold)
                                         .map(|l| l.y)
                                         .max_by(|a, b| a.partial_cmp(b).unwrap());
 
@@ -249,7 +279,7 @@ impl<'u, 'a, 'b> TextAreaBuilder<'u, 'a, 'b> {
                                         let mut best_idx = None;
                                         let mut best_dist = f32::INFINITY;
                                         for g in sb.glyphs() {
-                                            if (g.y - py).abs() < 2.0 {
+                                            if (g.y - py).abs() < row_threshold {
                                                 let dist = (g.x - target_x).abs();
                                                 if dist < best_dist {
                                                     best_dist = dist;
@@ -260,8 +290,7 @@ impl<'u, 'a, 'b> TextAreaBuilder<'u, 'a, 'b> {
                                         if let Some(idx) = best_idx {
                                             cursor_index = idx;
                                         } else {
-                                            // Empty line fallback
-                                            if let Some(line) = sb.lines().iter().find(|l| (l.y - py).abs() < 2.0) {
+                                            if let Some(line) = sb.lines().iter().find(|l| (l.y - py).abs() < row_threshold) {
                                                 cursor_index = line.start_cluster;
                                             }
                                         }
@@ -279,24 +308,52 @@ impl<'u, 'a, 'b> TextAreaBuilder<'u, 'a, 'b> {
 
                                     let mut target_x = 0.0;
                                     let mut target_y = first_line_y;
-                                    for g in sb.glyphs() {
-                                        if g.cluster <= cursor_index {
-                                            target_x = g.x;
-                                            target_y = g.y;
+                                    let row_threshold = (self.font_size * self.line_height) * 0.5;
+
+                                    let mut active_line = None;
+                                    for line in sb.lines() {
+                                        if line.start_cluster <= cursor_index {
+                                            active_line = Some(line);
                                         } else {
                                             break;
                                         }
                                     }
 
+                                    if let Some(line) = active_line {
+                                        target_y = line.y;
+                                        let mut found_g = None;
+                                        for g in sb.glyphs() {
+                                            if (g.y - target_y).abs() < row_threshold {
+                                                if g.cluster <= cursor_index {
+                                                    found_g = Some(g);
+                                                } else {
+                                                    break;
+                                                }
+                                            }
+                                        }
+
+                                        if let Some(g) = found_g {
+                                            if g.cluster < cursor_index {
+                                                target_x = g.x + g.width;
+                                            } else {
+                                                target_x = g.x;
+                                            }
+                                        } else {
+                                            target_x = 0.0;
+                                        }
+                                    }
+
                                     if cursor_index == self.buffer.len() {
                                         if let Some(lg) = sb.glyphs().last() {
-                                            target_x = lg.x + lg.width;
-                                            target_y = lg.y;
+                                            if lg.cluster < cursor_index {
+                                                target_x = lg.x + lg.width;
+                                                target_y = lg.y;
+                                            }
                                         }
                                     }
                                     
                                     let next_line_y = sb.lines().iter()
-                                        .filter(|l| l.y > target_y + 2.0)
+                                        .filter(|l| l.y > target_y + row_threshold)
                                         .map(|l| l.y)
                                         .min_by(|a, b| a.partial_cmp(b).unwrap());
 
@@ -304,7 +361,7 @@ impl<'u, 'a, 'b> TextAreaBuilder<'u, 'a, 'b> {
                                         let mut best_idx = None;
                                         let mut best_dist = f32::INFINITY;
                                         for g in sb.glyphs() {
-                                            if (g.y - ny).abs() < 2.0 {
+                                            if (g.y - ny).abs() < row_threshold {
                                                 let dist = (g.x - target_x).abs();
                                                 if dist < best_dist {
                                                     best_dist = dist;
@@ -315,8 +372,7 @@ impl<'u, 'a, 'b> TextAreaBuilder<'u, 'a, 'b> {
                                         if let Some(idx) = best_idx {
                                             cursor_index = idx;
                                         } else {
-                                            // Empty line fallback
-                                            if let Some(line) = sb.lines().iter().find(|l| (l.y - ny).abs() < 2.0) {
+                                            if let Some(line) = sb.lines().iter().find(|l| (l.y - ny).abs() < row_threshold) {
                                                 cursor_index = line.start_cluster;
                                             }
                                         }
@@ -480,18 +536,36 @@ impl<'u, 'a, 'b> TextAreaBuilder<'u, 'a, 'b> {
                 }
 
                 if !found {
-                    // Try to find the line the cursor is on based on clusters
+                    let mut best_line = None;
                     for line in sb.lines() {
                         if line.start_cluster <= cursor_index {
-                             ly = line.y;
+                            best_line = Some(line);
                         } else {
-                             break;
+                            break;
                         }
                     }
+
+                    if let Some(line) = best_line {
+                        ly = line.y;
+                        // If we are past the start of the line and not found in glyphs,
+                        // we're likely at a newline or trailing space.
+                        if cursor_index > line.start_cluster {
+                            lx = line.width;
+                        } else {
+                            lx = 0.0;
+                        }
+                    }
+                    
                     if cursor_index == self.buffer.len() {
                         if let Some(lg) = sb.glyphs().last() {
                             if (lg.y - ly).abs() < 2.0 {
                                 lx = lg.x + lg.width;
+                            } else {
+                                // Last line might be empty
+                                if let Some(last_line) = sb.lines().last() {
+                                    ly = last_line.y;
+                                    lx = 0.0;
+                                }
                             }
                         }
                     }

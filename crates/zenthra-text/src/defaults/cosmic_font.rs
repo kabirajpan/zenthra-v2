@@ -98,7 +98,21 @@ impl CosmicFontProvider {
             }
         }
         
-        let final_height = max_height.max(metrics.line_height);
+        let mut final_height = max_height.max(metrics.line_height);
+        
+        // Ensure trailing newlines create a reachable line
+        if text.ends_with('\n') {
+            let last_y = lines.last().map(|l| l.y).unwrap_or(metrics.font_size);
+            let next_y = last_y + metrics.line_height;
+            lines.push(crate::types::line::LineInfo { 
+                x: 0.0, 
+                y: next_y, 
+                width: 0.0,
+                start_cluster: text.len(),
+            });
+            final_height += metrics.line_height;
+        }
+
         ShapedBuffer::new(shaped_glyphs, lines, max_width, final_height)
     }
 }
@@ -113,11 +127,9 @@ impl FontProvider for CosmicFontProvider {
     fn shape(&mut self, text: &str, options: &TextOptions) -> ShapedBuffer {
         let mut font_system = self.font_system.lock().unwrap();
         
-        // 1. Convert our options to cosmic-text metrics
         let metrics = Metrics::new(options.font_size, options.font_size * options.line_height);
         self.buffer.set_metrics(&mut font_system, metrics);
 
-        // 2. Set the text and initial shaping
         self.buffer.set_text(
             &mut font_system,
             text,
@@ -126,7 +138,6 @@ impl FontProvider for CosmicFontProvider {
             None,
         );
 
-        // 3. Apply alignment if explicitly requested
         if let Some(alignment) = options.align {
             let align: Align = alignment.into();
             for line in self.buffer.lines.iter_mut() {
@@ -134,54 +145,108 @@ impl FontProvider for CosmicFontProvider {
             }
         }
 
-        // 4. Perform the final layout pass
         self.buffer.shape_until_scroll(&mut font_system, false);
 
-        // 5. Convert layout runs into our internal primitives
+        // Pre-calculate paragraph start offsets
+        let mut paragraph_offsets = Vec::new();
+        let mut current_offset = 0;
+        for line in &self.buffer.lines {
+            paragraph_offsets.push(current_offset);
+            current_offset += line.text().len() + 1; // +1 for the newline
+        }
+
         let mut shaped_glyphs = Vec::new();
         let mut lines = Vec::new();
         let mut max_width: f32 = 0.0;
         let mut max_height: f32 = 0.0;
 
-        let descent = -(metrics.line_height - metrics.font_size);
-        for run in self.buffer.layout_runs() {
-            max_height = max_height.max(run.line_y - descent);
+        let layout_width = self.buffer.size().0.unwrap_or(0.0);
 
-            let layout_width = self.buffer.size().0.unwrap_or(run.line_w);
+        let mut next_line_i = 0;
+        let mut last_line_y = 0.0;
+
+        for run in self.buffer.layout_runs() {
+            // 1. Fill in gaps for empty logical lines before this run
+            while next_line_i < run.line_i {
+                let missed_y = if lines.is_empty() {
+                    metrics.font_size
+                } else {
+                    last_line_y + metrics.line_height
+                };
+                
+                let start_cluster = paragraph_offsets.get(next_line_i).cloned().unwrap_or(0);
+                lines.push(crate::types::line::LineInfo {
+                    x: 0.0,
+                    y: missed_y,
+                    width: 0.0,
+                    start_cluster,
+                });
+                
+                last_line_y = missed_y;
+                next_line_i += 1;
+            }
+
+            // 2. Process this visual run
             let alignment_offset = match options.align {
-                Some(crate::types::HorizontalAlignment::Center) => {
-                    (layout_width - run.line_w) / 2.0
-                }
+                Some(crate::types::HorizontalAlignment::Center) => (layout_width - run.line_w) / 2.0,
                 Some(crate::types::HorizontalAlignment::Right) => layout_width - run.line_w,
                 _ => 0.0,
             };
 
+            let paragraph_offset = paragraph_offsets.get(run.line_i).cloned().unwrap_or(0);
             lines.push(crate::types::line::LineInfo {
                 x: alignment_offset,
                 y: run.line_y,
                 width: run.line_w,
-                start_cluster: run.glyphs.first().map(|g| g.start).unwrap_or(text.len()),
+                start_cluster: paragraph_offset + run.glyphs.first().map(|g| g.start).unwrap_or(0),
             });
 
             for glyph in run.glyphs {
                 max_width = max_width.max(glyph.x + glyph.w);
-
                 let physical = glyph.physical((0.0, 0.0), 1.0);
+                
                 shaped_glyphs.push(ShapedGlyph {
                     key: physical.cache_key,
-                    cluster: glyph.start,
+                    cluster: paragraph_offset + glyph.start,
                     x: glyph.x,
                     y: run.line_y + glyph.y,
                     width: glyph.w,
                     height: 0.0,
                 });
             }
+
+            last_line_y = run.line_y;
+            max_height = max_height.max(run.line_y + metrics.line_height - metrics.font_size);
+            
+            // Advance next_line_i up to current run index
+            if next_line_i <= run.line_i {
+                next_line_i = run.line_i + 1;
+            }
         }
 
-        let final_height = max_height.max(metrics.line_height);
-        ShapedBuffer::new(shaped_glyphs, lines, max_width, final_height)
-    }
+        // 3. Final cleanup for trailing empty lines
+        while next_line_i < self.buffer.lines.len() {
+             let missed_y = if lines.is_empty() {
+                metrics.font_size
+            } else {
+                last_line_y + metrics.line_height
+            };
+            
+            let start_cluster = paragraph_offsets.get(next_line_i).cloned().unwrap_or(0);
+            lines.push(crate::types::line::LineInfo {
+                x: 0.0,
+                y: missed_y,
+                width: 0.0,
+                start_cluster,
+            });
+            
+            last_line_y = missed_y;
+            next_line_i += 1;
+            max_height = max_height.max(last_line_y + metrics.line_height - metrics.font_size);
+        }
 
+        ShapedBuffer::new(shaped_glyphs, lines, max_width, max_height)
+    }
     fn load_font(&mut self, data: Vec<u8>) {
         self.font_system.lock().unwrap().db_mut().load_font_data(data);
     }
@@ -202,8 +267,7 @@ impl FontProvider for CosmicFontProvider {
     }
 
     fn set_layout_size(&mut self, width: f32, height: f32) {
-        self.buffer
-            .set_size(&mut self.font_system.lock().unwrap(), Some(width), Some(height));
+         self.buffer.set_size(&mut self.font_system.lock().unwrap(), Some(width), Some(height));
     }
 
     fn font_system(&self) -> Arc<Mutex<FontSystem>> {
