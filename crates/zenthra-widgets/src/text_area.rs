@@ -150,7 +150,11 @@ impl<'u, 'a, 'b> TextAreaBuilder<'u, 'a, 'b> {
             
             let buffer = adapter.shape(&self.buffer, &options);
             let (_, ch) = buffer.content_size();
-            (actual_width, ch + t_padding.vertical(), Some(buffer))
+            let mut max_line_y = ch;
+            if let Some(last_line) = buffer.lines().last() {
+                max_line_y = max_line_y.max(last_line.y + (self.font_size * self.line_height) - self.font_size);
+            }
+            (actual_width, max_line_y + t_padding.vertical(), Some(buffer))
         } else {
             (actual_width, 20.0, None)
         };
@@ -291,7 +295,16 @@ impl<'u, 'a, 'b> TextAreaBuilder<'u, 'a, 'b> {
                                             cursor_index = idx;
                                         } else {
                                             if let Some(line) = sb.lines().iter().find(|l| (l.y - py).abs() < row_threshold) {
-                                                cursor_index = line.start_cluster;
+                                                // Find the end of this line (either next line start - 1 or end of buffer)
+                                                let mut line_end = self.buffer.len();
+                                                for next_line in sb.lines() {
+                                                    if next_line.start_cluster > line.start_cluster {
+                                                        line_end = (next_line.start_cluster).saturating_sub(1);
+                                                        break;
+                                                    }
+                                                }
+                                                // For empty lines, end is just the start cluster
+                                                cursor_index = line.start_cluster.max(line_end);
                                             }
                                         }
                                     } else {
@@ -373,7 +386,14 @@ impl<'u, 'a, 'b> TextAreaBuilder<'u, 'a, 'b> {
                                             cursor_index = idx;
                                         } else {
                                             if let Some(line) = sb.lines().iter().find(|l| (l.y - ny).abs() < row_threshold) {
-                                                cursor_index = line.start_cluster;
+                                                let mut line_end = self.buffer.len();
+                                                for next_line in sb.lines() {
+                                                    if next_line.start_cluster > line.start_cluster {
+                                                        line_end = (next_line.start_cluster).saturating_sub(1);
+                                                        break;
+                                                    }
+                                                }
+                                                cursor_index = line.start_cluster.max(line_end);
                                             }
                                         }
                                     } else {
@@ -397,33 +417,42 @@ impl<'u, 'a, 'b> TextAreaBuilder<'u, 'a, 'b> {
                 }
             }
 
-            if changed {
-                // RE-SHAPE after buffer modification
-                if let Some(fs) = self.ui.font_system.as_ref() {
-                    let mut adapter = CosmicFontProvider::new_with_system(fs.clone());
-                    let t_padding = Padding::from(self.text_padding);
-                    let layout_width = actual_width - self.padding.horizontal() - t_padding.horizontal();
-                    adapter.set_layout_size(layout_width, 10000.0);
-                    let options = TextOptions::new().font_size(self.font_size).line_height(self.line_height).padding(t_padding);
-                    let buffer = adapter.shape(&self.buffer, &options);
-                    let (_cw, ch) = buffer.content_size();
-                    h_content = ch + t_padding.vertical();
-                    shaped_buffer = Some(buffer);
-                    
-                    if !self.scrollable {
-                        h_box = h_content + self.padding.vertical();
+                    if changed {
+                        // RE-SHAPE after buffer modification
+                        if let Some(fs) = self.ui.font_system.as_ref() {
+                            let mut adapter = CosmicFontProvider::new_with_system(fs.clone());
+                            let t_padding = Padding::from(self.text_padding);
+                            let layout_width = actual_width - self.padding.horizontal() - t_padding.horizontal();
+                            adapter.set_layout_size(layout_width, 10000.0);
+                            
+                            let options = TextOptions::new().font_size(self.font_size).line_height(self.line_height).padding(t_padding);
+                            let buffer = adapter.shape(&self.buffer, &options);
+                            let (_cw, ch) = buffer.content_size();
+                            
+                            let mut max_line_y = ch;
+                            if let Some(last_line) = buffer.lines().last() {
+                                max_line_y = max_line_y.max(last_line.y + (self.font_size * self.line_height) - self.font_size);
+                            }
+                            h_content = max_line_y + t_padding.vertical();
+                            shaped_buffer = Some(buffer);
+                            
+                            // Re-calculate h_box immediately if not fixed
+                            if !self.scrollable {
+                                h_box = h_content + self.padding.vertical();
+                            }
+                        }
+                        
+                        self.ui.cursor_state.insert(self.id, cursor_index);
                     }
+                    
+                    if self.scrollable {
+                        let usable_h = h_box - self.padding.vertical();
+                        let max_scroll = (h_content - usable_h).max(0.0);
+                        scroll_y = scroll_y.clamp(0.0, max_scroll);
+                    }
+                    self.ui.input_events = events;
+                    self.ui.cursor_state.insert(self.id, cursor_index);
                 }
-            }
-
-            if self.scrollable {
-                let usable_h = h_box - self.padding.vertical();
-                let max_scroll = (h_content - usable_h).max(0.0);
-                scroll_y = scroll_y.clamp(0.0, max_scroll);
-            }
-            self.ui.input_events = events;
-            self.ui.cursor_state.insert(self.id, cursor_index);
-        }
 
         // --- 4. Render Background (FIXED) ---
         let start_draw = self.ui.draws.len();
