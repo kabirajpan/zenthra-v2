@@ -131,14 +131,13 @@ impl<'u, 'a, 'b> TextAreaBuilder<'u, 'a, 'b> {
         };
 
         // --- 2. Initial Measure (to get content height) ---
-        let max_available_w = (self.ui.width - self.x).max(self.width);
         let actual_width = if self.full_width {
-            max_available_w
+            (self.ui.width - self.x).max(self.width)
         } else {
             self.width
         };
 
-        let (actual_width, mut h_content, mut shaped_buffer) = if let Some(fs) = self.ui.font_system.as_ref() {
+        let (_content_w, mut h_content, mut shaped_buffer) = if let Some(fs) = self.ui.font_system.as_ref() {
             let mut adapter = CosmicFontProvider::new_with_system(fs.clone());
             let t_padding = Padding::from(self.text_padding);
             let layout_width = actual_width - self.padding.horizontal() - t_padding.horizontal();
@@ -150,8 +149,8 @@ impl<'u, 'a, 'b> TextAreaBuilder<'u, 'a, 'b> {
                 .padding(t_padding);
             
             let buffer = adapter.shape(&self.buffer, &options);
-            let (cw, ch) = buffer.content_size();
-            (cw + t_padding.horizontal(), ch + t_padding.vertical(), Some(buffer))
+            let (_, ch) = buffer.content_size();
+            (actual_width, ch + t_padding.vertical(), Some(buffer))
         } else {
             (actual_width, 20.0, None)
         };
@@ -161,6 +160,10 @@ impl<'u, 'a, 'b> TextAreaBuilder<'u, 'a, 'b> {
         } else {
             h_content + self.padding.vertical()
         };
+        
+        if self.scrollable && self.height.unwrap_or(0.0) == 0.0 {
+            h_box = 200.0;
+        }
 
         // --- 3. Handle Events ---
         let mut cursor_index = *self.ui.cursor_state.get(&self.id).unwrap_or(&self.buffer.len());
