@@ -68,6 +68,7 @@ pub struct Ui<'a> {
     pub focused_id: Option<u64>,
     pub id_counter: u64,
     pub scroll_state: &'a mut std::collections::HashMap<u64, f32>,
+    pub cursor_state: &'a mut std::collections::HashMap<u64, usize>,
     pub active_drag: Option<ScrollDrag>,
     pub clicked: bool,
 }
@@ -83,6 +84,7 @@ impl<'a> Ui<'a> {
         mouse_pos: (f32, f32),
         mouse_down: bool,
         scroll_state: &'a mut std::collections::HashMap<u64, f32>,
+        cursor_state: &'a mut std::collections::HashMap<u64, usize>,
         active_drag: Option<ScrollDrag>,
         clicked: bool,
     ) -> Self {
@@ -118,6 +120,7 @@ impl<'a> Ui<'a> {
             max_y: height as f32,
             font_system,
             scroll_state,
+            cursor_state,
             active_drag,
             clicked,
         }

@@ -159,6 +159,12 @@ impl<'u, 'a, 'b> InputBuilder<'u, 'a, 'b> {
         let thumb_x = self.x + self.padding.left + scroll_percent * track_width;
 
         // --- 3. Handle Events ---
+        let mut cursor_index = *self.ui.cursor_state.get(&self.id).unwrap_or(&self.buffer.len());
+        cursor_index = cursor_index.min(self.buffer.len());
+        if !self.buffer.is_char_boundary(cursor_index) {
+            cursor_index = self.buffer.len();
+        }
+
         let is_hovered = self.ui.mouse_in_rect(self.x, self.y, w_box, h_box);
         let is_over_thumb = self.ui.mouse_in_rect(thumb_x, scroll_bar_y - 2.0, thumb_w, scroll_bar_h + 4.0);
 
@@ -180,14 +186,43 @@ impl<'u, 'a, 'b> InputBuilder<'u, 'a, 'b> {
                 match event {
                     PlatformEvent::CharTyped(c) if is_focused => {
                          if *c != '\r' && *c != '\n' {
-                              self.buffer.push(*c);
+                              self.buffer.insert(cursor_index, *c);
+                              cursor_index += c.len_utf8();
                               needs_auto_scroll = true;
                          }
                     }
                     PlatformEvent::KeyDown { key } if is_focused => {
-                        if *key == winit::keyboard::KeyCode::Backspace {
-                            self.buffer.pop();
-                            needs_auto_scroll = true;
+                        match key {
+                            winit::keyboard::KeyCode::Backspace => {
+                                if cursor_index > 0 {
+                                    let mut chars = self.buffer[..cursor_index].chars();
+                                    if let Some(c) = chars.next_back() {
+                                        let len = c.len_utf8();
+                                        self.buffer.remove(cursor_index - len);
+                                        cursor_index -= len;
+                                        needs_auto_scroll = true;
+                                    }
+                                }
+                            }
+                            winit::keyboard::KeyCode::ArrowLeft => {
+                                if cursor_index > 0 {
+                                    let mut chars = self.buffer[..cursor_index].chars();
+                                    if let Some(c) = chars.next_back() {
+                                        cursor_index -= c.len_utf8();
+                                        needs_auto_scroll = true;
+                                    }
+                                }
+                            }
+                            winit::keyboard::KeyCode::ArrowRight => {
+                                if cursor_index < self.buffer.len() {
+                                    let mut chars = self.buffer[cursor_index..].chars();
+                                    if let Some(c) = chars.next() {
+                                        cursor_index += c.len_utf8();
+                                        needs_auto_scroll = true;
+                                    }
+                                }
+                            }
+                            _ => {}
                         }
                     }
                     PlatformEvent::MouseWheel { delta_x, delta_y } if is_hovered => {
@@ -221,12 +256,24 @@ impl<'u, 'a, 'b> InputBuilder<'u, 'a, 'b> {
             let is_dragging_this = self.ui.active_drag.map(|d| d.id == scroll_state_id).unwrap_or(false);
             if is_focused && !is_dragging_this && needs_auto_scroll {
                 if let Some(sb) = &shaped_buffer {
-                    let lx = sb.glyphs().last().map(|g: &ShapedGlyph| g.x + g.width).unwrap_or(0.0);
-                    let cursor_x_with_padding = lx + self.text_padding.left;
-                    if cursor_x_with_padding > scroll_x + w_view - 40.0 {
-                        scroll_x = cursor_x_with_padding - w_view + 40.0;
-                    } else if cursor_x_with_padding < scroll_x + 10.0 {
-                        scroll_x = (cursor_x_with_padding - 10.0).max(0.0);
+                    let mut clx = 0.0;
+                    let mut found = false;
+                    for g in sb.glyphs() {
+                        if g.cluster == cursor_index {
+                            clx = g.x;
+                            found = true;
+                            break;
+                        }
+                    }
+                    if !found && cursor_index == self.buffer.len() {
+                        clx = sb.glyphs().last().map(|g: &ShapedGlyph| g.x + g.width).unwrap_or(0.0);
+                    }
+
+                    let cursor_x_v = clx + self.text_padding.left;
+                    if cursor_x_v > scroll_x + w_view - 40.0 {
+                        scroll_x = cursor_x_v - w_view + 40.0;
+                    } else if cursor_x_v < scroll_x + 10.0 {
+                        scroll_x = (cursor_x_v - 10.0).max(0.0);
                     }
                 }
             }
@@ -234,6 +281,7 @@ impl<'u, 'a, 'b> InputBuilder<'u, 'a, 'b> {
             scroll_x = scroll_x.clamp(0.0, max_scroll);
             self.ui.scroll_state.insert(scroll_state_id, scroll_x);
             self.ui.input_events = events;
+            self.ui.cursor_state.insert(self.id, cursor_index);
         } else if self.ui.active_drag.is_some() {
             // Also update if we are dragging even if not hovered (drag-out)
             scroll_x = scroll_x.clamp(0.0, max_scroll);
@@ -294,7 +342,20 @@ impl<'u, 'a, 'b> InputBuilder<'u, 'a, 'b> {
             let vertical_offset = (total_line_height - cursor_height) / 2.0;
 
             if let Some(sb) = shaped_buffer {
-                let lx = sb.glyphs().last().map(|g: &ShapedGlyph| g.x + g.width).unwrap_or(0.0);
+                let mut lx = 0.0;
+                let mut found = false;
+                for g in sb.glyphs() {
+                    if g.cluster == cursor_index {
+                        lx = g.x;
+                        found = true;
+                        break;
+                    }
+                }
+
+                if !found && cursor_index == self.buffer.len() {
+                    lx = sb.glyphs().last().map(|g: &ShapedGlyph| g.x + g.width).unwrap_or(0.0);
+                }
+
                 let cx = lx + self.x + self.padding.left + self.text_padding.left - scroll_x;
                 let cy = self.y + self.padding.top + self.text_padding.top + vertical_offset;
                 

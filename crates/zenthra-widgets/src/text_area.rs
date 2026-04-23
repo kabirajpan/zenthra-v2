@@ -164,6 +164,12 @@ impl<'u, 'a, 'b> TextAreaBuilder<'u, 'a, 'b> {
         };
 
         // --- 3. Handle Events ---
+        let mut cursor_index = *self.ui.cursor_state.get(&self.id).unwrap_or(&self.buffer.len());
+        cursor_index = cursor_index.min(self.buffer.len());
+        if !self.buffer.is_char_boundary(cursor_index) {
+            cursor_index = self.buffer.len(); // Safety
+        }
+
         let is_hovered = self.ui.mouse_in_rect(self.x, self.y, actual_width, h_box);
 
         if is_focused || is_hovered {
@@ -172,15 +178,109 @@ impl<'u, 'a, 'b> TextAreaBuilder<'u, 'a, 'b> {
                 match event {
                     PlatformEvent::CharTyped(c) if is_focused => {
                         if *c != '\r' && *c != '\n' {
-                            self.buffer.push(*c);
+                             self.buffer.insert(cursor_index, *c);
+                             cursor_index += c.len_utf8();
                         }
                     }
                     PlatformEvent::KeyDown { key } if is_focused => {
-                        if *key == winit::keyboard::KeyCode::Backspace {
-                            self.buffer.pop();
-                        }
-                        if *key == winit::keyboard::KeyCode::Enter || *key == winit::keyboard::KeyCode::NumpadEnter {
-                            self.buffer.push('\n');
+                        match key {
+                            winit::keyboard::KeyCode::Backspace => {
+                                if cursor_index > 0 {
+                                    let mut chars = self.buffer[..cursor_index].chars();
+                                    if let Some(c) = chars.next_back() {
+                                        let len = c.len_utf8();
+                                        self.buffer.remove(cursor_index - len);
+                                        cursor_index -= len;
+                                    }
+                                }
+                            }
+                            winit::keyboard::KeyCode::ArrowLeft => {
+                                if cursor_index > 0 {
+                                    let mut chars = self.buffer[..cursor_index].chars();
+                                    if let Some(c) = chars.next_back() {
+                                        cursor_index -= c.len_utf8();
+                                    }
+                                }
+                            }
+                            winit::keyboard::KeyCode::ArrowRight => {
+                                if cursor_index < self.buffer.len() {
+                                    let mut chars = self.buffer[cursor_index..].chars();
+                                    if let Some(c) = chars.next() {
+                                        cursor_index += c.len_utf8();
+                                    }
+                                }
+                            }
+                            winit::keyboard::KeyCode::ArrowUp => {
+                                if let Some(sb) = &shaped_buffer {
+                                    let font_size = self.font_size;
+                                    let lh = self.line_height;
+                                    let visual_ascent = font_size * (0.8 + (lh - 1.0) / 2.0);
+                                    let first_line_y = sb.lines().first().map(|l| l.y).unwrap_or(visual_ascent);
+
+                                    let mut target_x = 0.0;
+                                    let mut target_y = first_line_y;
+                                    for g in sb.glyphs() {
+                                        if g.cluster == cursor_index {
+                                            target_x = g.x;
+                                            target_y = g.y;
+                                            break;
+                                        }
+                                    }
+                                    let mut best_idx = 0;
+                                    let mut best_dist = f32::INFINITY;
+                                    for g in sb.glyphs() {
+                                        if g.y < target_y - 5.0 {
+                                            let dist = (g.x - target_x).abs();
+                                            if dist < best_dist {
+                                                best_dist = dist;
+                                                best_idx = g.cluster;
+                                            }
+                                        }
+                                    }
+                                    if best_dist < f32::INFINITY {
+                                        cursor_index = best_idx;
+                                    } else {
+                                        cursor_index = 0;
+                                    }
+                                }
+                            }
+                            winit::keyboard::KeyCode::ArrowDown => {
+                                if let Some(sb) = &shaped_buffer {
+                                    let font_size = self.font_size;
+                                    let lh = self.line_height;
+                                    let visual_ascent = font_size * (0.8 + (lh - 1.0) / 2.0);
+                                    let first_line_y = sb.lines().first().map(|l| l.y).unwrap_or(visual_ascent);
+
+                                    let mut target_x = 0.0;
+                                    let mut target_y = first_line_y;
+                                    for g in sb.glyphs() {
+                                        if g.cluster == cursor_index {
+                                            target_x = g.x;
+                                            target_y = g.y;
+                                            break;
+                                        }
+                                    }
+                                    let mut best_idx = self.buffer.len();
+                                    let mut best_dist = f32::INFINITY;
+                                    for g in sb.glyphs() {
+                                        if g.y > target_y + 5.0 {
+                                            let dist = (g.x - target_x).abs();
+                                            if dist < best_dist {
+                                                best_dist = dist;
+                                                best_idx = g.cluster;
+                                            }
+                                        }
+                                    }
+                                    if best_dist < f32::INFINITY {
+                                        cursor_index = best_idx;
+                                    }
+                                }
+                            }
+                            winit::keyboard::KeyCode::Enter | winit::keyboard::KeyCode::NumpadEnter => {
+                                self.buffer.insert(cursor_index, '\n');
+                                cursor_index += 1;
+                            }
+                            _ => {}
                         }
                     }
                     PlatformEvent::MouseWheel { delta_x, delta_y } if self.scrollable && is_hovered => {
@@ -196,6 +296,7 @@ impl<'u, 'a, 'b> TextAreaBuilder<'u, 'a, 'b> {
                 scroll_y = scroll_y.clamp(0.0, max_scroll);
             }
             self.ui.input_events = events;
+            self.ui.cursor_state.insert(self.id, cursor_index);
         }
 
         // --- 4. Render Background (FIXED) ---
@@ -295,10 +396,25 @@ impl<'u, 'a, 'b> TextAreaBuilder<'u, 'a, 'b> {
                 let first_line_y = sb.lines().first().map(|l| l.y).unwrap_or(visual_ascent);
                 let v_shift = visual_ascent - first_line_y;
 
-                let (lx, ly) = sb.glyphs()
-                    .last()
-                    .map(|g| (g.x + g.width, g.y))
-                    .unwrap_or((0.0, first_line_y));
+                let mut lx = 0.0;
+                let mut ly = first_line_y;
+                let mut found = false;
+
+                for g in sb.glyphs() {
+                    if g.cluster == cursor_index {
+                        lx = g.x;
+                        ly = g.y;
+                        found = true;
+                        break;
+                    }
+                }
+
+                if !found && cursor_index == self.buffer.len() {
+                    if let Some(lg) = sb.glyphs().last() {
+                        lx = lg.x + lg.width;
+                        ly = lg.y;
+                    }
+                }
                 
                 let cx = lx + self.x + self.padding.left + self.text_padding.left;
                 let cy = ly + self.y + self.padding.top + self.text_padding.top + v_shift - visual_ascent - scroll_y;
