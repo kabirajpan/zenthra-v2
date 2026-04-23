@@ -138,7 +138,7 @@ impl<'u, 'a, 'b> TextAreaBuilder<'u, 'a, 'b> {
             self.width
         };
 
-        let (_w_measured, h_content, shaped_buffer) = if let Some(fs) = self.ui.font_system.as_ref() {
+        let (actual_width, mut h_content, mut shaped_buffer) = if let Some(fs) = self.ui.font_system.as_ref() {
             let mut adapter = CosmicFontProvider::new_with_system(fs.clone());
             let t_padding = Padding::from(self.text_padding);
             let layout_width = actual_width - self.padding.horizontal() - t_padding.horizontal();
@@ -151,13 +151,12 @@ impl<'u, 'a, 'b> TextAreaBuilder<'u, 'a, 'b> {
             
             let buffer = adapter.shape(&self.buffer, &options);
             let (cw, ch) = buffer.content_size();
-            // Content height includes both layers of padding
             (cw + t_padding.horizontal(), ch + t_padding.vertical(), Some(buffer))
         } else {
             (actual_width, 20.0, None)
         };
 
-        let h_box = if self.scrollable {
+        let mut h_box = if self.scrollable {
             self.height.unwrap_or(200.0)
         } else {
             h_content + self.padding.vertical()
@@ -174,12 +173,14 @@ impl<'u, 'a, 'b> TextAreaBuilder<'u, 'a, 'b> {
 
         if is_focused || is_hovered {
             let events = std::mem::take(&mut self.ui.input_events);
+            let mut changed = false;
             for event in &events {
                 match event {
                     PlatformEvent::CharTyped(c) if is_focused => {
                         if *c != '\r' && *c != '\n' {
                              self.buffer.insert(cursor_index, *c);
                              cursor_index += c.len_utf8();
+                             changed = true;
                         }
                     }
                     PlatformEvent::KeyDown { key } if is_focused => {
@@ -191,6 +192,7 @@ impl<'u, 'a, 'b> TextAreaBuilder<'u, 'a, 'b> {
                                         let len = c.len_utf8();
                                         self.buffer.remove(cursor_index - len);
                                         cursor_index -= len;
+                                        changed = true;
                                     }
                                 }
                             }
@@ -220,25 +222,46 @@ impl<'u, 'a, 'b> TextAreaBuilder<'u, 'a, 'b> {
                                     let mut target_x = 0.0;
                                     let mut target_y = first_line_y;
                                     for g in sb.glyphs() {
-                                        if g.cluster == cursor_index {
+                                        if g.cluster <= cursor_index {
                                             target_x = g.x;
                                             target_y = g.y;
+                                        } else {
                                             break;
                                         }
                                     }
-                                    let mut best_idx = 0;
-                                    let mut best_dist = f32::INFINITY;
-                                    for g in sb.glyphs() {
-                                        if g.y < target_y - 5.0 {
-                                            let dist = (g.x - target_x).abs();
-                                            if dist < best_dist {
-                                                best_dist = dist;
-                                                best_idx = g.cluster;
-                                            }
+                                    
+                                    if cursor_index == self.buffer.len() {
+                                        if let Some(lg) = sb.glyphs().last() {
+                                            target_x = lg.x + lg.width;
+                                            target_y = lg.y;
                                         }
                                     }
-                                    if best_dist < f32::INFINITY {
-                                        cursor_index = best_idx;
+                                    
+                                    let prev_line_y = sb.lines().iter()
+                                        .filter(|l| l.y < target_y - 2.0)
+                                        .map(|l| l.y)
+                                        .max_by(|a, b| a.partial_cmp(b).unwrap());
+
+                                    if let Some(py) = prev_line_y {
+                                        let mut best_idx = None;
+                                        let mut best_dist = f32::INFINITY;
+                                        for g in sb.glyphs() {
+                                            if (g.y - py).abs() < 2.0 {
+                                                let dist = (g.x - target_x).abs();
+                                                if dist < best_dist {
+                                                    best_dist = dist;
+                                                    best_idx = Some(g.cluster);
+                                                }
+                                            }
+                                        }
+                                        if let Some(idx) = best_idx {
+                                            cursor_index = idx;
+                                        } else {
+                                            // Empty line fallback
+                                            if let Some(line) = sb.lines().iter().find(|l| (l.y - py).abs() < 2.0) {
+                                                cursor_index = line.start_cluster;
+                                            }
+                                        }
                                     } else {
                                         cursor_index = 0;
                                     }
@@ -254,31 +277,55 @@ impl<'u, 'a, 'b> TextAreaBuilder<'u, 'a, 'b> {
                                     let mut target_x = 0.0;
                                     let mut target_y = first_line_y;
                                     for g in sb.glyphs() {
-                                        if g.cluster == cursor_index {
+                                        if g.cluster <= cursor_index {
                                             target_x = g.x;
                                             target_y = g.y;
+                                        } else {
                                             break;
                                         }
                                     }
-                                    let mut best_idx = self.buffer.len();
-                                    let mut best_dist = f32::INFINITY;
-                                    for g in sb.glyphs() {
-                                        if g.y > target_y + 5.0 {
-                                            let dist = (g.x - target_x).abs();
-                                            if dist < best_dist {
-                                                best_dist = dist;
-                                                best_idx = g.cluster;
-                                            }
+
+                                    if cursor_index == self.buffer.len() {
+                                        if let Some(lg) = sb.glyphs().last() {
+                                            target_x = lg.x + lg.width;
+                                            target_y = lg.y;
                                         }
                                     }
-                                    if best_dist < f32::INFINITY {
-                                        cursor_index = best_idx;
+                                    
+                                    let next_line_y = sb.lines().iter()
+                                        .filter(|l| l.y > target_y + 2.0)
+                                        .map(|l| l.y)
+                                        .min_by(|a, b| a.partial_cmp(b).unwrap());
+
+                                    if let Some(ny) = next_line_y {
+                                        let mut best_idx = None;
+                                        let mut best_dist = f32::INFINITY;
+                                        for g in sb.glyphs() {
+                                            if (g.y - ny).abs() < 2.0 {
+                                                let dist = (g.x - target_x).abs();
+                                                if dist < best_dist {
+                                                    best_dist = dist;
+                                                    best_idx = Some(g.cluster);
+                                                }
+                                            }
+                                        }
+                                        if let Some(idx) = best_idx {
+                                            cursor_index = idx;
+                                        } else {
+                                            // Empty line fallback
+                                            if let Some(line) = sb.lines().iter().find(|l| (l.y - ny).abs() < 2.0) {
+                                                cursor_index = line.start_cluster;
+                                            }
+                                        }
+                                    } else {
+                                        cursor_index = self.buffer.len();
                                     }
                                 }
                             }
                             winit::keyboard::KeyCode::Enter | winit::keyboard::KeyCode::NumpadEnter => {
                                 self.buffer.insert(cursor_index, '\n');
                                 cursor_index += 1;
+                                changed = true;
                             }
                             _ => {}
                         }
@@ -290,6 +337,26 @@ impl<'u, 'a, 'b> TextAreaBuilder<'u, 'a, 'b> {
                     _ => {}
                 }
             }
+
+            if changed {
+                // RE-SHAPE after buffer modification
+                if let Some(fs) = self.ui.font_system.as_ref() {
+                    let mut adapter = CosmicFontProvider::new_with_system(fs.clone());
+                    let t_padding = Padding::from(self.text_padding);
+                    let layout_width = actual_width - self.padding.horizontal() - t_padding.horizontal();
+                    adapter.set_layout_size(layout_width, 10000.0);
+                    let options = TextOptions::new().font_size(self.font_size).line_height(self.line_height).padding(t_padding);
+                    let buffer = adapter.shape(&self.buffer, &options);
+                    let (_cw, ch) = buffer.content_size();
+                    h_content = ch + t_padding.vertical();
+                    shaped_buffer = Some(buffer);
+                    
+                    if !self.scrollable {
+                        h_box = h_content + self.padding.vertical();
+                    }
+                }
+            }
+
             if self.scrollable {
                 let usable_h = h_box - self.padding.vertical();
                 let max_scroll = (h_content - usable_h).max(0.0);
@@ -409,10 +476,21 @@ impl<'u, 'a, 'b> TextAreaBuilder<'u, 'a, 'b> {
                     }
                 }
 
-                if !found && cursor_index == self.buffer.len() {
-                    if let Some(lg) = sb.glyphs().last() {
-                        lx = lg.x + lg.width;
-                        ly = lg.y;
+                if !found {
+                    // Try to find the line the cursor is on based on clusters
+                    for line in sb.lines() {
+                        if line.start_cluster <= cursor_index {
+                             ly = line.y;
+                        } else {
+                             break;
+                        }
+                    }
+                    if cursor_index == self.buffer.len() {
+                        if let Some(lg) = sb.glyphs().last() {
+                            if (lg.y - ly).abs() < 2.0 {
+                                lx = lg.x + lg.width;
+                            }
+                        }
                     }
                 }
                 

@@ -78,7 +78,12 @@ impl CosmicFontProvider {
                 _ => 0.0,
             };
 
-            lines.push(crate::types::line::LineInfo { x: alignment_offset, y: run.line_y, width: run.line_w });
+            lines.push(crate::types::line::LineInfo { 
+                x: alignment_offset, 
+                y: run.line_y, 
+                width: run.line_w,
+                start_cluster: run.glyphs.first().map(|g| g.start).unwrap_or(text.len()),
+            });
             for glyph in run.glyphs {
                 max_width = max_width.max(glyph.x + glyph.w);
                 let physical = glyph.physical((0.0, 0.0), 1.0);
@@ -155,6 +160,7 @@ impl FontProvider for CosmicFontProvider {
                 x: alignment_offset,
                 y: run.line_y,
                 width: run.line_w,
+                start_cluster: run.glyphs.first().map(|g| g.start).unwrap_or(text.len()),
             });
 
             for glyph in run.glyphs {
