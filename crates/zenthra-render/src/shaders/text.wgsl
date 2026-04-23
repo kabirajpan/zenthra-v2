@@ -14,14 +14,17 @@ struct GlyphInstance {
     @location(3) uv_size:  vec2<f32>,
     @location(4) color:    vec4<f32>,
     @location(5) bg_color: vec4<f32>,
+    @location(6) clip_rect: vec4<f32>,
 }
 
 struct VertexOutput {
     @builtin(position) clip_pos: vec4<f32>,
-    @location(0) uv:       vec2<f32>,
-    @location(1) color:    vec4<f32>,
-    @location(2) bg_color: vec4<f32>,
-    @location(3) uv_size:  vec2<f32>,
+    @location(0) uv:        vec2<f32>,
+    @location(1) color:     vec4<f32>,
+    @location(2) bg_color:  vec4<f32>,
+    @location(3) uv_size:   vec2<f32>,
+    @location(4) clip_rect: vec4<f32>,
+    @location(5) screen_pos: vec2<f32>,
 }
 
 @vertex
@@ -29,16 +32,6 @@ fn vs_main(
     @builtin(vertex_index) vi: u32,
     g: GlyphInstance,
 ) -> VertexOutput {
-    var corners = array<vec2<f32>, 4>(
-        vec2(0.0, 0.0), vec2(1.0, 0.0), vec2(0.0, 1.0), vec2(1.0, 1.0)
-    );
-    
-    // We use indices 0..4 for a triangle strip (0,1,2,3) 
-    // or just array pick for 6 indices if preferred.
-    // However, Zentype uses 4 indices in its vs_main.
-    // Let's stick to 4 indices (TriangleStrip) or just stay with 6 for consistency with other pipelines.
-    
-    // Let's use 6 for compatibility with standard non-indexed draw(0..6)
     var corners_6 = array<vec2<f32>, 6>(
         vec2(0.0, 0.0), vec2(1.0, 0.0), vec2(0.0, 1.0),
         vec2(0.0, 1.0), vec2(1.0, 0.0), vec2(1.0, 1.0)
@@ -50,17 +43,25 @@ fn vs_main(
     let clip_y = 1.0 - (pixel.y / uniforms.screen_size.y) * 2.0;
 
     var out: VertexOutput;
-    out.clip_pos = vec4(clip_x, clip_y, 0.0, 1.0);
-    out.uv       = g.uv_pos + c * g.uv_size;
-    out.color    = g.color;
-    out.bg_color = g.bg_color;
-    out.uv_size  = g.uv_size;
+    out.clip_pos   = vec4(clip_x, clip_y, 0.0, 1.0);
+    out.uv         = g.uv_pos + c * g.uv_size;
+    out.color      = g.color;
+    out.bg_color   = g.bg_color;
+    out.uv_size    = g.uv_size;
+    out.clip_rect  = g.clip_rect;
+    out.screen_pos = pixel;
     return out;
 }
 
 @fragment
-fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
-    // Detect solid color mode (used for continuous line highlights)
+fn fs_main(@builtin(position) sc_pos: vec4<f32>, in: VertexOutput) -> @location(0) vec4<f32> {
+    // Hardware clipping
+    if (sc_pos.x < in.clip_rect.x || sc_pos.x > in.clip_rect.x + in.clip_rect.z ||
+        sc_pos.y < in.clip_rect.y || sc_pos.y > in.clip_rect.y + in.clip_rect.w) {
+        discard;
+    }
+
+    // Detect solid color mode (used for backgrounds)
     if (in.uv_size.x < 0.00001 && in.uv_size.y < 0.00001) {
         return in.bg_color;
     }

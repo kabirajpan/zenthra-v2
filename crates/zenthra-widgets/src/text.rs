@@ -3,8 +3,8 @@ use zenthra_text::traits::FontProvider;
 use crate::ui::{DrawCommand, TextDraw, Ui};
 use zenthra_core::{Color, EdgeInsets};
 
-pub struct TextBuilder<'a> {
-    ui: &'a mut Ui,
+pub struct TextBuilder<'u, 'a> {
+    ui: &'u mut Ui<'a>,
     content: String,
     options: TextOptions,
     
@@ -22,10 +22,11 @@ pub enum CursorIcon {
     Crosshair,
 }
 
-impl<'a> TextBuilder<'a> {
-    pub fn new(ui: &'a mut Ui, content: &str) -> Self {
+impl<'u, 'a> TextBuilder<'u, 'a> {
+    pub fn new(ui: &'u mut Ui<'a>, content: &str) -> Self {
         let x = ui.cursor_x;
         let y = ui.cursor_y;
+        let sf = ui.scale_factor;
         let max_width = (ui.max_x - x).max(0.0);
         
         Self {
@@ -33,7 +34,8 @@ impl<'a> TextBuilder<'a> {
             content: content.to_string(),
             options: TextOptions::new()
                 .at(x, y)
-                .max_width(max_width),
+                .max_width(max_width)
+                .scale_factor(sf),
             margin: EdgeInsets::ZERO,
             bg_radius: 0.0,
             cursor: CursorIcon::Default,
@@ -138,6 +140,12 @@ impl<'a> TextBuilder<'a> {
         self
     }
 
+    pub fn clip_rect(mut self, x: f32, y: f32, w: f32, h: f32) -> Self {
+        let sf = self.ui.scale_factor;
+        self.options = self.options.clip_rect(x * sf, y * sf, w * sf, h * sf);
+        self
+    }
+
     pub fn show(mut self) -> Option<ShapedBuffer> {
         let horiz = self.margin.horizontal();
         let vert = self.margin.vertical();
@@ -177,10 +185,12 @@ impl<'a> TextBuilder<'a> {
         };
 
         let start_draw = self.ui.draws.len();
+        let clip = self.options.clip_rect.unwrap_or([0.0, 0.0, 9999.0, 9999.0]);
         self.ui.draws.push(DrawCommand::Text(TextDraw {
             text: self.content.clone().into(),
             pos: [self.options.x, self.options.y],
             options: self.options.clone(),
+            clip,
         }));
 
         (cw, ch, buffer, start_draw)

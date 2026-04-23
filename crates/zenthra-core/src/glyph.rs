@@ -17,6 +17,8 @@ pub struct GlyphInstance {
     pub color: [f32; 4],
     /// Background color [r, g, b, a].
     pub bg_color: [f32; 4],
+    /// Clip rectangle [x, y, width, height].
+    pub clip_rect: [f32; 4],
 }
 
 impl GlyphInstance {
@@ -32,6 +34,7 @@ impl GlyphInstance {
                 wgpu::VertexAttribute { offset: 24, shader_location: 3, format: wgpu::VertexFormat::Float32x2 }, // uv_size
                 wgpu::VertexAttribute { offset: 32, shader_location: 4, format: wgpu::VertexFormat::Float32x4 }, // color
                 wgpu::VertexAttribute { offset: 48, shader_location: 5, format: wgpu::VertexFormat::Float32x4 }, // bg_color
+                wgpu::VertexAttribute { offset: 64, shader_location: 6, format: wgpu::VertexFormat::Float32x4 }, // clip_rect
             ],
         }
     }

@@ -10,13 +10,16 @@ pub struct TextDraw {
     pub text: String,
     pub pos: [f32; 2],
     pub options: TextOptions,
+    pub clip: [f32; 4],
 }
 
-pub struct CursorDraw {
+pub struct OverlayRectDraw {
     pub x: f32,
     pub y: f32,
+    pub width: f32,
     pub height: f32,
     pub color: Color,
+    pub clip: [f32; 4],
 }
 
 pub struct RectDraw {
@@ -26,11 +29,17 @@ pub struct RectDraw {
 pub enum DrawCommand {
     Rect(RectDraw),
     Text(TextDraw),
-    Cursor(CursorDraw),
+    OverlayRect(OverlayRectDraw),
 }
 
-use crate::input::InputBuilder;
-pub struct Ui {
+#[derive(Debug, Clone, Copy)]
+pub struct ScrollDrag {
+    pub id: u64,
+    pub start_mouse: f32,
+    pub start_scroll: f32,
+}
+
+pub struct Ui<'a> {
     pub width: f32,
     pub height: f32,
     pub scale_factor: f32,
@@ -58,9 +67,12 @@ pub struct Ui {
     pub input_events: Vec<PlatformEvent>,
     pub focused_id: Option<u64>,
     pub id_counter: u64,
+    pub scroll_state: &'a mut std::collections::HashMap<u64, f32>,
+    pub active_drag: Option<ScrollDrag>,
+    pub clicked: bool,
 }
 
-impl Ui {
+impl<'a> Ui<'a> {
     pub fn new(
         width: u32,
         height: u32,
@@ -69,10 +81,13 @@ impl Ui {
         events: Vec<PlatformEvent>,
         initial_focused_id: Option<u64>,
         mouse_pos: (f32, f32),
+        mouse_down: bool,
+        scroll_state: &'a mut std::collections::HashMap<u64, f32>,
+        active_drag: Option<ScrollDrag>,
+        clicked: bool,
     ) -> Self {
         let mouse_x = mouse_pos.0;
         let mouse_y = mouse_pos.1;
-        let mouse_down = events.iter().any(|e| matches!(e, PlatformEvent::MouseButton { state: winit::event::ElementState::Pressed, .. }));
 
         Self {
             width: width as f32,
@@ -102,6 +117,9 @@ impl Ui {
             max_x: width as f32,
             max_y: height as f32,
             font_system,
+            scroll_state,
+            active_drag,
+            clicked,
         }
     }
 
@@ -110,9 +128,14 @@ impl Ui {
         self.id_counter
     }
 
-    pub fn input<'a>(&'a mut self, buffer: &'a mut String) -> crate::input::InputBuilder<'a> {
+    pub fn input<'b>(&mut self, buffer: &'b mut String) -> crate::input::InputBuilder<'_, 'a, 'b> {
         let id = self.id();
         crate::input::InputBuilder::new(self, buffer, id)
+    }
+
+    pub fn text_area<'b>(&mut self, buffer: &'b mut String) -> crate::text_area::TextAreaBuilder<'_, 'a, 'b> {
+        let id = self.id();
+        crate::text_area::TextAreaBuilder::new(self, buffer, id)
     }
 
     pub fn set_mouse(&mut self, x: f32, y: f32, down: bool) {
@@ -149,46 +172,46 @@ impl Ui {
         }
     }
 
-    pub fn text<'a>(&'a mut self, content: &'a str) -> TextBuilder<'a> {
+    pub fn text(&mut self, content: &str) -> TextBuilder<'_, 'a> {
         TextBuilder::new(self, content).full_width_bg(true)
     }
 
-    pub fn h1<'a>(&'a mut self, content: &'a str) -> TextBuilder<'a> {
+    pub fn h1(&mut self, content: &str) -> TextBuilder<'_, 'a> {
         self.text(content).size(40.0).bold().full_width_bg(true)
     }
 
-    pub fn h2<'a>(&'a mut self, content: &'a str) -> TextBuilder<'a> {
+    pub fn h2(&mut self, content: &str) -> TextBuilder<'_, 'a> {
         self.text(content).size(32.0).bold().full_width_bg(true)
     }
 
-    pub fn h3<'a>(&'a mut self, content: &'a str) -> TextBuilder<'a> {
+    pub fn h3(&mut self, content: &str) -> TextBuilder<'_, 'a> {
         self.text(content).size(24.0).bold().full_width_bg(true)
     }
 
-    pub fn h4<'a>(&'a mut self, content: &'a str) -> TextBuilder<'a> {
+    pub fn h4(&mut self, content: &str) -> TextBuilder<'_, 'a> {
         self.text(content).size(20.0).bold().full_width_bg(true)
     }
 
-    pub fn row<F>(&mut self, f: F) -> ContainerBuilder<'_>
+    pub fn row<F>(&mut self, f: F) -> ContainerBuilder<'_, 'a>
     where
         F: FnOnce(&mut Ui),
     {
         self.container(Direction::Row, Wrap::NoWrap, f)
     }
 
-    pub fn column<F>(&mut self, f: F) -> ContainerBuilder<'_>
+    pub fn column<F>(&mut self, f: F) -> ContainerBuilder<'_, 'a>
     where
         F: FnOnce(&mut Ui),
     {
         self.container(Direction::Column, Wrap::NoWrap, f)
     }
 
-    pub fn container<'a, F>(
-        &'a mut self,
+    pub fn container<F>(
+        &mut self,
         direction: Direction,
         wrap: Wrap,
         f: F,
-    ) -> ContainerBuilder<'a>
+    ) -> ContainerBuilder<'_, 'a>
     where
         F: FnOnce(&mut Ui),
     {

@@ -1,5 +1,4 @@
 use crate::types::color::Color;
-use zenthra_core::EdgeInsets;
 use cosmic_text::{Align, Attrs, Buffer, FontSystem, Metrics};
 
 /// Options for configuring text rendering.
@@ -29,6 +28,8 @@ pub struct TextOptions {
     /// Vertical alignment within the available space.
     pub valign: Option<VerticalAlignment>,
     pub min_width: Option<f32>,
+    pub clip_rect: Option<[f32; 4]>,
+    pub scale_factor: f32,
 }
 
 
@@ -63,6 +64,8 @@ impl Default for TextOptions {
             align: None,
             valign: None,
             min_width: None,
+            clip_rect: None,
+            scale_factor: 1.0,
         }
     }
 }
@@ -189,6 +192,16 @@ impl TextOptions {
 
     pub fn valign(mut self, alignment: VerticalAlignment) -> Self {
         self.valign = Some(alignment);
+        self
+    }
+
+    pub fn clip_rect(mut self, x: f32, y: f32, w: f32, h: f32) -> Self {
+        self.clip_rect = Some([x, y, w, h]);
+        self
+    }
+
+    pub fn scale_factor(mut self, sf: f32) -> Self {
+        self.scale_factor = sf;
         self
     }
 

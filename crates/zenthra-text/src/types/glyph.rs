@@ -1,4 +1,3 @@
-use bytemuck::{Pod, Zeroable};
 use cosmic_text::CacheKey;
 
 /// Unique identifier for a glyph at a specific size and style.

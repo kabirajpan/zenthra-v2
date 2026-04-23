@@ -48,7 +48,7 @@ impl ZentypePipeline {
         // --- 1. AUTOMATIC BACKGROUND GENERATION ---
         let font_size = options.font_size;
         let lh = options.line_height;
-        let box_height = font_size * lh;
+        let _box_height = font_size * lh;
         let visual_ascent = font_size * (0.8 + (lh - 1.0) / 2.0);
         let padding = options.padding;
 
@@ -59,8 +59,11 @@ impl ZentypePipeline {
         let first_line_y = buffer.lines().first().map(|l| l.y).unwrap_or(visual_ascent);
         let vertical_shift = visual_ascent - first_line_y;
 
+        let clip = options.clip_rect.unwrap_or([0.0, 0.0, 9999.0, 9999.0]);
+
         if has_bg {
             let bg_color = options.bg_color.unwrap();
+            let sf = options.scale_factor;
 
             // DRAW A SINGLE UNIFIED BACKGROUND FOR THE WHOLE BLOCK
             let (cw, ch) = buffer.content_size();
@@ -77,29 +80,32 @@ impl ZentypePipeline {
             }
 
             instances.insert(0, crate::types::glyph::GlyphInstance {
-                pos: [pos[0], pos[1]], // Start at widget top
-                size: [width, ch + padding.top + padding.bottom], // Full multi-line padded height
+                pos: [pos[0] * sf, pos[1] * sf], // Start at widget top
+                size: [width * sf, (ch + padding.top + padding.bottom) * sf], // Full multi-line padded height
                 uv_pos: [0.0, 0.0],
                 uv_size: [0.0, 0.0],
                 color: [0.0, 0.0, 0.0, 0.0],
                 bg_color: bg_color.to_array(),
+                clip_rect: clip,
             });
         }
 
         // --- 2. GLYPH RENDERING ---
         let color = options.color;
+        let sf = options.scale_factor;
         for glyph in buffer.glyphs() {
             if let Some(entry) = atlas.get(&glyph.key) {
                 instances.push(crate::types::glyph::GlyphInstance {
                     pos: [
-                        pos[0] + glyph.x + entry.pixel_offset[0] + options.padding.left,
-                        pos[1] + glyph.y - entry.pixel_offset[1] + options.padding.top + vertical_shift,
+                        (pos[0] + glyph.x + options.padding.left) * sf + entry.pixel_offset[0],
+                        (pos[1] + glyph.y + options.padding.top + vertical_shift) * sf - entry.pixel_offset[1],
                     ],
                     size: entry.pixel_size,
                     uv_pos: entry.uv_pos,
                     uv_size: entry.uv_size,
                     color: color.to_array(),
                     bg_color: [0.0, 0.0, 0.0, 0.0],
+                    clip_rect: clip,
                 });
             }
         }

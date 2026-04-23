@@ -47,10 +47,10 @@ impl Zentype {
         self.renderer.draw(queue, text, pos, &options)
     }
 
-    /// Draws a solid colored rectangle. 
+    /// Draws a solid colored rectangle with optional clipping.
     /// Perfect for cursors, underlines, or selection highlights.
-    pub fn draw_rect(&mut self, pos: [f32; 2], size: [f32; 2], color: Color) {
-        self.renderer.draw_rect(pos, size, color);
+    pub fn draw_rect(&mut self, pos: [f32; 2], size: [f32; 2], color: Color, clip_rect: [f32; 4]) {
+        self.renderer.draw_rect(pos, size, color, clip_rect);
     }
 
     /// Finds the character index at the given screen-space coordinates for a specific buffer.

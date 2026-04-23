@@ -5,6 +5,7 @@ struct GlyphInstance {
     @location(3) uv_size: vec2<f32>,
     @location(4) color: vec4<f32>,
     @location(5) bg_color: vec4<f32>,
+    @location(6) clip_rect: vec4<f32>,
 };
 
 struct VertexOutput {
@@ -13,6 +14,7 @@ struct VertexOutput {
     @location(1) color: vec4<f32>,
     @location(2) bg_color: vec4<f32>,
     @location(3) uv_size: vec2<f32>,
+    @location(4) clip_rect: vec4<f32>,
 };
 
 @group(0) @binding(0)
@@ -48,12 +50,19 @@ fn vs_main(
     out.color = instance.color;
     out.bg_color = instance.bg_color;
     out.uv_size = instance.uv_size;
+    out.clip_rect = instance.clip_rect;
     
     return out;
 }
 
 @fragment
 fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
+    // Hardware clipping
+    if (in.clip_position.x < in.clip_rect.x || in.clip_position.x > in.clip_rect.x + in.clip_rect.z ||
+        in.clip_position.y < in.clip_rect.y || in.clip_position.y > in.clip_rect.y + in.clip_rect.w) {
+        discard;
+    }
+
     // Detect solid color mode (used for continuous line highlights)
     if (in.uv_size.x < 0.00001 && in.uv_size.y < 0.00001) {
         return in.bg_color;

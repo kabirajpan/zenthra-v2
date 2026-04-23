@@ -1,10 +1,10 @@
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 use crate::prelude::*;
 use crate::traits::font_provider::FontProvider;
 use crate::traits::rasterizer::Rasterizer;
 use crate::primitives::atlas::GlyphAtlas;
 use crate::primitives::pipeline::ZentypePipeline;
-use crate::types::{VerticalAlignment, HorizontalAlignment};
+use crate::types::VerticalAlignment;
 use zenthra_core::Color;
 use wgpu::util::DeviceExt;
 
@@ -105,9 +105,9 @@ impl TextRenderer {
         buffer
     }
 
-    /// Queues a single colored rectangle for rendering.
+    /// Queues a single colored rectangle for rendering with optional clipping.
     /// Useful for cursors, selections, and custom UI elements.
-    pub fn draw_rect(&mut self, pos: [f32; 2], size: [f32; 2], color: Color) {
+    pub fn draw_rect(&mut self, pos: [f32; 2], size: [f32; 2], color: Color, clip_rect: [f32; 4]) {
         self.instances.push(GlyphInstance {
             pos,
             size,
@@ -115,6 +115,7 @@ impl TextRenderer {
             uv_size: [0.0, 0.0],
             color: [0.0, 0.0, 0.0, 0.0],
             bg_color: color.to_array(),
+            clip_rect,
         });
     }
 

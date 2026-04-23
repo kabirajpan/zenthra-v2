@@ -129,10 +129,11 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
     let premul_border = vec4<f32>(in.border_color.rgb * in.border_color.a, in.border_color.a);
 
     var rect_body = premul_fill;
-    if in.border_width > 0.0 {
-        let border_d      = d + in.border_width;
-        let border_factor = smoothstep(-aa_width, aa_width, border_d);
-        rect_body         = mix(premul_border, premul_fill, border_factor);
+    if in.border_width > 0.1 {
+        // Border exists from d = -border_width to d = 0
+        // border_factor is 1.0 (border) at the edge, 0.0 (fill) inside
+        let border_factor = smoothstep(-in.border_width - aa_width, -in.border_width + aa_width, d);
+        rect_body = mix(premul_fill, premul_border, border_factor);
     }
     let premul_rect = rect_body * rect_alpha;
 

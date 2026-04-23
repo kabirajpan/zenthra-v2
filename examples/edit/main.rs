@@ -1,5 +1,4 @@
 use zenthra::prelude::*;
-use zenthra_core::EdgeInsets;
 
 fn main() {
     let mut my_text = String::from("Type here...");
@@ -12,13 +11,16 @@ fn main() {
 
             ui.text("Click the box below to start typing:").show();
 
-            ui.input(&mut my_text)
-                .size(20.0) // Sets font size to 24
-                .bg(Color::BLUE)
-                .min_width(200.0) // Sets minimum width to 400
+            ui.text_area(&mut my_text)
+                .size(20.0)
+                .bg(Color::RED)
+                .text_bg(Color::BLUE)
+                .padding(20.0)
+                .text_bg_full_width(true)
+                .full_width()
+                .height(200.0)
+                .scrollable(true)
                 .show();
-
-            ui.text(&format!("Current buffer: {}", my_text)).show();
         })
         .run();
 }

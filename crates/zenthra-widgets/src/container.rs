@@ -35,8 +35,8 @@ pub enum Wrap {
     RightToLeftReverse,
 }
 
-pub struct ContainerBuilder<'a> {
-    ui: &'a mut Ui,
+pub struct ContainerBuilder<'u, 'a> {
+    ui: &'u mut Ui<'a>,
     direction: Direction,
     halign: HAlign,
     valign: VAlign,
@@ -66,9 +66,9 @@ pub struct ContainerBuilder<'a> {
     opacity: f32,
 }
 
-impl<'a> ContainerBuilder<'a> {
+impl<'u, 'a> ContainerBuilder<'u, 'a> {
     pub fn new(
-        ui: &'a mut Ui,
+        ui: &'u mut Ui<'a>,
         direction: Direction,
         wrap: Wrap,
         children_draws: Vec<DrawCommand>,
@@ -666,7 +666,7 @@ fn offset_draw(cmd: &mut DrawCommand, dx: f32, dy: f32) {
             t.options.x += dx;
             t.options.y += dy;
         }
-        DrawCommand::Cursor(c) => {
+        DrawCommand::OverlayRect(c) => {
             c.x += dx;
             c.y += dy;
         }
@@ -677,6 +677,6 @@ fn draw_origin(cmd: &DrawCommand) -> (f32, f32) {
     match cmd {
         DrawCommand::Rect(r) => (r.instance.pos[0], r.instance.pos[1]),
         DrawCommand::Text(t) => (t.pos[0], t.pos[1]),
-        DrawCommand::Cursor(c) => (c.x, c.y),
+        DrawCommand::OverlayRect(c) => (c.x, c.y),
     }
 }

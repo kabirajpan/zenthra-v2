@@ -3,7 +3,6 @@ use zenthra_render::{RectPipeline};
 use zenthra_text::prelude::*;
 use zenthra_widgets::ui::DrawCommand;
 use zenthra_widgets::Ui;
-use std::sync::{Arc, Mutex};
 
 pub struct App {
     platform: PlatformApp,
@@ -32,7 +31,10 @@ impl App {
         let mut rect_pipeline: Option<RectPipeline> = None;
         let mut zentype: Option<Zentype> = None;
         let mut focused_id: Option<u64> = None;
+        let mut state: std::collections::HashMap<u64, f32> = std::collections::HashMap::new();
         let mut mouse_pos: (f32, f32) = (0.0, 0.0);
+        let mut ui_mouse_down = false;
+        let mut active_drag: Option<zenthra_widgets::ui::ScrollDrag> = None;
 
         self.platform = self.platform.with_ui(move |frame: &mut Frame| {
             let device = frame.window.gpu.device.clone();
@@ -48,9 +50,23 @@ impl App {
             });
 
             // Update persistent mouse pos from current frame events
+            let mut ui_clicked = false;
             for event in frame.events {
-                if let zenthra_platform::event::PlatformEvent::MouseMoved { x, y } = event {
-                    mouse_pos = (*x as f32 / sf, *y as f32 / sf);
+                match event {
+                    zenthra_platform::event::PlatformEvent::MouseMoved { x, y } => {
+                        mouse_pos = (*x as f32 / sf, *y as f32 / sf);
+                    }
+                    zenthra_platform::event::PlatformEvent::MouseButton { state, .. } => {
+                        let was_down = ui_mouse_down;
+                        ui_mouse_down = *state == winit::event::ElementState::Pressed;
+                        if ui_mouse_down && !was_down {
+                            ui_clicked = true;
+                        }
+                        if !ui_mouse_down {
+                            active_drag = None;
+                        }
+                    }
+                    _ => {}
                 }
             }
 
@@ -62,33 +78,56 @@ impl App {
             // We need the font_system from the engine for Ui and widgets to measure
             let font_system = engine.font_system(); // We'll add this accessor
 
+            let (logical_w, logical_h) = (width as f32 / sf, height as f32 / sf);
+
             let mut ui = Ui::new(
-                width,
-                height,
+                logical_w as u32,
+                logical_h as u32,
                 frame.scale_factor(),
                 Some(font_system),
                 frame.events.to_vec(),
                 focused_id,
                 mouse_pos,
+                ui_mouse_down,
+                &mut state,
+                active_drag,
+                ui_clicked,
             );
             
             f(&mut ui);
             focused_id = ui.focused_id;
+            active_drag = ui.active_drag;
 
             let mut rect_instances = Vec::new();
 
             // Process draw commands
             for cmd in &ui.draws {
                 match cmd {
-                    DrawCommand::Rect(r) => {
-                        rect_instances.push(r.instance);
+                    DrawCommand::Rect(rd) => {
+                        let mut inst = rd.instance;
+                        inst.pos[0] *= sf;
+                        inst.pos[1] *= sf;
+                        inst.size[0] *= sf;
+                        inst.size[1] *= sf;
+                        inst.clip_rect[0] *= sf;
+                        inst.clip_rect[1] *= sf;
+                        inst.clip_rect[2] *= sf;
+                        inst.clip_rect[3] *= sf;
+                        rect_instances.push(inst);
                     }
                     DrawCommand::Text(td) => {
-                        // Zentype handles all shaping, measurement, and background generation internally!
-                        engine.draw(queue, &td.text, td.pos, &td.options);
+                        let mut scaled_options = td.options.clone();
+                        scaled_options.scale_factor = sf;
+                        engine.draw(queue, &td.text, td.pos, &scaled_options);
                     }
-                    DrawCommand::Cursor(cd) => {
-                        engine.draw_rect([cd.x, cd.y], [2.0, cd.height], cd.color);
+                    DrawCommand::OverlayRect(od) => {
+                        // Keep manual scaling for OverlayRect as it's a raw call
+                        engine.draw_rect(
+                            [od.x * sf, od.y * sf], 
+                            [od.width * sf, od.height * sf], 
+                            od.color, 
+                            [od.clip[0] * sf, od.clip[1] * sf, od.clip[2] * sf, od.clip[3] * sf]
+                        );
                     }
                 }
             }

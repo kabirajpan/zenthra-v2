@@ -2,7 +2,7 @@ use crate::window::Window;
 use crate::event::PlatformEvent;
 use winit::{
     application::ApplicationHandler,
-    event::{WindowEvent, MouseButton, ElementState},
+    event::WindowEvent,
     event_loop::{ActiveEventLoop, EventLoop},
     window::WindowId,
 };
@@ -132,6 +132,14 @@ impl ApplicationHandler for AppRunner {
             WindowEvent::MouseInput { button, state, .. } => {
                 println!("MouseButton: {:?} {:?}", button, state); self.pending_events.push(PlatformEvent::MouseButton { button, state });
             }
+            WindowEvent::MouseWheel { delta, .. } => {
+                let (x, y) = match delta {
+                    winit::event::MouseScrollDelta::LineDelta(x, y) => (x, y),
+                    winit::event::MouseScrollDelta::PixelDelta(pos) => (pos.x as f32, pos.y as f32),
+                };
+                self.pending_events.push(PlatformEvent::MouseWheel { delta_x: x, delta_y: y });
+            }
+            WindowEvent::Touch(_touch) => { }
             WindowEvent::KeyboardInput { event, .. } => {
                 if event.state == winit::event::ElementState::Pressed {
                     if let winit::keyboard::PhysicalKey::Code(key) = event.physical_key {
