@@ -36,8 +36,10 @@ impl App {
         let mut mouse_pos: (f32, f32) = (0.0, 0.0);
         let mut ui_mouse_down = false;
         let mut active_drag: Option<zenthra_widgets::ui::ScrollDrag> = None;
+        let start_time = std::time::Instant::now();
 
         self.platform = self.platform.with_ui(move |frame: &mut Frame| {
+            let elapsed = start_time.elapsed().as_secs_f32();
             let device = frame.window.gpu.device.clone();
             let queue = &frame.window.gpu.queue;
             let config = &frame.window.gpu.config;
@@ -94,6 +96,7 @@ impl App {
                 &mut cursor_state,
                 active_drag,
                 ui_clicked,
+                elapsed,
             );
             
             f(&mut ui);

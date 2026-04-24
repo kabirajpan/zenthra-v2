@@ -24,6 +24,7 @@ pub struct TextAreaBuilder<'u, 'a, 'b> {
     overflow_hidden: bool,
     text_bg_full_width: bool,
     full_width: bool,
+    wrap: zenthra_text::prelude::TextWrap,
 }
 
 impl<'u, 'a, 'b> TextAreaBuilder<'u, 'a, 'b> {
@@ -49,6 +50,7 @@ impl<'u, 'a, 'b> TextAreaBuilder<'u, 'a, 'b> {
             overflow_hidden: false,
             text_bg_full_width: false,
             full_width: false,
+            wrap: zenthra_text::prelude::TextWrap::Word,
         }
     }
 
@@ -120,6 +122,11 @@ impl<'u, 'a, 'b> TextAreaBuilder<'u, 'a, 'b> {
         self
     }
 
+    pub fn wrap(mut self, strategy: zenthra_text::prelude::TextWrap) -> Self {
+        self.wrap = strategy;
+        self
+    }
+
     pub fn show(self) {
         let is_focused = self.ui.focused_id == Some(self.id);
         
@@ -146,15 +153,12 @@ impl<'u, 'a, 'b> TextAreaBuilder<'u, 'a, 'b> {
             let options = TextOptions::new()
                 .font_size(self.font_size)
                 .line_height(self.line_height)
+                .wrap(self.wrap)
                 .padding(t_padding);
             
             let buffer = adapter.shape(&self.buffer, &options);
             let (_, ch) = buffer.content_size();
-            let mut max_line_y = ch;
-            if let Some(last_line) = buffer.lines().last() {
-                max_line_y = max_line_y.max(last_line.y + (self.font_size * self.line_height) - self.font_size);
-            }
-            (actual_width, max_line_y + t_padding.vertical(), Some(buffer))
+            (actual_width, ch + t_padding.vertical(), Some(buffer))
         } else {
             (actual_width, 20.0, None)
         };
@@ -221,69 +225,43 @@ impl<'u, 'a, 'b> TextAreaBuilder<'u, 'a, 'b> {
                             }
                             winit::keyboard::KeyCode::ArrowUp => {
                                 if let Some(sb) = &shaped_buffer {
-                                    let font_size = self.font_size;
-                                    let lh = self.line_height;
-                                    let visual_ascent = font_size * (0.8 + (lh - 1.0) / 2.0);
-                                    let first_line_y = sb.lines().first().map(|l| l.y).unwrap_or(visual_ascent);
-
-                                    let mut target_x = 0.0;
-                                    let mut target_y = first_line_y;
                                     let row_threshold = (self.font_size * self.line_height) * 0.5;
 
-                                    // 1. Find which line the cursor is currently on using start_clusters
-                                    let mut active_line = None;
-                                    for line in sb.lines() {
+                                    // 1. Find EXACTLY which line index the cursor is on
+                                    let mut current_line_idx = 0;
+                                    for (i, line) in sb.lines().iter().enumerate() {
                                         if line.start_cluster <= cursor_index {
-                                            active_line = Some(line);
+                                            current_line_idx = i;
                                         } else {
                                             break;
                                         }
                                     }
 
-                                    if let Some(line) = active_line {
-                                        target_y = line.y;
-                                        // 2. Find horizontal position on THIS line
-                                        let mut found_g = None;
-                                        for g in sb.glyphs() {
-                                            if (g.y - target_y).abs() < row_threshold {
-                                                if g.cluster <= cursor_index {
-                                                    found_g = Some(g);
-                                                } else {
-                                                    break;
+                                    if current_line_idx > 0 {
+                                        // 2. Identify target line and target X
+                                        let target_line_idx = current_line_idx - 1;
+                                        let target_line = &sb.lines()[target_line_idx];
+                                        
+                                        // Find where we are horizontally on the current line to try and match it
+                                        let mut target_x = 0.0;
+                                        if let Some(current_line) = sb.lines().get(current_line_idx) {
+                                            for g in sb.glyphs() {
+                                                if (g.y - current_line.y).abs() < row_threshold {
+                                                    if g.cluster < cursor_index {
+                                                        target_x = g.x + g.width;
+                                                    } else if g.cluster == cursor_index {
+                                                        target_x = g.x;
+                                                        break;
+                                                    }
                                                 }
                                             }
                                         }
 
-                                        if let Some(g) = found_g {
-                                            if g.cluster < cursor_index {
-                                                target_x = g.x + g.width;
-                                            } else {
-                                                target_x = g.x;
-                                            }
-                                        } else {
-                                            target_x = 0.0;
-                                        }
-                                    }
-                                    
-                                    if cursor_index == self.buffer.len() {
-                                        if let Some(lg) = sb.glyphs().last() {
-                                            if lg.cluster < cursor_index {
-                                                target_x = lg.x + lg.width;
-                                                target_y = lg.y;
-                                            }
-                                        }
-                                    }
-                                    
-                                    let prev_line_y = sb.lines().iter()
-                                        .filter(|l| l.y < target_y - row_threshold)
-                                        .map(|l| l.y)
-                                        .max_by(|a, b| a.partial_cmp(b).unwrap());
-
-                                    if let Some(py) = prev_line_y {
+                                        // 3. Find closest character on target line
                                         let mut best_idx = None;
                                         let mut best_dist = f32::INFINITY;
                                         for g in sb.glyphs() {
-                                            if (g.y - py).abs() < row_threshold {
+                                            if (g.y - target_line.y).abs() < row_threshold {
                                                 let dist = (g.x - target_x).abs();
                                                 if dist < best_dist {
                                                     best_dist = dist;
@@ -291,90 +269,55 @@ impl<'u, 'a, 'b> TextAreaBuilder<'u, 'a, 'b> {
                                                 }
                                             }
                                         }
+
                                         if let Some(idx) = best_idx {
                                             cursor_index = idx;
                                         } else {
-                                            if let Some(line) = sb.lines().iter().find(|l| (l.y - py).abs() < row_threshold) {
-                                                // Find the end of this line (either next line start - 1 or end of buffer)
-                                                let mut line_end = self.buffer.len();
-                                                for next_line in sb.lines() {
-                                                    if next_line.start_cluster > line.start_cluster {
-                                                        line_end = (next_line.start_cluster).saturating_sub(1);
-                                                        break;
-                                                    }
-                                                }
-                                                // For empty lines, end is just the start cluster
-                                                cursor_index = line.start_cluster.max(line_end);
-                                            }
+                                            // Fallback for empty target line
+                                            cursor_index = target_line.start_cluster;
                                         }
-                                    } else {
-                                        cursor_index = 0;
                                     }
                                 }
                             }
                             winit::keyboard::KeyCode::ArrowDown => {
                                 if let Some(sb) = &shaped_buffer {
-                                    let font_size = self.font_size;
-                                    let lh = self.line_height;
-                                    let visual_ascent = font_size * (0.8 + (lh - 1.0) / 2.0);
-                                    let first_line_y = sb.lines().first().map(|l| l.y).unwrap_or(visual_ascent);
-
-                                    let mut target_x = 0.0;
-                                    let mut target_y = first_line_y;
                                     let row_threshold = (self.font_size * self.line_height) * 0.5;
 
-                                    let mut active_line = None;
-                                    for line in sb.lines() {
+                                    // 1. Find EXACTLY which line index the cursor is on
+                                    let mut current_line_idx = 0;
+                                    for (i, line) in sb.lines().iter().enumerate() {
                                         if line.start_cluster <= cursor_index {
-                                            active_line = Some(line);
+                                            current_line_idx = i;
                                         } else {
                                             break;
                                         }
                                     }
 
-                                    if let Some(line) = active_line {
-                                        target_y = line.y;
-                                        let mut found_g = None;
-                                        for g in sb.glyphs() {
-                                            if (g.y - target_y).abs() < row_threshold {
-                                                if g.cluster <= cursor_index {
-                                                    found_g = Some(g);
-                                                } else {
-                                                    break;
+                                    if current_line_idx < sb.lines().len() - 1 {
+                                        // 2. Identify target line and target X
+                                        let target_line_idx = current_line_idx + 1;
+                                        let target_line = &sb.lines()[target_line_idx];
+                                        
+                                        // Find where we are horizontally on current line
+                                        let mut target_x = 0.0;
+                                        if let Some(current_line) = sb.lines().get(current_line_idx) {
+                                            for g in sb.glyphs() {
+                                                if (g.y - current_line.y).abs() < row_threshold {
+                                                    if g.cluster < cursor_index {
+                                                        target_x = g.x + g.width;
+                                                    } else if g.cluster == cursor_index {
+                                                        target_x = g.x;
+                                                        break;
+                                                    }
                                                 }
                                             }
                                         }
 
-                                        if let Some(g) = found_g {
-                                            if g.cluster < cursor_index {
-                                                target_x = g.x + g.width;
-                                            } else {
-                                                target_x = g.x;
-                                            }
-                                        } else {
-                                            target_x = 0.0;
-                                        }
-                                    }
-
-                                    if cursor_index == self.buffer.len() {
-                                        if let Some(lg) = sb.glyphs().last() {
-                                            if lg.cluster < cursor_index {
-                                                target_x = lg.x + lg.width;
-                                                target_y = lg.y;
-                                            }
-                                        }
-                                    }
-                                    
-                                    let next_line_y = sb.lines().iter()
-                                        .filter(|l| l.y > target_y + row_threshold)
-                                        .map(|l| l.y)
-                                        .min_by(|a, b| a.partial_cmp(b).unwrap());
-
-                                    if let Some(ny) = next_line_y {
+                                        // 3. Find closest character on target line
                                         let mut best_idx = None;
                                         let mut best_dist = f32::INFINITY;
                                         for g in sb.glyphs() {
-                                            if (g.y - ny).abs() < row_threshold {
+                                            if (g.y - target_line.y).abs() < row_threshold {
                                                 let dist = (g.x - target_x).abs();
                                                 if dist < best_dist {
                                                     best_dist = dist;
@@ -382,22 +325,13 @@ impl<'u, 'a, 'b> TextAreaBuilder<'u, 'a, 'b> {
                                                 }
                                             }
                                         }
+
                                         if let Some(idx) = best_idx {
                                             cursor_index = idx;
                                         } else {
-                                            if let Some(line) = sb.lines().iter().find(|l| (l.y - ny).abs() < row_threshold) {
-                                                let mut line_end = self.buffer.len();
-                                                for next_line in sb.lines() {
-                                                    if next_line.start_cluster > line.start_cluster {
-                                                        line_end = (next_line.start_cluster).saturating_sub(1);
-                                                        break;
-                                                    }
-                                                }
-                                                cursor_index = line.start_cluster.max(line_end);
-                                            }
+                                            // Fallback for empty target line
+                                            cursor_index = target_line.start_cluster;
                                         }
-                                    } else {
-                                        cursor_index = self.buffer.len();
                                     }
                                 }
                             }
@@ -425,15 +359,10 @@ impl<'u, 'a, 'b> TextAreaBuilder<'u, 'a, 'b> {
                             let layout_width = actual_width - self.padding.horizontal() - t_padding.horizontal();
                             adapter.set_layout_size(layout_width, 10000.0);
                             
-                            let options = TextOptions::new().font_size(self.font_size).line_height(self.line_height).padding(t_padding);
+                            let options = TextOptions::new().font_size(self.font_size).line_height(self.line_height).wrap(self.wrap).padding(t_padding);
                             let buffer = adapter.shape(&self.buffer, &options);
                             let (_cw, ch) = buffer.content_size();
-                            
-                            let mut max_line_y = ch;
-                            if let Some(last_line) = buffer.lines().last() {
-                                max_line_y = max_line_y.max(last_line.y + (self.font_size * self.line_height) - self.font_size);
-                            }
-                            h_content = max_line_y + t_padding.vertical();
+                            h_content = ch + t_padding.vertical();
                             shaped_buffer = Some(buffer);
                             
                             // Re-calculate h_box immediately if not fixed
@@ -486,6 +415,7 @@ impl<'u, 'a, 'b> TextAreaBuilder<'u, 'a, 'b> {
             .color(self.color)
             .full_width_bg(false)
             .padding(self.text_padding)
+            .wrap(self.wrap)
             .max_width(actual_width - self.padding.horizontal())
             .pos(self.x + self.padding.left, pos_y);
 
@@ -600,11 +530,21 @@ impl<'u, 'a, 'b> TextAreaBuilder<'u, 'a, 'b> {
                     }
                 }
                 
+                let cursor_height = font_size * lh;
+                let v_shift = visual_ascent - first_line_y;
                 let cx = lx + self.x + self.padding.left + self.text_padding.left;
                 let cy = ly + self.y + self.padding.top + self.text_padding.top + v_shift - visual_ascent - scroll_y;
                 
-                // Only draw cursor if it's within the viewport
-                if cy >= self.y - 2.0 && cy + cursor_height <= self.y + h_box + 2.0 {
+                // Blink logic: slow down to 500ms on / 500ms off (1 second cycle)
+                let mut is_blink_visible = self.ui.elapsed_time.fract() < 0.5;
+                
+                // We'll use a simple trick: if the cursor state was JUST updated in this frame,
+                // we'll force visibility. Since we can't easily track "last activity" across frames 
+                // without adding more state, we'll use the fract() logic for now, but I'll add 
+                // a small "active" state check if possible.
+                
+                // Only draw cursor if it's within the viewport and in the visible blink phase
+                if cy >= self.y - 2.0 && cy + cursor_height <= self.y + h_box + 2.0 && is_blink_visible {
                     self.ui.draws.push(DrawCommand::OverlayRect(OverlayRectDraw {
                         x: cx,
                         y: cy,

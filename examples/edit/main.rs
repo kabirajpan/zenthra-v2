@@ -1,24 +1,33 @@
 use zenthra::prelude::*;
 
 fn main() {
-    let mut my_text = String::from("Type here...");
+    let mut input_text = String::from("Single line input");
+    let mut area_text = String::from("Multi-line\nTextArea content");
 
     App::new()
-        .title("Zenthra Editor")
+        .title("Zenthra Test")
         .size(600, 400)
         .with_ui(move |ui| {
-            ui.h1("Interactive Editor").show();
+            ui.h1("Widget Parity Test").show();
 
-            ui.text("Click the box below to start typing:").show();
+            ui.text("Input (Horizontal Scroll):").show();
+            ui.input(&mut input_text)
+                .size(20.0)
+                .text_bg(Color::BLUE)
+                .bg(Color::RED)
+                .padding(10.0)
+                .full_width()
+                .show();
 
-            ui.text_area(&mut my_text)
+            ui.text("TextArea (Vertical Grid):").show();
+            ui.text_area(&mut area_text)
                 .size(20.0)
                 .bg(Color::RED)
                 .text_bg(Color::BLUE)
-                .padding(20.0)
                 .text_bg_full_width(true)
+                .padding(10.0)
                 .full_width()
-                .height(200.0)
+                .height(150.0)
                 .scrollable(true)
                 .show();
         })

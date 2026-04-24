@@ -337,9 +337,7 @@ impl<'u, 'a, 'b> InputBuilder<'u, 'a, 'b> {
         if is_focused {
             let font_size = self.font_size;
             let lh = self.line_height;
-            let cursor_height = font_size; 
-            let total_line_height = font_size * lh;
-            let vertical_offset = (total_line_height - cursor_height) / 2.0;
+            let cursor_height = font_size * lh; 
 
             if let Some(sb) = shaped_buffer {
                 let mut lx = 0.0;
@@ -357,7 +355,7 @@ impl<'u, 'a, 'b> InputBuilder<'u, 'a, 'b> {
                 }
 
                 let cx = lx + self.x + self.padding.left + self.text_padding.left - scroll_x;
-                let cy = self.y + self.padding.top + self.text_padding.top + vertical_offset;
+                let cy = self.y + self.padding.top + self.text_padding.top;
                 
                 self.ui.draws.push(DrawCommand::OverlayRect(OverlayRectDraw {
                     x: cx,

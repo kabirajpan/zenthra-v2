@@ -127,6 +127,11 @@ impl<'u, 'a> TextBuilder<'u, 'a> {
         self
     }
     
+    pub fn wrap(mut self, strategy: TextWrap) -> Self {
+        self.options = self.options.wrap(strategy);
+        self
+    }
+    
     pub fn cursor(mut self, c: CursorIcon) -> Self {
         self.cursor = c;
         self

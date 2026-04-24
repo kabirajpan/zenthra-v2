@@ -71,6 +71,7 @@ pub struct Ui<'a> {
     pub cursor_state: &'a mut std::collections::HashMap<u64, usize>,
     pub active_drag: Option<ScrollDrag>,
     pub clicked: bool,
+    pub elapsed_time: f32,
 }
 
 impl<'a> Ui<'a> {
@@ -87,6 +88,7 @@ impl<'a> Ui<'a> {
         cursor_state: &'a mut std::collections::HashMap<u64, usize>,
         active_drag: Option<ScrollDrag>,
         clicked: bool,
+        elapsed_time: f32,
     ) -> Self {
         let mouse_x = mouse_pos.0;
         let mouse_y = mouse_pos.1;
@@ -123,6 +125,7 @@ impl<'a> Ui<'a> {
             cursor_state,
             active_drag,
             clicked,
+            elapsed_time,
         }
     }
 
