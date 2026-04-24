@@ -33,6 +33,7 @@ impl App {
         let mut focused_id: Option<u64> = None;
         let mut state: std::collections::HashMap<u64, f32> = std::collections::HashMap::new();
         let mut cursor_state: std::collections::HashMap<u64, usize> = std::collections::HashMap::new();
+        let mut interaction_state: std::collections::HashMap<u64, f32> = std::collections::HashMap::new();
         let mut mouse_pos: (f32, f32) = (0.0, 0.0);
         let mut ui_mouse_down = false;
         let mut active_drag: Option<zenthra_widgets::ui::ScrollDrag> = None;
@@ -94,6 +95,7 @@ impl App {
                 ui_mouse_down,
                 &mut state,
                 &mut cursor_state,
+                &mut interaction_state,
                 active_drag,
                 ui_clicked,
                 elapsed,

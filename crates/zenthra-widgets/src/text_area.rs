@@ -192,6 +192,7 @@ impl<'u, 'a, 'b> TextAreaBuilder<'u, 'a, 'b> {
                              self.buffer.insert(cursor_index, *c);
                              cursor_index += c.len_utf8();
                              changed = true;
+                             self.ui.interaction_state.insert(self.id, self.ui.elapsed_time);
                         }
                     }
                     PlatformEvent::KeyDown { key } if is_focused => {
@@ -204,6 +205,7 @@ impl<'u, 'a, 'b> TextAreaBuilder<'u, 'a, 'b> {
                                         self.buffer.remove(cursor_index - len);
                                         cursor_index -= len;
                                         changed = true;
+                                        self.ui.interaction_state.insert(self.id, self.ui.elapsed_time);
                                     }
                                 }
                             }
@@ -212,6 +214,7 @@ impl<'u, 'a, 'b> TextAreaBuilder<'u, 'a, 'b> {
                                     let mut chars = self.buffer[..cursor_index].chars();
                                     if let Some(c) = chars.next_back() {
                                         cursor_index -= c.len_utf8();
+                                        self.ui.interaction_state.insert(self.id, self.ui.elapsed_time);
                                     }
                                 }
                             }
@@ -220,11 +223,13 @@ impl<'u, 'a, 'b> TextAreaBuilder<'u, 'a, 'b> {
                                     let mut chars = self.buffer[cursor_index..].chars();
                                     if let Some(c) = chars.next() {
                                         cursor_index += c.len_utf8();
+                                        self.ui.interaction_state.insert(self.id, self.ui.elapsed_time);
                                     }
                                 }
                             }
                             winit::keyboard::KeyCode::ArrowUp => {
                                 if let Some(sb) = &shaped_buffer {
+                                    self.ui.interaction_state.insert(self.id, self.ui.elapsed_time);
                                     let row_threshold = (self.font_size * self.line_height) * 0.5;
 
                                     // 1. Find EXACTLY which line index the cursor is on
@@ -281,6 +286,7 @@ impl<'u, 'a, 'b> TextAreaBuilder<'u, 'a, 'b> {
                             }
                             winit::keyboard::KeyCode::ArrowDown => {
                                 if let Some(sb) = &shaped_buffer {
+                                    self.ui.interaction_state.insert(self.id, self.ui.elapsed_time);
                                     let row_threshold = (self.font_size * self.line_height) * 0.5;
 
                                     // 1. Find EXACTLY which line index the cursor is on
@@ -339,6 +345,7 @@ impl<'u, 'a, 'b> TextAreaBuilder<'u, 'a, 'b> {
                                 self.buffer.insert(cursor_index, '\n');
                                 cursor_index += 1;
                                 changed = true;
+                                self.ui.interaction_state.insert(self.id, self.ui.elapsed_time);
                             }
                             _ => {}
                         }
@@ -535,16 +542,20 @@ impl<'u, 'a, 'b> TextAreaBuilder<'u, 'a, 'b> {
                 let cx = lx + self.x + self.padding.left + self.text_padding.left;
                 let cy = ly + self.y + self.padding.top + self.text_padding.top + v_shift - visual_ascent - scroll_y;
                 
-                // Blink logic: temporarily disabled for focus work
-                let is_blink_visible = true; // self.ui.elapsed_time.fract() < 0.5;
-                
-                // We'll use a simple trick: if the cursor state was JUST updated in this frame,
-                // we'll force visibility. Since we can't easily track "last activity" across frames 
-                // without adding more state, we'll use the fract() logic for now, but I'll add 
-                // a small "active" state check if possible.
-                
-                // Only draw cursor if it's within the viewport and in the visible blink phase
-                if cy >= self.y - 2.0 && cy + cursor_height <= self.y + h_box + 2.0 && is_blink_visible {
+                 // Smart Blink: Solid while typing, blink when idle
+                 let last_activity = *self.ui.interaction_state.get(&self.id).unwrap_or(&0.0);
+                 let time_since_activity = self.ui.elapsed_time - last_activity;
+                 
+                 let is_blink_visible = if time_since_activity < 0.5 {
+                     true // Solid during and just after activity
+                 } else {
+                     // Start blinking after 500ms of idle. 
+                     // Offset by last_activity so the cycle always starts "ON" when you stop.
+                     (self.ui.elapsed_time - last_activity).fract() < 0.5
+                 };
+                 
+                 // Only draw cursor if it's within the viewport and in the visible blink phase
+                 if cy >= self.y - 2.0 && cy + cursor_height <= self.y + h_box + 2.0 && is_blink_visible {
                     self.ui.draws.push(DrawCommand::OverlayRect(OverlayRectDraw {
                         x: cx,
                         y: cy,

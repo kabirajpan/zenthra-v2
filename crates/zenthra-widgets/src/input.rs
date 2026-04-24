@@ -113,17 +113,35 @@ impl<'u, 'a, 'b> InputBuilder<'u, 'a, 'b> {
     pub fn show(self) {
         let is_focused = self.ui.focused_id == Some(self.id);
         
-        // --- 1. Handle Events ---
+        // --- 1. Initial Measure (for hit-testing and initial sizing) ---
+        let (mut w_text_raw, mut h_content, mut shaped_buffer) = if let Some(fs) = self.ui.font_system.as_ref() {
+            let mut adapter = CosmicFontProvider::new_with_system(fs.clone());
+            let t_padding = Padding::from(self.text_padding);
+            adapter.set_layout_size(1000000.0, 10000.0);
+            let options = TextOptions::new().font_size(self.font_size).line_height(self.line_height).padding(t_padding);
+            let buffer = adapter.shape(&self.buffer, &options);
+            let (cw, _ch) = buffer.content_size();
+            let m = adapter.metrics(&options);
+            (cw + t_padding.horizontal(), m.line_height() + t_padding.vertical(), Some(buffer))
+        } else {
+            (self.min_width, 20.0, None)
+        };
+
+        let max_available_w = (self.ui.width - self.x).max(self.min_width);
+        let mut w_box = if self.full_width { max_available_w } else { self.width.unwrap_or_else(|| (w_text_raw + self.padding.horizontal()).min(max_available_w)).max(self.min_width) };
+        let mut h_box = h_content + self.padding.vertical();
+        let mut w_view = w_box - self.padding.horizontal();
+
+        // --- 2. Hit Testing & Event Handling ---
         let mut cursor_index = *self.ui.cursor_state.get(&self.id).unwrap_or(&self.buffer.len());
         cursor_index = cursor_index.min(self.buffer.len());
         if !self.buffer.is_char_boundary(cursor_index) {
             cursor_index = self.buffer.len();
         }
 
-        let approx_w = self.width.unwrap_or(self.min_width).max(10.0);
-        let approx_h = (self.font_size * self.line_height + self.padding.vertical() + self.text_padding.vertical()).max(20.0);
-        let is_hovered = self.ui.mouse_in_rect(self.x, self.y, approx_w, approx_h); 
+        let is_hovered = self.ui.mouse_in_rect(self.x, self.y, w_box, h_box);
         let mut needs_auto_scroll = false;
+        let mut changed = false;
 
         if is_focused || is_hovered || self.ui.active_drag.is_some() {
             let events = std::mem::take(&mut self.ui.input_events);
@@ -134,6 +152,8 @@ impl<'u, 'a, 'b> InputBuilder<'u, 'a, 'b> {
                              self.buffer.insert(cursor_index, *c);
                              cursor_index += c.len_utf8();
                              needs_auto_scroll = true;
+                             changed = true;
+                             self.ui.interaction_state.insert(self.id, self.ui.elapsed_time);
                         }
                     }
                     PlatformEvent::KeyDown { key } if is_focused => {
@@ -146,6 +166,8 @@ impl<'u, 'a, 'b> InputBuilder<'u, 'a, 'b> {
                                         self.buffer.remove(cursor_index - len);
                                         cursor_index -= len;
                                         needs_auto_scroll = true;
+                                        changed = true;
+                                        self.ui.interaction_state.insert(self.id, self.ui.elapsed_time);
                                     }
                                 }
                             }
@@ -155,6 +177,7 @@ impl<'u, 'a, 'b> InputBuilder<'u, 'a, 'b> {
                                     if let Some(c) = chars.next_back() {
                                         cursor_index -= c.len_utf8();
                                         needs_auto_scroll = true;
+                                        self.ui.interaction_state.insert(self.id, self.ui.elapsed_time);
                                     }
                                 }
                             }
@@ -164,6 +187,7 @@ impl<'u, 'a, 'b> InputBuilder<'u, 'a, 'b> {
                                     if let Some(c) = chars.next() {
                                         cursor_index += c.len_utf8();
                                         needs_auto_scroll = true;
+                                        self.ui.interaction_state.insert(self.id, self.ui.elapsed_time);
                                     }
                                 }
                             }
@@ -171,12 +195,10 @@ impl<'u, 'a, 'b> InputBuilder<'u, 'a, 'b> {
                         }
                     }
                     PlatformEvent::MouseWheel { delta_x, delta_y } if is_hovered => {
-                        // We'll update scroll_x later once we have it
-                        // But for now we just handle it here by getting the ID
                         let id = self.id + 100000;
                         let mut sx = *self.ui.scroll_state.get(&id).unwrap_or(&0.0);
-                        let effective_dx = if delta_x.abs() < 0.001 { *delta_y } else { *delta_x };
-                        sx -= effective_dx * 30.0;
+                        let effect = if delta_x.abs() < 0.001 { *delta_y } else { *delta_x };
+                        sx -= effect * 30.0;
                         self.ui.scroll_state.insert(id, sx);
                     }
                     _ => {}
@@ -192,39 +214,25 @@ impl<'u, 'a, 'b> InputBuilder<'u, 'a, 'b> {
             self.ui.cursor_state.insert(self.id, cursor_index);
         }
 
-        // --- 2. Measure & Shape (Now using UPDATED buffer) ---
-        let (w_text_raw, h_content, shaped_buffer) = if let Some(fs) = self.ui.font_system.as_ref() {
-            let mut adapter = CosmicFontProvider::new_with_system(fs.clone());
-            let t_padding = Padding::from(self.text_padding);
-            adapter.set_layout_size(1000000.0, 10000.0); 
-            
-            let options = TextOptions::new()
-                .font_size(self.font_size)
-                .line_height(self.line_height)
-                .padding(t_padding);
-            
-            let buffer = adapter.shape(&self.buffer, &options);
-            let (cw, _ch) = buffer.content_size();
-            let m = adapter.metrics(&options);
-            let h_total = m.line_height() + t_padding.vertical();
-            
-            (cw + t_padding.horizontal(), h_total, Some(buffer))
-        } else {
-            (self.min_width, 20.0, None)
-        };
+        // --- 3. Re-Measure if content changed ---
+        if changed {
+             if let Some(fs) = self.ui.font_system.as_ref() {
+                let mut adapter = CosmicFontProvider::new_with_system(fs.clone());
+                let t_padding = Padding::from(self.text_padding);
+                adapter.set_layout_size(1000000.0, 10000.0);
+                let options = TextOptions::new().font_size(self.font_size).line_height(self.line_height).padding(t_padding);
+                let buffer = adapter.shape(&self.buffer, &options);
+                let (cw, _ch) = buffer.content_size();
+                w_text_raw = cw + t_padding.horizontal();
+                shaped_buffer = Some(buffer);
+                
+                // Re-calculate boxes
+                w_box = if self.full_width { max_available_w } else { self.width.unwrap_or_else(|| (w_text_raw + self.padding.horizontal()).min(max_available_w)).max(self.min_width) };
+                w_view = w_box - self.padding.horizontal();
+            }
+        }
 
-        let max_available_w = (self.ui.width - self.x).max(self.min_width);
-        let w_box = if self.full_width {
-            max_available_w
-        } else {
-            self.width.unwrap_or_else(|| {
-                (w_text_raw + self.padding.horizontal()).min(max_available_w)
-            }).max(self.min_width)
-        };
-        let h_box = h_content + self.padding.vertical();
-        let w_view = w_box - self.padding.horizontal();
-
-        // --- 3. Scroll & Auto-Scroll Calculation ---
+        // --- 4. Scroll & Auto-Scroll Calculation ---
         let scroll_state_id = self.id + 100000;
         let mut scroll_x = *self.ui.scroll_state.get(&scroll_state_id).unwrap_or(&0.0);
         let max_scroll = (w_text_raw - w_view).max(0.0f32);
@@ -356,14 +364,28 @@ impl<'u, 'a, 'b> InputBuilder<'u, 'a, 'b> {
                 let cx = lx + self.x + self.padding.left + self.text_padding.left - scroll_x;
                 let cy = self.y + self.padding.top + self.text_padding.top;
                 
-                self.ui.draws.push(DrawCommand::OverlayRect(OverlayRectDraw {
-                    x: cx,
-                    y: cy,
-                    width: 2.0,
-                    height: cursor_height,
-                    color: Color::WHITE,
-                    clip: [self.x, self.y, w_box, h_box], 
-                }));
+                // Smart Blink: Solid while typing, blink when idle
+                let last_activity = *self.ui.interaction_state.get(&self.id).unwrap_or(&0.0);
+                let time_since_activity = self.ui.elapsed_time - last_activity;
+                
+                let is_blink_visible = if time_since_activity < 0.5 {
+                    true // Solid during and just after activity
+                } else {
+                    // Start blinking after 500ms of idle. 
+                    // Offset by last_activity so the cycle always starts "ON" when you stop.
+                    (self.ui.elapsed_time - last_activity).fract() < 0.5
+                };
+
+                if is_blink_visible {
+                    self.ui.draws.push(DrawCommand::OverlayRect(OverlayRectDraw {
+                        x: cx,
+                        y: cy,
+                        width: 2.0,
+                        height: cursor_height,
+                        color: Color::WHITE,
+                        clip: [self.x, self.y, w_box, h_box], 
+                    }));
+                }
             }
         }
 
