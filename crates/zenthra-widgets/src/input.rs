@@ -113,83 +113,28 @@ impl<'u, 'a, 'b> InputBuilder<'u, 'a, 'b> {
     pub fn show(self) {
         let is_focused = self.ui.focused_id == Some(self.id);
         
-        // --- 1. Initial Measure ---
-        let (w_text_raw, h_content, shaped_buffer) = if let Some(fs) = self.ui.font_system.as_ref() {
-            let mut adapter = CosmicFontProvider::new_with_system(fs.clone());
-            let t_padding = Padding::from(self.text_padding);
-            adapter.set_layout_size(1000000.0, 10000.0); 
-            
-            let options = TextOptions::new()
-                .font_size(self.font_size)
-                .line_height(self.line_height)
-                .padding(t_padding);
-            
-            let buffer = adapter.shape(&self.buffer, &options);
-            let (cw, _ch) = buffer.content_size();
-            let m = adapter.metrics(&options);
-            let h_total = m.line_height() + t_padding.vertical();
-            
-            (cw + t_padding.horizontal(), h_total, Some(buffer))
-        } else {
-            (self.min_width, 20.0, None)
-        };
-
-        let max_available_w = (self.ui.width - self.x).max(self.min_width);
-        let w_box = if self.full_width {
-            max_available_w
-        } else {
-            self.width.unwrap_or_else(|| {
-                (w_text_raw + self.padding.horizontal()).min(max_available_w)
-            }).max(self.min_width)
-        };
-        let h_box = h_content + self.padding.vertical();
-        let w_view = w_box - self.padding.horizontal();
-
-        // --- 2. Calculate Scrollbar Thumb ---
-        let scroll_state_id = self.id + 100000;
-        let mut scroll_x = *self.ui.scroll_state.get(&scroll_state_id).unwrap_or(&0.0);
-        let max_scroll = (w_text_raw - w_view).max(0.0f32);
-
-        let scroll_bar_h = 4.0;
-        let scroll_bar_y = self.y + h_box - scroll_bar_h - 2.0;
-        let thumb_w = if w_text_raw > w_view { (w_view / w_text_raw) * w_view } else { w_view };
-        let thumb_w = thumb_w.max(20.0);
-        let scroll_percent = if max_scroll > 0.0 { scroll_x / max_scroll } else { 0.0 };
-        let track_width = w_view - thumb_w;
-        let thumb_x = self.x + self.padding.left + scroll_percent * track_width;
-
-        // --- 3. Handle Events ---
+        // --- 1. Handle Events ---
         let mut cursor_index = *self.ui.cursor_state.get(&self.id).unwrap_or(&self.buffer.len());
         cursor_index = cursor_index.min(self.buffer.len());
         if !self.buffer.is_char_boundary(cursor_index) {
             cursor_index = self.buffer.len();
         }
 
-        let is_hovered = self.ui.mouse_in_rect(self.x, self.y, w_box, h_box);
-        let is_over_thumb = self.ui.mouse_in_rect(thumb_x, scroll_bar_y - 2.0, thumb_w, scroll_bar_h + 4.0);
-
-        // Handle dragging
-        if let Some(drag) = self.ui.active_drag {
-            if drag.id == scroll_state_id {
-                let delta_mouse = self.ui.mouse_x - drag.start_mouse;
-                if track_width > 0.0 {
-                    let scroll_delta = (delta_mouse / track_width) * max_scroll;
-                    scroll_x = (drag.start_scroll + scroll_delta).clamp(0.0, max_scroll);
-                }
-            }
-        }
+        let approx_w = self.width.unwrap_or(self.min_width).max(10.0);
+        let approx_h = (self.font_size * self.line_height + self.padding.vertical() + self.text_padding.vertical()).max(20.0);
+        let is_hovered = self.ui.mouse_in_rect(self.x, self.y, approx_w, approx_h); 
+        let mut needs_auto_scroll = false;
 
         if is_focused || is_hovered || self.ui.active_drag.is_some() {
             let events = std::mem::take(&mut self.ui.input_events);
-            let mut needs_auto_scroll = false;
             for event in &events {
                 match event {
                     PlatformEvent::CharTyped(c) if is_focused => {
-                         if *c != '\r' && *c != '\n' {
-                              self.buffer.insert(cursor_index, *c);
-                              cursor_index += c.len_utf8();
-                              needs_auto_scroll = true;
-                         }
+                        if *c != '\r' && *c != '\n' {
+                             self.buffer.insert(cursor_index, *c);
+                             cursor_index += c.len_utf8();
+                             needs_auto_scroll = true;
+                        }
                     }
                     PlatformEvent::KeyDown { key } if is_focused => {
                         match key {
@@ -226,67 +171,121 @@ impl<'u, 'a, 'b> InputBuilder<'u, 'a, 'b> {
                         }
                     }
                     PlatformEvent::MouseWheel { delta_x, delta_y } if is_hovered => {
+                        // We'll update scroll_x later once we have it
+                        // But for now we just handle it here by getting the ID
+                        let id = self.id + 100000;
+                        let mut sx = *self.ui.scroll_state.get(&id).unwrap_or(&0.0);
                         let effective_dx = if delta_x.abs() < 0.001 { *delta_y } else { *delta_x };
-                        scroll_x -= effective_dx * 30.0; 
+                        sx -= effective_dx * 30.0;
+                        self.ui.scroll_state.insert(id, sx);
                     }
                     _ => {}
                 }
             }
             
-            if self.ui.clicked {
-                if is_over_thumb {
-                    self.ui.active_drag = Some(ScrollDrag {
-                        id: scroll_state_id,
-                        start_mouse: self.ui.mouse_x,
-                        start_scroll: scroll_x,
-                    });
-                } else if is_hovered {
-                    self.ui.focused_id = Some(self.id);
-                    needs_auto_scroll = true;
-                }
+            if self.ui.clicked && is_hovered {
+                self.ui.focused_id = Some(self.id);
+                needs_auto_scroll = true;
             }
             
-            if let Some(drag) = self.ui.active_drag {
-                if drag.id == scroll_state_id {
-                    // println!("Dragging! mouse: {}, delta: {}", self.ui.mouse_x, self.ui.mouse_x - drag.start_mouse);
-                }
-            }
-            
-            // Auto-scroll to cursor after event processing
-            let is_dragging_this = self.ui.active_drag.map(|d| d.id == scroll_state_id).unwrap_or(false);
-            if is_focused && !is_dragging_this && needs_auto_scroll {
-                if let Some(sb) = &shaped_buffer {
-                    let mut clx = 0.0;
-                    let mut found = false;
-                    for g in sb.glyphs() {
-                        if g.cluster == cursor_index {
-                            clx = g.x;
-                            found = true;
-                            break;
-                        }
-                    }
-                    if !found && cursor_index == self.buffer.len() {
-                        clx = sb.glyphs().last().map(|g: &ShapedGlyph| g.x + g.width).unwrap_or(0.0);
-                    }
-
-                    let cursor_x_v = clx + self.text_padding.left;
-                    if cursor_x_v > scroll_x + w_view - 40.0 {
-                        scroll_x = cursor_x_v - w_view + 40.0;
-                    } else if cursor_x_v < scroll_x + 10.0 {
-                        scroll_x = (cursor_x_v - 10.0).max(0.0);
-                    }
-                }
-            }
-
-            scroll_x = scroll_x.clamp(0.0, max_scroll);
-            self.ui.scroll_state.insert(scroll_state_id, scroll_x);
             self.ui.input_events = events;
             self.ui.cursor_state.insert(self.id, cursor_index);
-        } else if self.ui.active_drag.is_some() {
-            // Also update if we are dragging even if not hovered (drag-out)
-            scroll_x = scroll_x.clamp(0.0, max_scroll);
-            self.ui.scroll_state.insert(scroll_state_id, scroll_x);
         }
+
+        // --- 2. Measure & Shape (Now using UPDATED buffer) ---
+        let (w_text_raw, h_content, shaped_buffer) = if let Some(fs) = self.ui.font_system.as_ref() {
+            let mut adapter = CosmicFontProvider::new_with_system(fs.clone());
+            let t_padding = Padding::from(self.text_padding);
+            adapter.set_layout_size(1000000.0, 10000.0); 
+            
+            let options = TextOptions::new()
+                .font_size(self.font_size)
+                .line_height(self.line_height)
+                .padding(t_padding);
+            
+            let buffer = adapter.shape(&self.buffer, &options);
+            let (cw, _ch) = buffer.content_size();
+            let m = adapter.metrics(&options);
+            let h_total = m.line_height() + t_padding.vertical();
+            
+            (cw + t_padding.horizontal(), h_total, Some(buffer))
+        } else {
+            (self.min_width, 20.0, None)
+        };
+
+        let max_available_w = (self.ui.width - self.x).max(self.min_width);
+        let w_box = if self.full_width {
+            max_available_w
+        } else {
+            self.width.unwrap_or_else(|| {
+                (w_text_raw + self.padding.horizontal()).min(max_available_w)
+            }).max(self.min_width)
+        };
+        let h_box = h_content + self.padding.vertical();
+        let w_view = w_box - self.padding.horizontal();
+
+        // --- 3. Scroll & Auto-Scroll Calculation ---
+        let scroll_state_id = self.id + 100000;
+        let mut scroll_x = *self.ui.scroll_state.get(&scroll_state_id).unwrap_or(&0.0);
+        let max_scroll = (w_text_raw - w_view).max(0.0f32);
+
+        let scroll_bar_h = 4.0;
+        let scroll_bar_y = self.y + h_box - scroll_bar_h - 2.0;
+        let thumb_w = if w_text_raw > w_view { (w_view / w_text_raw) * w_view } else { w_view };
+        let thumb_w = thumb_w.max(20.0);
+        let scroll_percent = if max_scroll > 0.0 { scroll_x / max_scroll } else { 0.0 };
+        let track_width = (w_view - thumb_w).max(0.0);
+        let thumb_x = self.x + self.padding.left + scroll_percent * track_width;
+
+        let is_over_thumb = self.ui.mouse_in_rect(thumb_x, scroll_bar_y - 2.0, thumb_w, scroll_bar_h + 4.0);
+
+        // Handle dragging
+        if let Some(drag) = self.ui.active_drag {
+            if drag.id == scroll_state_id {
+                let delta_mouse = self.ui.mouse_x - drag.start_mouse;
+                if track_width > 0.0 {
+                    let scroll_delta = (delta_mouse / track_width) * max_scroll;
+                    scroll_x = (drag.start_scroll + scroll_delta).clamp(0.0, max_scroll);
+                }
+            }
+        }
+        
+        if self.ui.clicked && is_over_thumb {
+            self.ui.active_drag = Some(ScrollDrag {
+                id: scroll_state_id,
+                start_mouse: self.ui.mouse_x,
+                start_scroll: scroll_x,
+            });
+        }
+
+        // Auto-scroll logic (Now uses FRESH buffer)
+        let is_dragging_this = self.ui.active_drag.map(|d| d.id == scroll_state_id).unwrap_or(false);
+        if is_focused && !is_dragging_this && needs_auto_scroll {
+            if let Some(sb) = &shaped_buffer {
+                let mut clx = 0.0;
+                let mut found = false;
+                for g in sb.glyphs() {
+                    if g.cluster == cursor_index {
+                        clx = g.x;
+                        found = true;
+                        break;
+                    }
+                }
+                if !found && cursor_index == self.buffer.len() {
+                    clx = sb.glyphs().last().map(|g: &ShapedGlyph| g.x + g.width).unwrap_or(0.0);
+                }
+
+                let cursor_x_v = clx + self.text_padding.left;
+                if cursor_x_v > scroll_x + w_view - 40.0 {
+                    scroll_x = cursor_x_v - w_view + 40.0;
+                } else if cursor_x_v < scroll_x + 10.0 {
+                    scroll_x = (cursor_x_v - 10.0).max(0.0);
+                }
+            }
+        }
+
+        scroll_x = scroll_x.clamp(0.0, max_scroll);
+        self.ui.scroll_state.insert(scroll_state_id, scroll_x);
 
         // --- 4. Render Background ---
         let start_draw = self.ui.draws.len();
@@ -331,7 +330,7 @@ impl<'u, 'a, 'b> InputBuilder<'u, 'a, 'b> {
             text_builder = text_builder.bg(tbg).full_width_bg(false);
         }
         
-        text_builder.draw_and_measure();
+        let (_, _, final_sb, _) = text_builder.draw_and_measure();
         
         // --- 6. Cursor Rendering ---
         if is_focused {
@@ -339,7 +338,7 @@ impl<'u, 'a, 'b> InputBuilder<'u, 'a, 'b> {
             let lh = self.line_height;
             let cursor_height = font_size * lh; 
 
-            if let Some(sb) = shaped_buffer {
+            if let Some(sb) = final_sb {
                 let mut lx = 0.0;
                 let mut found = false;
                 for g in sb.glyphs() {

@@ -74,10 +74,8 @@ impl TextRenderer {
         
         // --- Handle wrapping within the padded area ---
         let mut final_options = options.clone();
-        if final_options.max_width.is_none() {
-            // Default to the calculated layout width
-            final_options.max_width = Some(layout_width);
-        }
+        // Always enforce layout_width as the shaper boundary to respect padding
+        final_options.max_width = Some(layout_width);
         
         // 2. Shape text with the final bounding options
         let buffer = self.font_provider.shape(text, &final_options);

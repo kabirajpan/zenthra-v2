@@ -535,8 +535,8 @@ impl<'u, 'a, 'b> TextAreaBuilder<'u, 'a, 'b> {
                 let cx = lx + self.x + self.padding.left + self.text_padding.left;
                 let cy = ly + self.y + self.padding.top + self.text_padding.top + v_shift - visual_ascent - scroll_y;
                 
-                // Blink logic: slow down to 500ms on / 500ms off (1 second cycle)
-                let mut is_blink_visible = self.ui.elapsed_time.fract() < 0.5;
+                // Blink logic: temporarily disabled for focus work
+                let is_blink_visible = true; // self.ui.elapsed_time.fract() < 0.5;
                 
                 // We'll use a simple trick: if the cursor state was JUST updated in this frame,
                 // we'll force visibility. Since we can't easily track "last activity" across frames 

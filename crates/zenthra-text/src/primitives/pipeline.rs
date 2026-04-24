@@ -70,7 +70,9 @@ impl ZentypePipeline {
             let mut width = cw + padding.left + padding.right;
 
             if options.full_width_bg {
-                 width = options.max_width.unwrap_or(width);
+                 // options.max_width is the CONTENT width (already shrunken by padding).
+                 // For the background, we need to add the padding back to get the total widget width.
+                 width = options.max_width.map(|mw| mw + padding.left + padding.right).unwrap_or(width);
             }
 
             if let Some(min_w) = options.min_width {
