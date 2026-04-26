@@ -38,3 +38,11 @@ path = "../../examples/nested_wrap.rs"
 [[example]]
 name = "edit"
 path = "../../examples/edit/main.rs"
+
+[[example]]
+name = "button"
+path = "../../examples/button.rs"
+
+[[example]]
+name = "render_modes"
+path = "../../examples/render_modes.rs"

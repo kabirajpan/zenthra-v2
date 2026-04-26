@@ -7,24 +7,24 @@ use wgpu::util::DeviceExt;
 /// offset  0  loc 0  pos           [f32;2]
 /// offset  8  loc 1  size          [f32;2]
 /// offset 16  loc 2  color         [f32;4]
-/// offset 32  loc 3  radius        f32
-/// offset 36  loc 4  border_width  f32
-/// offset 40  loc 5  border_color  [f32;4]
-/// offset 56  loc 6  shadow_color  [f32;4]
-/// offset 72  loc 7  shadow_offset [f32;2]
-/// offset 80  loc 8  shadow_blur   f32
-/// offset 84  loc 9  clip_rect     [f32;4]
-/// offset 100 loc 10 grayscale     f32
-/// offset 104 loc 11 brightness    f32
-/// offset 108 loc 12 opacity       f32
-/// total: 112 bytes
+/// offset 32  loc 3  radius        [f32;4]
+/// offset 48  loc 4  border_width  f32
+/// offset 52  loc 5  border_color  [f32;4]
+/// offset 68  loc 6  shadow_color  [f32;4]
+/// offset 84  loc 7  shadow_offset [f32;2]
+/// offset 92  loc 8  shadow_blur   f32
+/// offset 96  loc 9  clip_rect     [f32;4]
+/// offset 112 loc 10 grayscale     f32
+/// offset 116 loc 11 brightness    f32
+/// offset 120 loc 12 opacity       f32
+/// total: 124 bytes
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Pod, Zeroable)]
 pub struct RectInstance {
-    pub pos: [f32; 2],           // offset 0
-    pub size: [f32; 2],          // offset 8
-    pub color: [f32; 4],         // offset 16
-    pub radius: f32,             // offset 32
+    pub pos: [f32; 2],           
+    pub size: [f32; 2],          
+    pub color: [f32; 4],         
+    pub radius: [f32; 4],        
     pub border_width: f32,       // offset 36
     pub border_color: [f32; 4],  // offset 40
     pub shadow_color: [f32; 4],  // offset 56
@@ -42,7 +42,7 @@ impl Default for RectInstance {
             pos: [0.0; 2],
             size: [100.0, 100.0],
             color: [1.0, 1.0, 1.0, 1.0],
-            radius: 0.0,
+            radius: [0.0; 4],
             border_width: 0.0,
             border_color: [0.0; 4],
             shadow_color: [0.0; 4],
@@ -80,50 +80,50 @@ impl RectInstance {
                 wgpu::VertexAttribute {
                     offset: 32,
                     shader_location: 3,
-                    format: wgpu::VertexFormat::Float32,
+                    format: wgpu::VertexFormat::Float32x4,
                 },
                 wgpu::VertexAttribute {
-                    offset: 36,
+                    offset: 48,
                     shader_location: 4,
                     format: wgpu::VertexFormat::Float32,
                 },
                 wgpu::VertexAttribute {
-                    offset: 40,
+                    offset: 52,
                     shader_location: 5,
                     format: wgpu::VertexFormat::Float32x4,
                 },
                 wgpu::VertexAttribute {
-                    offset: 56,
+                    offset: 68,
                     shader_location: 6,
                     format: wgpu::VertexFormat::Float32x4,
                 },
                 wgpu::VertexAttribute {
-                    offset: 72,
+                    offset: 84,
                     shader_location: 7,
                     format: wgpu::VertexFormat::Float32x2,
                 },
                 wgpu::VertexAttribute {
-                    offset: 80,
+                    offset: 92,
                     shader_location: 8,
                     format: wgpu::VertexFormat::Float32,
                 },
                 wgpu::VertexAttribute {
-                    offset: 84,
+                    offset: 96,
                     shader_location: 9,
                     format: wgpu::VertexFormat::Float32x4,
                 },
                 wgpu::VertexAttribute {
-                    offset: 100,
+                    offset: 112,
                     shader_location: 10,
                     format: wgpu::VertexFormat::Float32,
                 },
                 wgpu::VertexAttribute {
-                    offset: 104,
+                    offset: 116,
                     shader_location: 11,
                     format: wgpu::VertexFormat::Float32,
                 },
                 wgpu::VertexAttribute {
-                    offset: 108,
+                    offset: 120,
                     shader_location: 12,
                     format: wgpu::VertexFormat::Float32,
                 },

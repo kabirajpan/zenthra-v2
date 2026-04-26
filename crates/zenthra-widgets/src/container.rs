@@ -64,30 +64,22 @@ pub struct ContainerBuilder<'u, 'a> {
     shadow_blur: f32,
     shadow_color: Option<Color>,
     opacity: f32,
+    render_mode: Option<zenthra_core::RenderMode>,
 }
 
 impl<'u, 'a> ContainerBuilder<'u, 'a> {
-    pub fn new(
-        ui: &'u mut Ui<'a>,
-        direction: Direction,
-        wrap: Wrap,
-        children_draws: Vec<DrawCommand>,
-        child_sizes: Vec<(f32, f32)>,
-        child_ranges: Vec<(usize, usize)>,
-        start_x: f32,
-        start_y: f32,
-    ) -> Self {
+    pub fn new(ui: &'u mut Ui<'a>) -> Self {
         Self {
             ui,
-            direction,
+            direction: Direction::Column,
             halign: HAlign::Left,
             valign: VAlign::Top,
-            wrap,
-            children_draws,
-            child_sizes,
-            child_ranges,
-            start_x,
-            start_y,
+            wrap: Wrap::NoWrap,
+            children_draws: Vec::new(),
+            child_sizes: Vec::new(),
+            child_ranges: Vec::new(),
+            start_x: 0.0,
+            start_y: 0.0,
             pos_x: None,
             pos_y: None,
             width: None,
@@ -106,6 +98,7 @@ impl<'u, 'a> ContainerBuilder<'u, 'a> {
             shadow_blur: 0.0,
             shadow_color: None,
             opacity: 1.0,
+            render_mode: None,
         }
     }
 
@@ -161,6 +154,77 @@ impl<'u, 'a> ContainerBuilder<'u, 'a> {
         self
     }
 
+    pub fn row(mut self) -> Self {
+        self.direction = Direction::Row;
+        self
+    }
+
+    pub fn column(mut self) -> Self {
+        self.direction = Direction::Column;
+        self
+    }
+
+    pub fn wrap(mut self) -> Self {
+        self.wrap = Wrap::Wrap;
+        self
+    }
+
+    pub fn no_wrap(mut self) -> Self {
+        self.wrap = Wrap::NoWrap;
+        self
+    }
+
+    pub fn center(mut self) -> Self {
+        self.halign = HAlign::Center;
+        self.valign = VAlign::Center;
+        self
+    }
+
+    pub fn center_x(mut self) -> Self {
+        self.halign = HAlign::Center;
+        self
+    }
+
+    pub fn center_y(mut self) -> Self {
+        self.valign = VAlign::Center;
+        self
+    }
+
+    pub fn align_top(mut self) -> Self {
+        self.valign = VAlign::Top;
+        self
+    }
+
+    pub fn align_bottom(mut self) -> Self {
+        self.valign = VAlign::Bottom;
+        self
+    }
+
+    pub fn align_left(mut self) -> Self {
+        self.halign = HAlign::Left;
+        self
+    }
+
+    pub fn align_right(mut self) -> Self {
+        self.halign = HAlign::Right;
+        self
+    }
+
+    pub fn continuous(mut self) -> Self {
+        self.render_mode = Some(zenthra_core::RenderMode::Continuous);
+        self
+    }
+
+    pub fn static_mode(mut self) -> Self {
+        self.render_mode = Some(zenthra_core::RenderMode::Static);
+        self
+    }
+
+    pub fn render_mode(mut self, mode: zenthra_core::RenderMode) -> Self {
+        self.render_mode = Some(mode);
+        self
+    }
+
     pub fn halign(mut self, align: HAlign) -> Self {
         self.halign = align;
         self
@@ -170,6 +234,7 @@ impl<'u, 'a> ContainerBuilder<'u, 'a> {
         self.valign = align;
         self
     }
+
     pub fn padding_left(mut self, p: f32) -> Self {
         self.padding_left = p;
         self
@@ -208,12 +273,77 @@ impl<'u, 'a> ContainerBuilder<'u, 'a> {
         self
     }
 
-    pub fn show(mut self) {
-        let n = self.child_sizes.len();
+    pub fn show<F>(mut self, f: F) 
+    where F: FnOnce(&mut Ui)
+    {
+        // 1. Capture the start position and own ID
+        let id = self.ui.id();
+        
+        self.start_x = self.ui.cursor_x;
+        self.start_y = self.ui.cursor_y;
         let ox = self.pos_x.unwrap_or(self.start_x);
         let oy = self.pos_y.unwrap_or(self.start_y);
 
-        // 1. Determine available space for wrapping
+        // -- Save current Ui environment --
+        let prev_dir = self.ui.direction;
+        let prev_line_h = self.ui.line_height;
+        let prev_base_x = self.ui.base_x;
+        let prev_base_y = self.ui.base_y;
+        let prev_offset_x = self.ui.offset_x;
+        let prev_offset_y = self.ui.offset_y;
+        
+        // Take and isolate state maps for children
+        let prev_child_sizes = std::mem::take(&mut self.ui.child_sizes);
+        let prev_child_ranges = std::mem::take(&mut self.ui.child_draw_ranges);
+        let prev_id_ranges = std::mem::take(&mut self.ui.id_ranges);
+        let prev_id_log = std::mem::take(&mut self.ui.id_log);
+
+        // Set child environment
+        self.ui.direction = self.direction;
+        self.ui.line_height = 0.0;
+        self.ui.base_x = ox + self.padding_left;
+        self.ui.base_y = oy + self.padding_top;
+        self.ui.cursor_x = self.ui.base_x;
+        self.ui.cursor_y = self.ui.base_y;
+        
+        let mode = self.render_mode.unwrap_or(self.ui.current_render_mode());
+        self.ui.render_mode_stack.push(mode);
+        if mode == zenthra_core::RenderMode::Continuous {
+            self.ui.needs_redraw = true;
+        }
+
+        self.ui.semantic_stack.push(id);
+        self.ui.register_semantic(zenthra_core::SemanticNode::new(id, zenthra_core::Role::Container, zenthra_core::Rect::new(ox, oy, 0.0, 0.0)));
+
+        let parent_draws = std::mem::take(&mut self.ui.draws);
+
+        // -- Run Children --
+        f(self.ui);
+
+        // -- Restore Stacks and Environment --
+        self.ui.render_mode_stack.pop();
+        self.ui.semantic_stack.pop();
+        
+        // Capture everything the children created
+        let child_ids_only = std::mem::replace(&mut self.ui.id_log, prev_id_log);
+        let child_id_ranges = std::mem::replace(&mut self.ui.id_ranges, prev_id_ranges);
+        self.children_draws = std::mem::replace(&mut self.ui.draws, parent_draws);
+        self.child_sizes = std::mem::replace(&mut self.ui.child_sizes, prev_child_sizes);
+        self.child_ranges = std::mem::replace(&mut self.ui.child_draw_ranges, prev_child_ranges);
+
+        // Restore cursor/base
+        self.ui.direction = prev_dir;
+        self.ui.line_height = prev_line_h;
+        self.ui.base_x = prev_base_x;
+        self.ui.base_y = prev_base_y;
+        self.ui.offset_x = prev_offset_x;
+        self.ui.offset_y = prev_offset_y;
+        self.ui.cursor_x = self.start_x;
+        self.ui.cursor_y = self.start_y;
+
+        // -- Layout Engine --
+        let n = self.child_sizes.len();
+
         let avail_w = if self.fill_x {
             self.ui.width - ox
         } else if let Some(w) = self.width {
@@ -230,14 +360,12 @@ impl<'u, 'a> ContainerBuilder<'u, 'a> {
             f32::INFINITY
         };
 
-        // 2. Compute target positions and actual content size
         let mut target_positions: Vec<(f32, f32)> = vec![(0.0, 0.0); n];
         let (content_w, content_h) = match self.wrap {
             Wrap::NoWrap => self.layout_no_wrap(ox, oy, avail_w, avail_h, &mut target_positions),
             _ => self.layout_wrap(ox, oy, avail_w, avail_h, &mut target_positions),
         };
 
-        // 3. Final dimensions
         let w = if self.fill_x {
             self.ui.width - ox
         } else {
@@ -250,8 +378,9 @@ impl<'u, 'a> ContainerBuilder<'u, 'a> {
         };
 
         let draw_start = self.ui.draws.len();
+        self.ui.record_layout(id, zenthra_core::Rect::new(ox, oy, w, h));
 
-        // ── bg rect ───────────────────────────────────────────────────────
+        // Background
         if let Some(bg) = self.bg {
             let bc = self.border_color.unwrap_or(Color::TRANSPARENT);
             let sc = self.shadow_color.unwrap_or(Color::TRANSPARENT);
@@ -260,7 +389,7 @@ impl<'u, 'a> ContainerBuilder<'u, 'a> {
                     pos: [ox, oy],
                     size: [w, h],
                     color: bg.to_array(),
-                    radius: self.radius,
+                    radius: [self.radius; 4],
                     border_width: self.border_width,
                     border_color: bc.to_array(),
                     shadow_color: sc.to_array(),
@@ -274,47 +403,49 @@ impl<'u, 'a> ContainerBuilder<'u, 'a> {
             }));
         }
 
-        // ── offset each child's draws and flush ───────────────────────────
+        // Final Translation Pass
         for (i, (start, end)) in self.child_ranges.iter().enumerate() {
-            if i >= target_positions.len() {
-                break;
-            }
+            if i >= target_positions.len() { break; }
             let (tx, ty) = target_positions[i];
 
-            // find where this child actually drew from
             let (origin_x, origin_y) = self
                 .children_draws
                 .get(*start)
                 .map(|d| draw_origin(d))
-                .unwrap_or((self.start_x, self.start_y));
+                .unwrap_or((ox + self.padding_left, oy + self.padding_top));
 
             let dx = tx - origin_x;
             let dy = ty - origin_y;
 
-            for draw in &mut self.children_draws[*start..*end] {
-                offset_draw(draw, dx, dy);
+            if dx != 0.0 || dy != 0.0 {
+                // visuals
+                for draw in &mut self.children_draws[*start..*end] {
+                    offset_draw(draw, dx, dy);
+                }
+                
+                // hit-test regions
+                if let Some(&(id_s, id_e)) = child_id_ranges.get(i) {
+                    for j in id_s..id_e {
+                        let cid = child_ids_only[j];
+                        if let Some(rect) = self.ui.next_layout_cache.get_mut(&cid) {
+                            rect.origin.x += dx;
+                            rect.origin.y += dy;
+                        }
+                    }
+                }
             }
         }
 
-        for draw in self.children_draws {
+        // Flush children draws to parent
+        for draw in self.children_draws.drain(..) {
             self.ui.draws.push(draw);
         }
-
-        // ── advance parent cursor ─────────────────────────────────────────
-        let draw_end = self.ui.draws.len();
-        self.ui.child_draw_ranges.push((draw_start, draw_end));
-        self.ui.child_sizes.push((w, h));
-
-        match self.ui.direction {
-            Direction::Column => {
-                self.ui.cursor_x = self.ui.base_x;
-                self.ui.cursor_y = oy + h;
-            }
-            Direction::Row => {
-                self.ui.cursor_x = ox + w;
-                self.ui.cursor_y = self.ui.base_y;
-            }
-        }
+        
+        // Bubble IDs up to parent's scope
+        self.ui.id_log.push(id);
+        self.ui.id_log.extend(child_ids_only);
+        
+        self.ui.advance(w, h, draw_start);
     }
 
     fn layout_no_wrap(
@@ -326,27 +457,17 @@ impl<'u, 'a> ContainerBuilder<'u, 'a> {
         targets: &mut [(f32, f32)],
     ) -> (f32, f32) {
         let n = self.child_sizes.len();
-        if n == 0 {
-            return (0.0, 0.0);
-        }
+        if n == 0 { return (0.0, 0.0); }
 
         let (content_w, content_h) = match self.direction {
             Direction::Row => {
                 let w = self.child_sizes.iter().map(|(w, _)| w).sum::<f32>()
                     + self.gap * (n.saturating_sub(1)) as f32;
-                let h = self
-                    .child_sizes
-                    .iter()
-                    .map(|(_, h)| *h)
-                    .fold(0.0f32, f32::max);
+                let h = self.child_sizes.iter().map(|(_, h)| *h).fold(0.0f32, f32::max);
                 (w, h)
             }
             Direction::Column => {
-                let w = self
-                    .child_sizes
-                    .iter()
-                    .map(|(w, _)| *w)
-                    .fold(0.0f32, f32::max);
+                let w = self.child_sizes.iter().map(|(w, _)| *w).fold(0.0f32, f32::max);
                 let h = self.child_sizes.iter().map(|(_, h)| h).sum::<f32>()
                     + self.gap * (n.saturating_sub(1)) as f32;
                 (w, h)
@@ -356,67 +477,65 @@ impl<'u, 'a> ContainerBuilder<'u, 'a> {
         let real_w = if inner_w.is_infinite() { content_w } else { inner_w };
         let real_h = if inner_h.is_infinite() { content_h } else { inner_h };
 
+        match self.target_halign_valign(ox, oy, real_w, real_h, content_w, content_h, targets) {
+            (w, h) => (w, h),
+        }
+    }
+    
+    fn target_halign_valign(&self, ox: f32, oy: f32, real_w: f32, real_h: f32, content_w: f32, content_h: f32, targets: &mut [(f32, f32)]) -> (f32, f32) {
+        let n = self.child_sizes.len();
         match self.direction {
             Direction::Row => {
                 let extra = (real_w - content_w).max(0.0);
-                let mut cx = ox
-                    + self.padding_left
-                    + match self.halign {
-                        HAlign::Left => 0.0,
-                        HAlign::Center => extra / 2.0,
-                        HAlign::Right => extra,
-                        HAlign::SpaceBetween => 0.0,
-                        HAlign::SpaceAround => extra / (n as f32 * 2.0),
-                    };
+                let mut cx = ox + self.padding_left + match self.halign {
+                    HAlign::Left => 0.0,
+                    HAlign::Center => extra / 2.0,
+                    HAlign::Right => extra,
+                    HAlign::SpaceBetween => 0.0,
+                    HAlign::SpaceAround => extra / (n as f32 * 2.0),
+                };
                 let gap = match self.halign {
                     HAlign::SpaceBetween if n > 1 => extra / (n - 1) as f32,
                     HAlign::SpaceAround => extra / n as f32,
                     _ => self.gap,
                 };
                 for (i, (cw, ch)) in self.child_sizes.iter().enumerate() {
-                    let cy = oy
-                        + self.padding_top
-                        + match self.valign {
-                            VAlign::Top => 0.0,
-                            VAlign::Center => (real_h - ch) / 2.0,
-                            VAlign::Bottom => real_h - ch,
-                            _ => 0.0,
-                        };
+                    let cy = oy + self.padding_top + match self.valign {
+                        VAlign::Top => 0.0,
+                        VAlign::Center => (real_h - ch) / 2.0,
+                        VAlign::Bottom => real_h - ch,
+                        _ => 0.0,
+                    };
                     targets[i] = (cx, cy);
                     cx += cw + gap;
                 }
             }
             Direction::Column => {
                 let extra = (real_h - content_h).max(0.0);
-                let mut cy = oy
-                    + self.padding_top
-                    + match self.valign {
-                        VAlign::Top => 0.0,
-                        VAlign::Center => extra / 2.0,
-                        VAlign::Bottom => extra,
-                        VAlign::SpaceBetween => 0.0,
-                        VAlign::SpaceAround => extra / (n as f32 * 2.0),
-                    };
+                let mut cy = oy + self.padding_top + match self.valign {
+                    VAlign::Top => 0.0,
+                    VAlign::Center => extra / 2.0,
+                    VAlign::Bottom => extra,
+                    VAlign::SpaceBetween => 0.0,
+                    VAlign::SpaceAround => extra / (n as f32 * 2.0),
+                };
                 let gap = match self.valign {
                     VAlign::SpaceBetween if n > 1 => extra / (n - 1) as f32,
                     VAlign::SpaceAround => extra / n as f32,
                     _ => self.gap,
                 };
                 for (i, (cw, ch)) in self.child_sizes.iter().enumerate() {
-                    let cx = ox
-                        + self.padding_left
-                        + match self.halign {
-                            HAlign::Left => 0.0,
-                            HAlign::Center => (real_w - cw) / 2.0,
-                            HAlign::Right => real_w - cw,
-                            _ => 0.0,
-                        };
+                    let cx = ox + self.padding_left + match self.halign {
+                        HAlign::Left => 0.0,
+                        HAlign::Center => (real_w - cw) / 2.0,
+                        HAlign::Right => real_w - cw,
+                        _ => 0.0,
+                    };
                     targets[i] = (cx, cy);
                     cy += ch + gap;
                 }
             }
         }
-
         (content_w, content_h)
     }
 
@@ -429,11 +548,8 @@ impl<'u, 'a> ContainerBuilder<'u, 'a> {
         targets: &mut [(f32, f32)],
     ) -> (f32, f32) {
         let n = self.child_sizes.len();
-        if n == 0 {
-            return (0.0, 0.0);
-        }
+        if n == 0 { return (0.0, 0.0); }
 
-        // Determine if main axis or cross axis should be reversed
         let (main_reversed, cross_reversed) = match self.wrap {
             Wrap::Wrap => (false, false),
             Wrap::WrapReverse => (false, true),
@@ -473,7 +589,6 @@ impl<'u, 'a> ContainerBuilder<'u, 'a> {
                 let real_h = if inner_h.is_infinite() { total_h } else { inner_h };
                 let real_w = if inner_w.is_infinite() { max_row_w } else { inner_w };
 
-                // Vertical starting point (Cross axis)
                 let mut cy = if cross_reversed {
                     oy + self.padding_top + match self.valign {
                         VAlign::Top => real_h,
@@ -493,10 +608,8 @@ impl<'u, 'a> ContainerBuilder<'u, 'a> {
                     let row_h = row_heights[ri];
                     let row_content_w = row.iter().map(|&i| self.child_sizes[i].0).sum::<f32>() + self.gap * (row.len().saturating_sub(1)) as f32;
                     let extra = (real_w - row_content_w).max(0.0);
-
                     if cross_reversed { cy -= row_h; }
 
-                    // Horizontal starting point (Main axis)
                     let mut cx = if main_reversed {
                         ox + self.padding_left + match self.halign {
                             HAlign::Left => real_w,
@@ -523,26 +636,15 @@ impl<'u, 'a> ContainerBuilder<'u, 'a> {
                     for &ci in row {
                         let (cw, ch) = self.child_sizes[ci];
                         if main_reversed { cx -= cw; }
-                        
                         let child_y = cy + match self.valign {
                             VAlign::Center => (row_h - ch) / 2.0,
                             VAlign::Bottom => row_h - ch,
                             _ => 0.0,
                         };
                         targets[ci] = (cx, child_y);
-                        
-                        if main_reversed {
-                            cx -= gap;
-                        } else {
-                            cx += cw + gap;
-                        }
+                        if main_reversed { cx -= gap; } else { cx += cw + gap; }
                     }
-
-                    if cross_reversed {
-                        cy -= self.gap;
-                    } else {
-                        cy += row_h + self.gap;
-                    }
+                    if cross_reversed { cy -= self.gap; } else { cy += row_h + self.gap; }
                 }
                 (max_row_w, total_h)
             }
@@ -576,7 +678,6 @@ impl<'u, 'a> ContainerBuilder<'u, 'a> {
                 let real_w = if inner_w.is_infinite() { total_w } else { inner_w };
                 let real_h = if inner_h.is_infinite() { max_col_h } else { inner_h };
 
-                // Horizontal starting point (Cross axis)
                 let mut cx = if cross_reversed {
                     ox + self.padding_left + match self.halign {
                         HAlign::Left => real_w,
@@ -596,10 +697,8 @@ impl<'u, 'a> ContainerBuilder<'u, 'a> {
                     let col_w = col_widths[ci_idx];
                     let col_content_h = col.iter().map(|&i| self.child_sizes[i].1).sum::<f32>() + self.gap * (col.len().saturating_sub(1)) as f32;
                     let extra = (real_h - col_content_h).max(0.0);
-
                     if cross_reversed { cx -= col_w; }
 
-                    // Vertical starting point (Main axis)
                     let mut cy = if main_reversed {
                         oy + self.padding_top + match self.valign {
                             VAlign::Top => real_h,
@@ -626,26 +725,15 @@ impl<'u, 'a> ContainerBuilder<'u, 'a> {
                     for &ci in col {
                         let (cw, ch) = self.child_sizes[ci];
                         if main_reversed { cy -= ch; }
-                        
                         let child_x = cx + match self.halign {
                             HAlign::Center => (col_w - cw) / 2.0,
                             HAlign::Right => col_w - cw,
                             _ => 0.0,
                         };
                         targets[ci] = (child_x, cy);
-                        
-                        if main_reversed {
-                            cy -= gap;
-                        } else {
-                            cy += ch + gap;
-                        }
+                        if main_reversed { cy -= gap; } else { cy += ch + gap; }
                     }
-
-                    if cross_reversed {
-                        cx -= self.gap;
-                    } else {
-                        cx += col_w + self.gap;
-                    }
+                    if cross_reversed { cx -= self.gap; } else { cx += col_w + self.gap; }
                 }
                 (total_w, max_col_h)
             }
@@ -665,6 +753,8 @@ fn offset_draw(cmd: &mut DrawCommand, dx: f32, dy: f32) {
             t.pos[1] += dy;
             t.options.x += dx;
             t.options.y += dy;
+            t.clip[0] += dx;
+            t.clip[1] += dy;
         }
         DrawCommand::OverlayRect(c) => {
             c.x += dx;

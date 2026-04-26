@@ -9,7 +9,7 @@ struct RectInstance {
     @location(0)  pos:           vec2<f32>,
     @location(1)  size:          vec2<f32>,
     @location(2)  color:         vec4<f32>,
-    @location(3)  radius:        f32,
+    @location(3)  radius:        vec4<f32>,
     @location(4)  border_width:  f32,
     @location(5)  border_color:  vec4<f32>,
     @location(6)  shadow_color:  vec4<f32>,
@@ -26,7 +26,7 @@ struct VertexOutput {
     @location(0)  color:         vec4<f32>,
     @location(1)  local_pos:     vec2<f32>,
     @location(2)  half_size:     vec2<f32>,
-    @location(3)  radius:        f32,
+    @location(3)  radius:        vec4<f32>,
     @location(4)  border_width:  f32,
     @location(5)  border_color:  vec4<f32>,
     @location(6)  shadow_color:  vec4<f32>,
@@ -83,9 +83,14 @@ fn vs_main(
     return out;
 }
 
-fn sdf_rounded_box(p: vec2<f32>, b: vec2<f32>, r: f32) -> f32 {
-    let q = abs(p) - b + vec2<f32>(r, r);
-    return length(max(q, vec2<f32>(0.0, 0.0))) + min(max(q.x, q.y), 0.0) - r;
+fn sdf_rounded_box(p: vec2<f32>, b: vec2<f32>, r: vec4<f32>) -> f32 {
+    let corner = select(
+        select(r.w, r.z, p.x > 0.0),
+        select(r.x, r.y, p.x > 0.0),
+        p.y > 0.0
+    );
+    let q = abs(p) - b + corner;
+    return length(max(q, vec2<f32>(0.0))) + min(max(q.x, q.y), 0.0) - corner;
 }
 
 fn gaussian_shadow(d: f32, sigma: f32) -> f32 {
@@ -105,7 +110,7 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
         discard;
     }
 
-    let r = min(in.radius, min(in.half_size.x, in.half_size.y));
+    let r = in.radius;
 
     // 1. Shadow
     var shadow_alpha = 0.0;

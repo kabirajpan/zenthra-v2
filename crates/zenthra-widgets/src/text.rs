@@ -1,7 +1,7 @@
 use zenthra_text::prelude::*;
-use zenthra_text::traits::FontProvider;
+// use zenthra_text::traits::FontProvider;
 use crate::ui::{DrawCommand, TextDraw, Ui};
-use zenthra_core::{Color, EdgeInsets};
+use zenthra_core::{Color, EdgeInsets, Role, SemanticNode, Rect};
 
 pub struct TextBuilder<'u, 'a> {
     ui: &'u mut Ui<'a>,
@@ -170,6 +170,13 @@ impl<'u, 'a> TextBuilder<'u, 'a> {
         let horiz = self.margin.horizontal();
         let vert = self.margin.vertical();
         let (w, h, buffer, start) = self.draw_and_measure();
+        
+        let id = self.ui.id();
+        self.ui.register_semantic(
+            SemanticNode::new(id, Role::Label, Rect::new(self.options.x, self.options.y, w, h))
+                .with_label(self.content.clone())
+        );
+
         self.ui.advance(w + horiz, h + vert, start);
         buffer
     }
@@ -221,7 +228,7 @@ impl<'u, 'a> TextBuilder<'u, 'a> {
                     pos: [self.options.x, self.options.y],
                     size: [w, h],
                     color: bg.to_array(),
-                    radius: self.bg_radius,
+                    radius: [self.bg_radius; 4],
                     border_width: 0.0,
                     border_color: [0.0, 0.0, 0.0, 0.0],
                     shadow_color: [0.0, 0.0, 0.0, 0.0],

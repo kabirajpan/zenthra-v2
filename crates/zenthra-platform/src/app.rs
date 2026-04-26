@@ -28,7 +28,7 @@ pub struct App {
     title: String,
     width: u32,
     height: u32,
-    draw_fn: Option<Box<dyn FnMut(&mut Frame) + 'static>>,
+    draw_fn: Option<Box<dyn FnMut(&mut Frame) -> bool + 'static>>,
 }
 
 impl App {
@@ -54,7 +54,7 @@ impl App {
 
     pub fn with_ui<F>(mut self, f: F) -> Self
     where
-        F: FnMut(&mut Frame) + 'static,
+        F: FnMut(&mut Frame) -> bool + 'static,
     {
         self.draw_fn = Some(Box::new(f));
         self
@@ -78,7 +78,7 @@ struct AppRunner {
     title: String,
     width: u32,
     height: u32,
-    draw_fn: Option<Box<dyn FnMut(&mut Frame) + 'static>>,
+    draw_fn: Option<Box<dyn FnMut(&mut Frame) -> bool + 'static>>,
     window: Option<Window>,
     pending_events: Vec<PlatformEvent>,
 }
@@ -87,14 +87,19 @@ impl AppRunner {
     fn render(&mut self) {
         let Some(window) = &mut self.window else { return };
 
+        let mut needs_redraw = false;
         if let Some(draw_fn) = &mut self.draw_fn {
             let mut frame = Frame { 
                 window,
                 events: &self.pending_events,
             };
-            draw_fn(&mut frame);
+            needs_redraw = draw_fn(&mut frame);
         }
         self.pending_events.clear();
+        
+        if needs_redraw {
+            window.request_redraw();
+        }
     }
 }
 
@@ -128,9 +133,11 @@ impl ApplicationHandler for AppRunner {
                     x: position.x,
                     y: position.y,
                 });
+                if let Some(w) = &mut self.window { w.request_redraw(); }
             }
             WindowEvent::MouseInput { button, state, .. } => {
                 println!("MouseButton: {:?} {:?}", button, state); self.pending_events.push(PlatformEvent::MouseButton { button, state });
+                if let Some(w) = &mut self.window { w.request_redraw(); }
             }
             WindowEvent::MouseWheel { delta, .. } => {
                 let (x, y) = match delta {
@@ -138,6 +145,7 @@ impl ApplicationHandler for AppRunner {
                     winit::event::MouseScrollDelta::PixelDelta(pos) => (pos.x as f32, pos.y as f32),
                 };
                 self.pending_events.push(PlatformEvent::MouseWheel { delta_x: x, delta_y: y });
+                if let Some(w) = &mut self.window { w.request_redraw(); }
             }
             WindowEvent::Touch(_touch) => { }
             WindowEvent::KeyboardInput { event, .. } => {
@@ -154,12 +162,10 @@ impl ApplicationHandler for AppRunner {
                         }
                     }
                 }
+                if let Some(w) = &mut self.window { w.request_redraw(); }
             }
             WindowEvent::RedrawRequested => {
                 self.render();
-                if let Some(w) = &self.window {
-                    w.request_redraw();
-                }
             }
             _ => {}
         }

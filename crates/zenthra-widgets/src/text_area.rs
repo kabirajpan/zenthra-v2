@@ -1,14 +1,14 @@
 use crate::ui::{Ui, DrawCommand, OverlayRectDraw};
 use crate::text::TextBuilder;
-use zenthra_core::{Color, EdgeInsets};
+use zenthra_core::{Color, EdgeInsets, Id};
 use zenthra_platform::event::PlatformEvent;
 use zenthra_text::prelude::{TextOptions, CosmicFontProvider, Padding};
-use zenthra_text::traits::FontProvider;
+// use zenthra_text::traits::FontProvider;
 
 pub struct TextAreaBuilder<'u, 'a, 'b> {
     ui: &'u mut Ui<'a>,
     buffer: &'b mut String,
-    id: u64,
+    id: Id,
     x: f32,
     y: f32,
     font_size: f32,
@@ -29,7 +29,7 @@ pub struct TextAreaBuilder<'u, 'a, 'b> {
 }
 
 impl<'u, 'a, 'b> TextAreaBuilder<'u, 'a, 'b> {
-    pub fn new(ui: &'u mut Ui<'a>, buffer: &'b mut String, id: u64) -> Self {
+    pub fn new(ui: &'u mut Ui<'a>, buffer: &'b mut String, id: Id) -> Self {
         let x = ui.cursor_x;
         let y = ui.cursor_y;
         Self {
@@ -407,7 +407,7 @@ impl<'u, 'a, 'b> TextAreaBuilder<'u, 'a, 'b> {
                     pos: [self.x, self.y],
                     size: [actual_width, h_box],
                     color: bg.to_array(),
-                    radius: 4.0, // Match typical UI style
+                    radius: [4.0; 4], // Match typical UI style
                     border_width: if is_focused { 1.0 } else { 0.0 },
                     border_color: [1.0, 1.0, 1.0, 0.4],
                     shadow_color: [0.0, 0.0, 0.0, 0.0],

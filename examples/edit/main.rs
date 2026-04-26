@@ -14,7 +14,6 @@ fn main() {
             ui.input(&mut input_text)
                 .size(20.0)
                 .text_bg(Color::BLUE)
-                .text_padding(30.0)
                 .text_bg_full_width(true)
                 .bg(Color::RED)
                 .padding(10.0)

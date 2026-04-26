@@ -1,6 +1,6 @@
 use crate::ui::{Ui, DrawCommand, OverlayRectDraw, ScrollDrag};
 use crate::text::TextBuilder;
-use zenthra_core::{Color, EdgeInsets};
+use zenthra_core::{Color, EdgeInsets, Id, Role, SemanticNode, Rect};
 use zenthra_platform::event::PlatformEvent;
 use zenthra_text::prelude::{TextOptions, CosmicFontProvider, Padding, ShapedGlyph};
 use zenthra_text::traits::FontProvider;
@@ -8,7 +8,7 @@ use zenthra_text::traits::FontProvider;
 pub struct InputBuilder<'u, 'a, 'b> {
     ui: &'u mut Ui<'a>,
     buffer: &'b mut String,
-    id: u64,
+    id: Id,
     x: f32,
     y: f32,
     font_size: f32,
@@ -27,7 +27,7 @@ pub struct InputBuilder<'u, 'a, 'b> {
 }
 
 impl<'u, 'a, 'b> InputBuilder<'u, 'a, 'b> {
-    pub fn new(ui: &'u mut Ui<'a>, buffer: &'b mut String, id: u64) -> Self {
+    pub fn new(ui: &'u mut Ui<'a>, buffer: &'b mut String, id: Id) -> Self {
         let x = ui.cursor_x;
         let y = ui.cursor_y;
         Self {
@@ -121,7 +121,7 @@ impl<'u, 'a, 'b> InputBuilder<'u, 'a, 'b> {
         let is_focused = self.ui.focused_id == Some(self.id);
         
         // --- 1. Initial Measure (for hit-testing and initial sizing) ---
-        let (mut w_text_raw, mut h_content, mut shaped_buffer) = if let Some(fs) = self.ui.font_system.as_ref() {
+        let (mut w_text_raw, h_content, mut shaped_buffer) = if let Some(fs) = self.ui.font_system.as_ref() {
             let mut adapter = CosmicFontProvider::new_with_system(fs.clone());
             let t_padding = Padding::from(self.text_padding);
             adapter.set_layout_size(1000000.0, 10000.0);
@@ -136,7 +136,7 @@ impl<'u, 'a, 'b> InputBuilder<'u, 'a, 'b> {
 
         let max_available_w = (self.ui.width - self.x).max(self.min_width);
         let mut w_box = if self.full_width { max_available_w } else { self.width.unwrap_or_else(|| (w_text_raw + self.padding.horizontal()).min(max_available_w)).max(self.min_width) };
-        let mut h_box = h_content + self.padding.vertical();
+        let h_box = h_content + self.padding.vertical();
         let mut w_view = w_box - self.padding.horizontal();
 
         // --- 2. Hit Testing & Event Handling ---
@@ -202,11 +202,11 @@ impl<'u, 'a, 'b> InputBuilder<'u, 'a, 'b> {
                         }
                     }
                     PlatformEvent::MouseWheel { delta_x, delta_y } if is_hovered => {
-                        let id = self.id + 100000;
-                        let mut sx = *self.ui.scroll_state.get(&id).unwrap_or(&0.0);
+                        let _id = self.id;
+                        let mut sx = *self.ui.scroll_state.get(&self.id).unwrap_or(&0.0);
                         let effect = if delta_x.abs() < 0.001 { *delta_y } else { *delta_x };
                         sx -= effect * 30.0;
-                        self.ui.scroll_state.insert(id, sx);
+                        self.ui.scroll_state.insert(self.id, sx);
                     }
                     _ => {}
                 }
@@ -240,7 +240,7 @@ impl<'u, 'a, 'b> InputBuilder<'u, 'a, 'b> {
         }
 
         // --- 4. Scroll & Auto-Scroll Calculation ---
-        let scroll_state_id = self.id + 100000;
+        let scroll_state_id = self.id;
         let mut scroll_x = *self.ui.scroll_state.get(&scroll_state_id).unwrap_or(&0.0);
         let max_scroll = (w_text_raw - w_view).max(0.0f32);
 
@@ -312,7 +312,7 @@ impl<'u, 'a, 'b> InputBuilder<'u, 'a, 'b> {
                     pos: [self.x, self.y],
                     size: [w_box, h_box],
                     color: bg.to_array(),
-                    radius: 4.0,
+                    radius: [4.0; 4],
                     border_width: if is_focused { 1.0 } else { 0.0 },
                     border_color: [1.0, 1.0, 1.0, 0.4],
                     shadow_color: [0.0, 0.0, 0.0, 0.0],
@@ -414,7 +414,14 @@ impl<'u, 'a, 'b> InputBuilder<'u, 'a, 'b> {
             }));
         }
 
-        // --- 8. Advance UI ---
+        // --- 8. Semantic Registration ---
+        self.ui.register_semantic(
+            SemanticNode::new(self.id, Role::TextInput, Rect::new(self.x, self.y, w_box, h_box))
+                .with_label(self.buffer.clone())
+                .with_focus(is_focused)
+        );
+
+        // --- 9. Advance UI ---
         self.ui.advance(w_box, h_box, start_draw);
     }
 }
