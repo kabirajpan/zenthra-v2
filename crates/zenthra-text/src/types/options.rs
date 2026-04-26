@@ -15,9 +15,7 @@ pub struct TextOptions {
     pub font_weight: FontWeight,
     pub font_style: FontStyle,
 
-    pub bg_color: Option<Color>,
-    pub padding: Padding,
-    pub full_width_bg: bool,
+    pub highlight_color: Option<Color>,
 
     pub max_width: Option<f32>,
     pub max_height: Option<f32>,
@@ -53,10 +51,7 @@ impl Default for TextOptions {
             font_family: None,
             font_weight: FontWeight::Regular,
             font_style: FontStyle::Normal,
-            bg_color: None,
-            padding: Padding::all(0.0),
-
-            full_width_bg: false,
+            highlight_color: None,
             max_width: None,
             max_height: None,
             line_height: 1.5,
@@ -112,57 +107,11 @@ impl TextOptions {
         self
     }
 
-    pub fn bg(mut self, color: Color) -> Self {
-        self.bg_color = Some(color);
+    pub fn highlight(mut self, color: Color) -> Self {
+        self.highlight_color = Some(color);
         self
     }
 
-    pub fn padding(mut self, padding: Padding) -> Self {
-        self.padding = padding;
-        self
-    }
-
-    pub fn padding_all(mut self, value: f32) -> Self {
-        self.padding = Padding::all(value);
-        self
-    }
-
-    pub fn padding_horizontal(mut self, value: f32) -> Self {
-        self.padding.left = value;
-        self.padding.right = value;
-        self
-    }
-
-    pub fn padding_vertical(mut self, value: f32) -> Self {
-        self.padding.top = value;
-        self.padding.bottom = value;
-        self
-    }
-
-    pub fn padding_left(mut self, value: f32) -> Self {
-        self.padding.left = value;
-        self
-    }
-
-    pub fn padding_right(mut self, value: f32) -> Self {
-        self.padding.right = value;
-        self
-    }
-
-    pub fn padding_top(mut self, value: f32) -> Self {
-        self.padding.top = value;
-        self
-    }
-
-    pub fn padding_bottom(mut self, value: f32) -> Self {
-        self.padding.bottom = value;
-        self
-    }
-
-    pub fn full_width(mut self, enabled: bool) -> Self {
-        self.full_width_bg = enabled;
-        self
-    }
 
     pub fn max_width(mut self, width: f32) -> Self {
         self.max_width = Some(width);

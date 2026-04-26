@@ -1,6 +1,6 @@
 use std::path::Path;
 use std::sync::{Arc, Mutex};
-use cosmic_text::{Attrs, Buffer, FontSystem, Metrics, Shaping};
+use cosmic_text::{Buffer, FontSystem, Metrics, Shaping};
 use crate::primitives::shaped_buffer::ShapedBuffer;
 use crate::traits::{FontProvider, FontMetrics};
 use crate::types::options::TextOptions;

@@ -13,8 +13,10 @@ fn main() {
             //     .bg(Color::BLUE)
             //     .show();
             ui.text("And this is standard body text. And this is standard body text. And this is standard body text. And this is standard body text. And this is standard body text. And this is standard body text.")
-                .padding(30.0)
+                
                 .bg(Color::BLUE)
+                .padding_x(30.0)
+                .highlight(Color::RED)
                 .show();
         })
         .run();

@@ -40,67 +40,53 @@ impl ZentypePipeline {
         options: &crate::types::options::TextOptions,
     ) -> Vec<crate::types::glyph::GlyphInstance> {
         // We pre-allocate space for backgrounds and glyphs
-        let has_bg = options.bg_color.map(|c| c.a > 0.0).unwrap_or(false);
+        let has_highlight = options.highlight_color.map(|c| c.a > 0.0).unwrap_or(false);
 
-        let bg_count = if has_bg { buffer.lines().len() } else { 0 };
+        let bg_count = if has_highlight { 1 } else { 0 };
         let mut instances = Vec::with_capacity(buffer.len() + bg_count);
 
-        // --- 1. AUTOMATIC BACKGROUND GENERATION ---
+        // --- 1. METRICS & ALIGNMENT ---
         let font_size = options.font_size;
         let lh = options.line_height;
-        let _box_height = font_size * lh;
         let visual_ascent = font_size * (0.8 + (lh - 1.0) / 2.0);
-        let padding = options.padding;
 
-        // Calculate a vertical shift to ensure the first line's top starts exactly at pos[1] + padding.top
-        // The first line's l.y is its baseline relative to some origin.
-        // We want (pos[1] + padding.top + line.y + shift) - visual_ascent == pos[1] + padding.top
-        // So: line.y + shift - visual_ascent == 0 => shift = visual_ascent - line.y
+        // Calculate a vertical shift to ensure the first line's top starts exactly at pos[1]
         let first_line_y = buffer.lines().first().map(|l| l.y).unwrap_or(visual_ascent);
         let vertical_shift = visual_ascent - first_line_y;
 
         let clip = options.clip_rect.unwrap_or([0.0, 0.0, 9999.0, 9999.0]);
+        let sf = options.scale_factor;
 
-        if has_bg {
-            let bg_color = options.bg_color.unwrap();
-            let sf = options.scale_factor;
-
-            // DRAW A SINGLE UNIFIED BACKGROUND FOR THE WHOLE BLOCK
-            let (cw, ch) = buffer.content_size();
-            let mut width = cw + padding.left + padding.right;
-
-            if options.full_width_bg {
-                 // options.max_width is the CONTENT width (already shrunken by padding).
-                 // For the background, we need to add the padding back to get the total widget width.
-                 width = options.max_width.map(|mw| mw + padding.left + padding.right).unwrap_or(width);
-            }
-
-            if let Some(min_w) = options.min_width {
-                if width < min_w {
-                    width = min_w;
+        // --- 2. HIGHLIGHT RENDERING ---
+        if has_highlight {
+            let highlight_color = options.highlight_color.unwrap();
+            
+            for line in buffer.lines() {
+                if line.width > 0.0 {
+                    instances.push(crate::types::glyph::GlyphInstance {
+                        pos: [
+                            (pos[0] + line.x) * sf, 
+                            (pos[1] + line.y + vertical_shift - visual_ascent) * sf
+                        ],
+                        size: [line.width * sf, (font_size * lh) * sf],
+                        uv_pos: [0.0, 0.0],
+                        uv_size: [0.0, 0.0],
+                        color: [0.0, 0.0, 0.0, 0.0],
+                        bg_color: highlight_color.to_array(),
+                        clip_rect: clip,
+                    });
                 }
             }
-
-            instances.insert(0, crate::types::glyph::GlyphInstance {
-                pos: [pos[0] * sf, pos[1] * sf], // Start at widget top
-                size: [width * sf, (ch + padding.top + padding.bottom) * sf], // Full multi-line padded height
-                uv_pos: [0.0, 0.0],
-                uv_size: [0.0, 0.0],
-                color: [0.0, 0.0, 0.0, 0.0],
-                bg_color: bg_color.to_array(),
-                clip_rect: clip,
-            });
         }
 
-        // --- 2. GLYPH RENDERING ---
+        // --- 3. GLYPH RENDERING ---
         let color = options.color;
-        let sf = options.scale_factor;
         for glyph in buffer.glyphs() {
             if let Some(entry) = atlas.get(&glyph.key) {
                 instances.push(crate::types::glyph::GlyphInstance {
                     pos: [
-                        (pos[0] + glyph.x + options.padding.left) * sf + entry.pixel_offset[0],
-                        (pos[1] + glyph.y + options.padding.top + vertical_shift) * sf - entry.pixel_offset[1],
+                        (pos[0] + glyph.x) * sf + entry.pixel_offset[0],
+                        (pos[1] + glyph.y + vertical_shift) * sf - entry.pixel_offset[1],
                     ],
                     size: entry.pixel_size,
                     uv_pos: entry.uv_pos,

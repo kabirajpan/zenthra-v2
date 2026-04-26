@@ -15,6 +15,7 @@ pub struct InputBuilder<'u, 'a, 'b> {
     color: Color,
     bg: Option<Color>,
     text_bg: Option<Color>,
+    highlight: Option<Color>,
     padding: EdgeInsets,
     text_padding: EdgeInsets,
     line_height: f32,
@@ -47,6 +48,7 @@ impl<'u, 'a, 'b> InputBuilder<'u, 'a, 'b> {
             scrollable: true,
             full_width: false,
             text_bg_full_width: false,
+            highlight: None,
         }
     }
 
@@ -67,6 +69,11 @@ impl<'u, 'a, 'b> InputBuilder<'u, 'a, 'b> {
 
     pub fn text_bg(mut self, bg: Color) -> Self {
         self.text_bg = Some(bg);
+        self
+    }
+
+    pub fn highlight(mut self, color: Color) -> Self {
+        self.highlight = Some(color);
         self
     }
 
@@ -118,7 +125,7 @@ impl<'u, 'a, 'b> InputBuilder<'u, 'a, 'b> {
             let mut adapter = CosmicFontProvider::new_with_system(fs.clone());
             let t_padding = Padding::from(self.text_padding);
             adapter.set_layout_size(1000000.0, 10000.0);
-            let options = TextOptions::new().font_size(self.font_size).line_height(self.line_height).padding(t_padding);
+            let options = TextOptions::new().font_size(self.font_size).line_height(self.line_height);
             let buffer = adapter.shape(&self.buffer, &options);
             let (cw, _ch) = buffer.content_size();
             let m = adapter.metrics(&options);
@@ -220,7 +227,7 @@ impl<'u, 'a, 'b> InputBuilder<'u, 'a, 'b> {
                 let mut adapter = CosmicFontProvider::new_with_system(fs.clone());
                 let t_padding = Padding::from(self.text_padding);
                 adapter.set_layout_size(1000000.0, 10000.0);
-                let options = TextOptions::new().font_size(self.font_size).line_height(self.line_height).padding(t_padding);
+                let options = TextOptions::new().font_size(self.font_size).line_height(self.line_height);
                 let buffer = adapter.shape(&self.buffer, &options);
                 let (cw, _ch) = buffer.content_size();
                 w_text_raw = cw + t_padding.horizontal();
@@ -336,6 +343,10 @@ impl<'u, 'a, 'b> InputBuilder<'u, 'a, 'b> {
         
         if let Some(tbg) = self.text_bg {
             text_builder = text_builder.bg(tbg).full_width_bg(false);
+        }
+
+        if let Some(h) = self.highlight {
+            text_builder = text_builder.highlight(h);
         }
         
         let (_, _, final_sb, _) = text_builder.draw_and_measure();

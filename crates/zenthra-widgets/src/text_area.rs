@@ -15,6 +15,7 @@ pub struct TextAreaBuilder<'u, 'a, 'b> {
     color: Color,
     bg: Option<Color>,
     text_bg: Option<Color>,
+    highlight: Option<Color>,
     padding: EdgeInsets,
     text_padding: EdgeInsets,
     line_height: f32,
@@ -50,6 +51,7 @@ impl<'u, 'a, 'b> TextAreaBuilder<'u, 'a, 'b> {
             overflow_hidden: false,
             text_bg_full_width: false,
             full_width: false,
+            highlight: None,
             wrap: zenthra_text::prelude::TextWrap::Word,
         }
     }
@@ -84,6 +86,11 @@ impl<'u, 'a, 'b> TextAreaBuilder<'u, 'a, 'b> {
 
     pub fn text_bg(mut self, bg: Color) -> Self {
         self.text_bg = Some(bg);
+        self
+    }
+
+    pub fn highlight(mut self, color: Color) -> Self {
+        self.highlight = Some(color);
         self
     }
 
@@ -154,7 +161,7 @@ impl<'u, 'a, 'b> TextAreaBuilder<'u, 'a, 'b> {
                 .font_size(self.font_size)
                 .line_height(self.line_height)
                 .wrap(self.wrap)
-                .padding(t_padding);
+                .max_width(layout_width);
             
             let buffer = adapter.shape(&self.buffer, &options);
             let (_, ch) = buffer.content_size();
@@ -366,7 +373,7 @@ impl<'u, 'a, 'b> TextAreaBuilder<'u, 'a, 'b> {
                             let layout_width = actual_width - self.padding.horizontal() - t_padding.horizontal();
                             adapter.set_layout_size(layout_width, 10000.0);
                             
-                            let options = TextOptions::new().font_size(self.font_size).line_height(self.line_height).wrap(self.wrap).padding(t_padding);
+                            let options = TextOptions::new().font_size(self.font_size).line_height(self.line_height).wrap(self.wrap).max_width(layout_width);
                             let buffer = adapter.shape(&self.buffer, &options);
                             let (_cw, ch) = buffer.content_size();
                             h_content = ch + t_padding.vertical();
@@ -434,6 +441,10 @@ impl<'u, 'a, 'b> TextAreaBuilder<'u, 'a, 'b> {
             text_builder = text_builder.bg(tbg).full_width_bg(false);
         }
 
+        if let Some(h) = self.highlight {
+            text_builder = text_builder.highlight(h);
+        }
+
         if self.overflow_hidden {
             // Reverted to full-box clipping so content can merge with edges during scroll
             text_builder = text_builder.clip_rect(self.x, self.y, actual_width, h_box);
@@ -481,8 +492,8 @@ impl<'u, 'a, 'b> TextAreaBuilder<'u, 'a, 'b> {
         if is_focused {
             let font_size = self.font_size;
             let lh = self.line_height;
-            let cursor_height = font_size * lh;
             let visual_ascent = font_size * (0.8 + (lh - 1.0) / 2.0);
+            let cursor_height = font_size * lh;
 
             if let Some(sb) = shaped_buffer {
                 let first_line_y = sb.lines().first().map(|l| l.y).unwrap_or(visual_ascent);
@@ -537,8 +548,6 @@ impl<'u, 'a, 'b> TextAreaBuilder<'u, 'a, 'b> {
                     }
                 }
                 
-                let cursor_height = font_size * lh;
-                let v_shift = visual_ascent - first_line_y;
                 let cx = lx + self.x + self.padding.left + self.text_padding.left;
                 let cy = ly + self.y + self.padding.top + self.text_padding.top + v_shift - visual_ascent - scroll_y;
                 

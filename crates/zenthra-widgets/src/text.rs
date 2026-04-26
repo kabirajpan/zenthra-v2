@@ -8,6 +8,11 @@ pub struct TextBuilder<'u, 'a> {
     content: String,
     options: TextOptions,
     
+    // Container/Widget-level styling
+    padding: Padding,
+    bg_color: Option<Color>,
+    full_width_bg: bool,
+    
     // Layout-specific fields (not in TextOptions)
     margin: EdgeInsets,
     bg_radius: f32, // Not currently in Zentype but used in Zenthra
@@ -36,6 +41,9 @@ impl<'u, 'a> TextBuilder<'u, 'a> {
                 .at(x, y)
                 .max_width(max_width)
                 .scale_factor(sf),
+            padding: Padding::ZERO,
+            bg_color: None,
+            full_width_bg: false,
             margin: EdgeInsets::ZERO,
             bg_radius: 0.0,
             cursor: CursorIcon::Default,
@@ -85,15 +93,17 @@ impl<'u, 'a> TextBuilder<'u, 'a> {
     }
 
     pub fn padding(mut self, p: impl Into<Padding>) -> Self {
-        self.options = self.options.padding(p.into());
+        self.padding = p.into();
         self
     }
     pub fn padding_x(mut self, p: f32) -> Self {
-        self.options = self.options.padding_horizontal(p);
+        self.padding.left = p;
+        self.padding.right = p;
         self
     }
     pub fn padding_y(mut self, p: f32) -> Self {
-        self.options = self.options.padding_vertical(p);
+        self.padding.top = p;
+        self.padding.bottom = p;
         self
     }
 
@@ -118,12 +128,17 @@ impl<'u, 'a> TextBuilder<'u, 'a> {
     }
 
     pub fn bg(mut self, c: Color) -> Self {
-        self.options = self.options.bg(c);
+        self.bg_color = Some(c);
+        self
+    }
+
+    pub fn highlight(mut self, c: Color) -> Self {
+        self.options = self.options.highlight(c);
         self
     }
 
     pub fn full_width_bg(mut self, b: bool) -> Self {
-        self.options = self.options.full_width(b);
+        self.full_width_bg = b;
         self
     }
     
@@ -160,30 +175,34 @@ impl<'u, 'a> TextBuilder<'u, 'a> {
     }
 
     pub fn draw_and_measure(&mut self) -> (f32, f32, Option<ShapedBuffer>, usize) {
-        let metrics = self.ui.font_system.as_ref().map(|fs| {
-             let adapter = CosmicFontProvider::new_with_system(fs.clone());
-             adapter.metrics(&self.options)
-        });
-
-        let (cw, ch, buffer) = if let Some(_metrics) = metrics {
-             let mut adapter = CosmicFontProvider::new_with_system(self.ui.font_system.clone().unwrap());
+        let (w, h, buffer) = if let Some(fs) = self.ui.font_system.as_ref() {
+             let mut adapter = CosmicFontProvider::new_with_system(fs.clone());
              
-             let layout_width = self.options.max_width.unwrap_or(self.ui.width - self.options.x) - self.options.padding.left - self.options.padding.right;
+             // Calculate layout width available for text (window width - x - outer padding)
+             let max_w = self.options.max_width.unwrap_or(self.ui.width - self.options.x);
+             let layout_width = (max_w - self.padding.horizontal()).max(0.0);
+             
+             self.options.max_width = Some(layout_width);
+             
              adapter.set_layout_size(layout_width, self.ui.height);
              
              let buffer = adapter.shape(&self.content, &self.options);
              let (cw, ch) = buffer.content_size();
              
-             let padding = self.options.padding;
-             let mut w = cw + padding.left + padding.right;
+             // Restore original max_width if necessary, but actually for rendering 
+             // generate_instances also needs the shrunken width.
              
-             if let Some(min_w) = self.options.min_width {
+             let mut w = cw + self.padding.horizontal();
+             
+             if self.full_width_bg {
+                 w = max_w;
+             } else if let Some(min_w) = self.options.min_width {
                  if w < min_w {
                      w = min_w;
                  }
              }
 
-             let h = ch + padding.top + padding.bottom;
+             let h = ch + self.padding.vertical();
              (w, h, Some(buffer))
         } else {
             (100.0, 20.0, None) // Fallback
@@ -191,13 +210,39 @@ impl<'u, 'a> TextBuilder<'u, 'a> {
 
         let start_draw = self.ui.draws.len();
         let clip = self.options.clip_rect.unwrap_or([0.0, 0.0, 9999.0, 9999.0]);
+
+        // --- 1. Draw Container Background ---
+        if let Some(bg) = self.bg_color {
+            use zenthra_render::RectInstance;
+            use crate::ui::RectDraw;
+
+            self.ui.draws.push(DrawCommand::Rect(RectDraw {
+                instance: RectInstance {
+                    pos: [self.options.x, self.options.y],
+                    size: [w, h],
+                    color: bg.to_array(),
+                    radius: self.bg_radius,
+                    border_width: 0.0,
+                    border_color: [0.0, 0.0, 0.0, 0.0],
+                    shadow_color: [0.0, 0.0, 0.0, 0.0],
+                    shadow_offset: [0.0, 0.0],
+                    shadow_blur: 0.0,
+                    clip_rect: clip,
+                    grayscale: 0.0,
+                    brightness: 1.0,
+                    opacity: 1.0,
+                }
+            }));
+        }
+
+        // --- 2. Draw Text (Padded) ---
         self.ui.draws.push(DrawCommand::Text(TextDraw {
             text: self.content.clone().into(),
-            pos: [self.options.x, self.options.y],
+            pos: [self.options.x + self.padding.left, self.options.y + self.padding.top],
             options: self.options.clone(),
             clip,
         }));
 
-        (cw, ch, buffer, start_draw)
+        (w, h, buffer, start_draw)
     }
 }

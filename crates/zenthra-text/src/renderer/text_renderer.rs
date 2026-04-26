@@ -67,8 +67,8 @@ impl TextRenderer {
     /// Returns the ShapedBuffer which can be used for hit-testing and interactivity.
     pub fn draw(&mut self, queue: &wgpu::Queue, text: &str, pos: [f32; 2], options: &TextOptions) -> ShapedBuffer {
         // 1. Ensure the shaper knows the available width for alignment/wrapping
-        let layout_width = options.max_width.unwrap_or(self.screen_size[0] - pos[0]) - options.padding.left - options.padding.right;
-        let layout_height = self.screen_size[1] - pos[1] - options.padding.top - options.padding.bottom;
+        let layout_width = options.max_width.unwrap_or(self.screen_size[0] - pos[0]);
+        let layout_height = self.screen_size[1] - pos[1];
 
         self.font_provider.set_layout_size(layout_width, layout_height);
         
@@ -145,26 +145,24 @@ impl TextRenderer {
     /// This handles the translation from screen space to text-local space, 
     /// accounting for position and padding.
     pub fn hit_test(&self, buffer: &ShapedBuffer, pos: [f32; 2], options: &TextOptions, mouse_pos: [f32; 2]) -> usize {
-        let padding = options.padding;
         let y_offset = self.calculate_valign_offset(buffer, pos, options);
         let v_shift = self.calculate_visual_shift(buffer, options);
         
-        let x = mouse_pos[0] - pos[0] - padding.left; 
-        let y = mouse_pos[1] - pos[1] - padding.top - y_offset - v_shift; 
+        let x = mouse_pos[0] - pos[0]; 
+        let y = mouse_pos[1] - pos[1] - y_offset - v_shift; 
         
         buffer.index_at(x, y)
     }
 
     /// Returns the screen-space position for a given character index.
     pub fn position_at(&self, buffer: &ShapedBuffer, pos: [f32; 2], options: &TextOptions, index: usize) -> Option<[f32; 2]> {
-        let padding = options.padding;
         let y_offset = self.calculate_valign_offset(buffer, pos, options);
         let v_shift = self.calculate_visual_shift(buffer, options);
         
         buffer.position_at(index).map(|(lx, ly)| {
             [
-                lx + pos[0] + padding.left,
-                ly + pos[1] + padding.top + y_offset + v_shift,
+                lx + pos[0],
+                ly + pos[1] + y_offset + v_shift,
             ]
         })
     }
