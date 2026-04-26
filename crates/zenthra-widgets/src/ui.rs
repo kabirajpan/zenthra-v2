@@ -1,6 +1,7 @@
 use std::sync::{Arc, Mutex};
 use zenthra_text::prelude::*;
 use crate::container::{ContainerBuilder, Direction};
+use crate::lazy_container::LazyContainerBuilder;
 use crate::text::{CursorIcon, TextBuilder};
 use zenthra_core::{Color, Id, SemanticNode, Rect};
 use zenthra_render::RectInstance;
@@ -186,6 +187,10 @@ impl<'a> Ui<'a> {
         ContainerBuilder::new(self)
     }
 
+    pub fn lazy_container(&mut self) -> LazyContainerBuilder<'_, 'a> {
+        LazyContainerBuilder::new(self)
+    }
+
     pub fn continuous(&mut self) -> ContainerBuilder<'_, 'a> {
         ContainerBuilder::new(self).continuous()
     }
@@ -204,6 +209,24 @@ impl<'a> Ui<'a> {
             Direction::Row => self.cursor_x += size,
         }
     }
+
+    /// Moves the cursor down by `h` pixels WITHOUT registering a layout child.
+    /// Use this inside a lazy/virtual list to offset visible items below invisible ones.
+    pub fn add_space(&mut self, h: f32) {
+        match self.direction {
+            Direction::Column => self.cursor_y += h,
+            Direction::Row => self.cursor_x += h,
+        }
+    }
+
+    /// Registers an invisible zero-draw child with the given size.
+    /// This forces the parent container's layout engine to account for this size
+    /// when calculating total content height for scroll area sizing.
+    pub fn set_min_size(&mut self, w: f32, h: f32) {
+        let draw_start = self.draws.len();
+        self.advance(w, h, draw_start);
+    }
+
 
     pub fn input<'b>(&mut self, buffer: &'b mut String) -> crate::input::InputBuilder<'_, 'a, 'b> {
         let id = self.id();

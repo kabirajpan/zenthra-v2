@@ -1,6 +1,7 @@
 pub mod button;
 pub mod container;
 pub mod input;
+pub mod lazy_container;
 pub mod text;
 pub mod text_area;
 pub mod ui;
