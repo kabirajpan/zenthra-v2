@@ -28,12 +28,12 @@ fn main() {
 
                     // LEVEL 2: Continuous (forced rendering)
                     ui.container()
+                        .render_mode(RenderMode::Continuous)
                         .width(600.0)
                         .height(250.0)
                         .bg(Color::rgb(0.15, 0.15, 0.2))
                         .radius(10.0)
                         .padding(20.0)
-                        .continuous() // Forced 120 FPS
                         .center()
                         .show(|ui: &mut Ui| {
                             frame_count += 1;
@@ -52,11 +52,11 @@ fn main() {
 
                                 // LEVEL 3: Explicitly Static (Inside Continuous)
                                 ui.container()
+                                    .render_mode(RenderMode::Static)
                                     .width(400.0)
                                     .padding(15.0)
                                     .bg(Color::rgb(0.05, 0.05, 0.07))
                                     .radius(5.0)
-                                    .static_mode() // Explicitly override inheritance back to static
                                     .center()
                                     .show(|ui: &mut Ui| {
                                         let l3_text = match l3_snapshot {

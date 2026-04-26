@@ -1,29 +1,11 @@
 use crate::ui::{DrawCommand, RectDraw, Ui};
-use zenthra_core::Color;
+use zenthra_core::{Color, Align};
 use zenthra_render::RectInstance;
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum Direction {
     Row,
     Column,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq)]
-pub enum HAlign {
-    Left,
-    Center,
-    Right,
-    SpaceBetween,
-    SpaceAround,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq)]
-pub enum VAlign {
-    Top,
-    Center,
-    Bottom,
-    SpaceBetween,
-    SpaceAround,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -38,8 +20,8 @@ pub enum Wrap {
 pub struct ContainerBuilder<'u, 'a> {
     ui: &'u mut Ui<'a>,
     direction: Direction,
-    halign: HAlign,
-    valign: VAlign,
+    halign: Align,
+    valign: Align,
     wrap: Wrap,
     children_draws: Vec<DrawCommand>,
     child_sizes: Vec<(f32, f32)>,
@@ -72,8 +54,8 @@ impl<'u, 'a> ContainerBuilder<'u, 'a> {
         Self {
             ui,
             direction: Direction::Column,
-            halign: HAlign::Left,
-            valign: VAlign::Top,
+            halign: Align::Left,
+            valign: Align::Top,
             wrap: Wrap::NoWrap,
             children_draws: Vec::new(),
             child_sizes: Vec::new(),
@@ -164,8 +146,8 @@ impl<'u, 'a> ContainerBuilder<'u, 'a> {
         self
     }
 
-    pub fn wrap(mut self) -> Self {
-        self.wrap = Wrap::Wrap;
+    pub fn wrap(mut self, strategy: Wrap) -> Self {
+        self.wrap = strategy;
         self
     }
 
@@ -174,39 +156,29 @@ impl<'u, 'a> ContainerBuilder<'u, 'a> {
         self
     }
 
-    pub fn center(mut self) -> Self {
-        self.halign = HAlign::Center;
-        self.valign = VAlign::Center;
-        self
-    }
-
-    pub fn center_x(mut self) -> Self {
-        self.halign = HAlign::Center;
-        self
-    }
-
-    pub fn center_y(mut self) -> Self {
-        self.valign = VAlign::Center;
-        self
-    }
-
     pub fn align_top(mut self) -> Self {
-        self.valign = VAlign::Top;
+        self.valign = Align::Top;
         self
     }
 
     pub fn align_bottom(mut self) -> Self {
-        self.valign = VAlign::Bottom;
+        self.valign = Align::Bottom;
         self
     }
 
     pub fn align_left(mut self) -> Self {
-        self.halign = HAlign::Left;
+        self.halign = Align::Left;
         self
     }
 
     pub fn align_right(mut self) -> Self {
-        self.halign = HAlign::Right;
+        self.halign = Align::Right;
+        self
+    }
+
+    pub fn align(mut self, align: Align) -> Self {
+        self.halign = align;
+        self.valign = align;
         self
     }
 
@@ -225,12 +197,12 @@ impl<'u, 'a> ContainerBuilder<'u, 'a> {
         self
     }
 
-    pub fn halign(mut self, align: HAlign) -> Self {
+    pub fn halign(mut self, align: Align) -> Self {
         self.halign = align;
         self
     }
 
-    pub fn valign(mut self, align: VAlign) -> Self {
+    pub fn valign(mut self, align: Align) -> Self {
         self.valign = align;
         self
     }
@@ -297,20 +269,45 @@ impl<'u, 'a> ContainerBuilder<'u, 'a> {
         let prev_child_ranges = std::mem::take(&mut self.ui.child_draw_ranges);
         let prev_id_ranges = std::mem::take(&mut self.ui.id_ranges);
         let prev_id_log = std::mem::take(&mut self.ui.id_log);
+        
+        let prev_max_x = self.ui.max_x;
+        let prev_max_y = self.ui.max_y;
 
         // Set child environment
+        if let Some(w) = self.width {
+            self.ui.max_x = (ox + w - self.padding_right).min(prev_max_x);
+        }
+        if let Some(h) = self.height {
+            self.ui.max_y = (oy + h - self.padding_bottom).min(prev_max_y);
+        }
+
         self.ui.direction = self.direction;
         self.ui.line_height = 0.0;
         self.ui.base_x = ox + self.padding_left;
         self.ui.base_y = oy + self.padding_top;
         self.ui.cursor_x = self.ui.base_x;
         self.ui.cursor_y = self.ui.base_y;
-        
+
         let mode = self.render_mode.unwrap_or(self.ui.current_render_mode());
         self.ui.render_mode_stack.push(mode);
         if mode == zenthra_core::RenderMode::Continuous {
             self.ui.needs_redraw = true;
         }
+
+        let avail_w = if let Some(w) = self.width {
+            w - self.padding_left - self.padding_right
+        } else {
+            (prev_max_x - ox - self.padding_left - self.padding_right).max(0.0)
+        };
+
+        let avail_h = if let Some(h) = self.height {
+            h - self.padding_top - self.padding_bottom
+        } else {
+            (prev_max_y - oy - self.padding_top - self.padding_bottom).max(0.0)
+        };
+
+        self.ui.max_x = (ox + self.padding_left + avail_w).min(prev_max_x);
+        self.ui.max_y = (oy + self.padding_top + avail_h).min(prev_max_y);
 
         self.ui.semantic_stack.push(id);
         self.ui.register_semantic(zenthra_core::SemanticNode::new(id, zenthra_core::Role::Container, zenthra_core::Rect::new(ox, oy, 0.0, 0.0)));
@@ -340,26 +337,11 @@ impl<'u, 'a> ContainerBuilder<'u, 'a> {
         self.ui.offset_y = prev_offset_y;
         self.ui.cursor_x = self.start_x;
         self.ui.cursor_y = self.start_y;
+        self.ui.max_x = prev_max_x;
+        self.ui.max_y = prev_max_y;
 
         // -- Layout Engine --
         let n = self.child_sizes.len();
-
-        let avail_w = if self.fill_x {
-            self.ui.width - ox
-        } else if let Some(w) = self.width {
-            w - self.padding_left - self.padding_right
-        } else {
-            f32::INFINITY
-        };
-
-        let avail_h = if self.fill_y {
-            self.ui.height - oy
-        } else if let Some(h) = self.height {
-            h - self.padding_top - self.padding_bottom
-        } else {
-            f32::INFINITY
-        };
-
         let mut target_positions: Vec<(f32, f32)> = vec![(0.0, 0.0); n];
         let (content_w, content_h) = match self.wrap {
             Wrap::NoWrap => self.layout_no_wrap(ox, oy, avail_w, avail_h, &mut target_positions),
@@ -488,22 +470,23 @@ impl<'u, 'a> ContainerBuilder<'u, 'a> {
             Direction::Row => {
                 let extra = (real_w - content_w).max(0.0);
                 let mut cx = ox + self.padding_left + match self.halign {
-                    HAlign::Left => 0.0,
-                    HAlign::Center => extra / 2.0,
-                    HAlign::Right => extra,
-                    HAlign::SpaceBetween => 0.0,
-                    HAlign::SpaceAround => extra / (n as f32 * 2.0),
+                    Align::Left => 0.0,
+                    Align::Center => extra / 2.0,
+                    Align::Right => extra,
+                    Align::SpaceBetween => 0.0,
+                    Align::SpaceAround => extra / (n as f32 * 2.0),
+                    _ => 0.0,
                 };
                 let gap = match self.halign {
-                    HAlign::SpaceBetween if n > 1 => extra / (n - 1) as f32,
-                    HAlign::SpaceAround => extra / n as f32,
+                    Align::SpaceBetween if n > 1 => extra / (n - 1) as f32,
+                    Align::SpaceAround => extra / n as f32,
                     _ => self.gap,
                 };
                 for (i, (cw, ch)) in self.child_sizes.iter().enumerate() {
                     let cy = oy + self.padding_top + match self.valign {
-                        VAlign::Top => 0.0,
-                        VAlign::Center => (real_h - ch) / 2.0,
-                        VAlign::Bottom => real_h - ch,
+                        Align::Top => 0.0,
+                        Align::Center => (real_h - ch) / 2.0,
+                        Align::Bottom => real_h - ch,
                         _ => 0.0,
                     };
                     targets[i] = (cx, cy);
@@ -513,22 +496,23 @@ impl<'u, 'a> ContainerBuilder<'u, 'a> {
             Direction::Column => {
                 let extra = (real_h - content_h).max(0.0);
                 let mut cy = oy + self.padding_top + match self.valign {
-                    VAlign::Top => 0.0,
-                    VAlign::Center => extra / 2.0,
-                    VAlign::Bottom => extra,
-                    VAlign::SpaceBetween => 0.0,
-                    VAlign::SpaceAround => extra / (n as f32 * 2.0),
+                    Align::Top => 0.0,
+                    Align::Center => extra / 2.0,
+                    Align::Bottom => extra,
+                    Align::SpaceBetween => 0.0,
+                    Align::SpaceAround => extra / (n as f32 * 2.0),
+                    _ => 0.0,
                 };
                 let gap = match self.valign {
-                    VAlign::SpaceBetween if n > 1 => extra / (n - 1) as f32,
-                    VAlign::SpaceAround => extra / n as f32,
+                    Align::SpaceBetween if n > 1 => extra / (n - 1) as f32,
+                    Align::SpaceAround => extra / n as f32,
                     _ => self.gap,
                 };
                 for (i, (cw, ch)) in self.child_sizes.iter().enumerate() {
                     let cx = ox + self.padding_left + match self.halign {
-                        HAlign::Left => 0.0,
-                        HAlign::Center => (real_w - cw) / 2.0,
-                        HAlign::Right => real_w - cw,
+                        Align::Left => 0.0,
+                        Align::Center => (real_w - cw) / 2.0,
+                        Align::Right => real_w - cw,
                         _ => 0.0,
                     };
                     targets[i] = (cx, cy);
@@ -591,15 +575,15 @@ impl<'u, 'a> ContainerBuilder<'u, 'a> {
 
                 let mut cy = if cross_reversed {
                     oy + self.padding_top + match self.valign {
-                        VAlign::Top => real_h,
-                        VAlign::Center => (real_h + total_h) / 2.0,
-                        VAlign::Bottom => total_h,
+                        Align::Top => real_h,
+                        Align::Center => (real_h + total_h) / 2.0,
+                        Align::Bottom => total_h,
                         _ => real_h,
                     }
                 } else {
                     oy + self.padding_top + match self.valign {
-                        VAlign::Center => (real_h - total_h).max(0.0) / 2.0,
-                        VAlign::Bottom => (real_h - total_h).max(0.0),
+                        Align::Center => (real_h - total_h).max(0.0) / 2.0,
+                        Align::Bottom => (real_h - total_h).max(0.0),
                         _ => 0.0,
                     }
                 };
@@ -612,24 +596,25 @@ impl<'u, 'a> ContainerBuilder<'u, 'a> {
 
                     let mut cx = if main_reversed {
                         ox + self.padding_left + match self.halign {
-                            HAlign::Left => real_w,
-                            HAlign::Center => (real_w + row_content_w) / 2.0,
-                            HAlign::Right => row_content_w,
-                            _ => real_w,
+                            Align::Left => row_content_w,
+                            Align::Center => (real_w + row_content_w) / 2.0,
+                            Align::Right => real_w,
+                            _ => row_content_w,
                         }
                     } else {
                         ox + self.padding_left + match self.halign {
-                            HAlign::Left => 0.0,
-                            HAlign::Center => extra / 2.0,
-                            HAlign::Right => extra,
-                            HAlign::SpaceBetween => 0.0,
-                            HAlign::SpaceAround => extra / (row.len() as f32 * 2.0),
+                            Align::Left => 0.0,
+                            Align::Center => extra / 2.0,
+                            Align::Right => extra,
+                            Align::SpaceBetween => 0.0,
+                            Align::SpaceAround => extra / (row.len() as f32 * 2.0),
+                            _ => 0.0,
                         }
                     };
 
                     let gap = match self.halign {
-                        HAlign::SpaceBetween if row.len() > 1 && !main_reversed => extra / (row.len() - 1) as f32,
-                        HAlign::SpaceAround if !main_reversed => extra / row.len() as f32,
+                        Align::SpaceBetween if row.len() > 1 && !main_reversed => extra / (row.len() - 1) as f32,
+                        Align::SpaceAround if !main_reversed => extra / row.len() as f32,
                         _ => self.gap,
                     };
 
@@ -637,8 +622,8 @@ impl<'u, 'a> ContainerBuilder<'u, 'a> {
                         let (cw, ch) = self.child_sizes[ci];
                         if main_reversed { cx -= cw; }
                         let child_y = cy + match self.valign {
-                            VAlign::Center => (row_h - ch) / 2.0,
-                            VAlign::Bottom => row_h - ch,
+                            Align::Center => (row_h - ch) / 2.0,
+                            Align::Bottom => row_h - ch,
                             _ => 0.0,
                         };
                         targets[ci] = (cx, child_y);
@@ -680,15 +665,15 @@ impl<'u, 'a> ContainerBuilder<'u, 'a> {
 
                 let mut cx = if cross_reversed {
                     ox + self.padding_left + match self.halign {
-                        HAlign::Left => real_w,
-                        HAlign::Center => (real_w + total_w) / 2.0,
-                        HAlign::Right => total_w,
+                        Align::Left => real_w,
+                        Align::Center => (real_w + total_w) / 2.0,
+                        Align::Right => total_w,
                         _ => real_w,
                     }
                 } else {
                     ox + self.padding_left + match self.halign {
-                        HAlign::Center => (real_w - total_w).max(0.0) / 2.0,
-                        HAlign::Right => (real_w - total_w).max(0.0),
+                        Align::Center => (real_w - total_w).max(0.0) / 2.0,
+                        Align::Right => (real_w - total_w).max(0.0),
                         _ => 0.0,
                     }
                 };
@@ -701,35 +686,36 @@ impl<'u, 'a> ContainerBuilder<'u, 'a> {
 
                     let mut cy = if main_reversed {
                         oy + self.padding_top + match self.valign {
-                            VAlign::Top => real_h,
-                            VAlign::Center => (real_h + col_content_h) / 2.0,
-                            VAlign::Bottom => col_content_h,
+                            Align::Top => real_h,
+                            Align::Center => (real_h + col_content_h) / 2.0,
+                            Align::Bottom => col_content_h,
                             _ => real_h,
                         }
                     } else {
                         oy + self.padding_top + match self.valign {
-                            VAlign::Top => 0.0,
-                            VAlign::Center => extra / 2.0,
-                            VAlign::Bottom => extra,
-                            VAlign::SpaceBetween => 0.0,
-                            VAlign::SpaceAround => extra / (col.len() as f32 * 2.0),
+                            Align::Top => 0.0,
+                            Align::Center => extra / 2.0,
+                            Align::Bottom => extra,
+                            Align::SpaceBetween => 0.0,
+                            Align::SpaceAround => extra / (col.len() as f32 * 2.0),
+                            _ => 0.0,
                         }
                     };
 
                     let gap = match self.valign {
-                        VAlign::SpaceBetween if col.len() > 1 && !main_reversed => extra / (col.len() - 1) as f32,
-                        VAlign::SpaceAround if !main_reversed => extra / col.len() as f32,
+                        Align::SpaceBetween if col.len() > 1 && !main_reversed => extra / (col.len() - 1) as f32,
+                        Align::SpaceAround if !main_reversed => extra / col.len() as f32,
                         _ => self.gap,
                     };
 
                     for &ci in col {
                         let (cw, ch) = self.child_sizes[ci];
                         if main_reversed { cy -= ch; }
-                        let child_x = cx + match self.halign {
-                            HAlign::Center => (col_w - cw) / 2.0,
-                            HAlign::Right => col_w - cw,
-                            _ => 0.0,
-                        };
+                    let child_x = cx + match self.halign {
+                        Align::Center => (col_w - cw) / 2.0,
+                        Align::Right => col_w - cw,
+                        _ => 0.0,
+                    };
                         targets[ci] = (child_x, cy);
                         if main_reversed { cy -= gap; } else { cy += ch + gap; }
                     }
@@ -751,8 +737,6 @@ fn offset_draw(cmd: &mut DrawCommand, dx: f32, dy: f32) {
         DrawCommand::Text(t) => {
             t.pos[0] += dx;
             t.pos[1] += dy;
-            t.options.x += dx;
-            t.options.y += dy;
             t.clip[0] += dx;
             t.clip[1] += dy;
         }

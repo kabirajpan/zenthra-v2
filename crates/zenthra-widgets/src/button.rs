@@ -35,6 +35,7 @@ pub struct ButtonBuilder<'u, 'a> {
     
     // Other
     opacity: f32,
+    render_mode: Option<zenthra_core::RenderMode>,
     // on_click: Option<Box<dyn FnMut()>>,
 }
 
@@ -61,6 +62,7 @@ impl<'u, 'a> ButtonBuilder<'u, 'a> {
             hover_bg: Some(Color::rgb(0.25, 0.25, 0.35)),
             active_bg: Some(Color::rgb(0.15, 0.15, 0.2)),
             opacity: 1.0,
+            render_mode: None,
             // on_click: None,
         }
     }
@@ -133,7 +135,16 @@ impl<'u, 'a> ButtonBuilder<'u, 'a> {
         self
     }
 
+    pub fn render_mode(mut self, mode: zenthra_core::RenderMode) -> Self {
+        self.render_mode = Some(mode);
+        self
+    }
+
     pub fn show(self) -> zenthra_core::Response {
+        if let Some(mode) = self.render_mode {
+            self.ui.render_mode_stack.push(mode);
+        }
+
         let (x, y) = self.pos.unwrap_or((self.ui.cursor_x, self.ui.cursor_y));
         
         let mut clicked = false;
@@ -222,6 +233,10 @@ impl<'u, 'a> ButtonBuilder<'u, 'a> {
         self.ui.record_layout(self.id, Rect::new(x, y, final_w, final_h));
         self.ui.advance(final_w, final_h, start_draw);
         
+        if self.render_mode.is_some() {
+            self.ui.render_mode_stack.pop();
+        }
+
         zenthra_core::Response {
             clicked,
             hovered: is_hovered,

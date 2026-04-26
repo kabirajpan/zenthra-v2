@@ -19,5 +19,5 @@ pub use id::Id;
 pub use rect::{Point, Rect, Size};
 pub use render_mode::RenderMode;
 pub use response::Response;
-pub use style::{BorderRadius, EdgeInsets};
+pub use style::{BorderRadius, EdgeInsets, Align};
 pub use widget::Widget;

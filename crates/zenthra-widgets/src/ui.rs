@@ -183,6 +183,14 @@ impl<'a> Ui<'a> {
         ContainerBuilder::new(self)
     }
 
+    pub fn continuous(&mut self) -> ContainerBuilder<'_, 'a> {
+        ContainerBuilder::new(self).continuous()
+    }
+
+    pub fn static_mode(&mut self) -> ContainerBuilder<'_, 'a> {
+        ContainerBuilder::new(self).static_mode()
+    }
+
     pub fn button(&mut self, label: &str) -> crate::button::ButtonBuilder<'_, 'a> {
         crate::button::ButtonBuilder::new(self, label)
     }
@@ -257,23 +265,23 @@ impl<'a> Ui<'a> {
     }
 
     pub fn text(&mut self, content: &str) -> TextBuilder<'_, 'a> {
-        TextBuilder::new(self, content).full_width_bg(true)
+        TextBuilder::new(self, content)
     }
 
     pub fn h1(&mut self, content: &str) -> TextBuilder<'_, 'a> {
-        self.text(content).size(40.0).bold().full_width_bg(true)
+        self.text(content).size(40.0).bold()
     }
 
     pub fn h2(&mut self, content: &str) -> TextBuilder<'_, 'a> {
-        self.text(content).size(32.0).bold().full_width_bg(true)
+        self.text(content).size(32.0).bold()
     }
 
     pub fn h3(&mut self, content: &str) -> TextBuilder<'_, 'a> {
-        self.text(content).size(24.0).bold().full_width_bg(true)
+        self.text(content).size(24.0).bold()
     }
 
     pub fn h4(&mut self, content: &str) -> TextBuilder<'_, 'a> {
-        self.text(content).size(20.0).bold().full_width_bg(true)
+        self.text(content).size(20.0).bold()
     }
 }
 

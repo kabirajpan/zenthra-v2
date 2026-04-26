@@ -1,7 +1,7 @@
 use zenthra_text::prelude::*;
 // use zenthra_text::traits::FontProvider;
 use crate::ui::{DrawCommand, TextDraw, Ui};
-use zenthra_core::{Color, EdgeInsets, Role, SemanticNode, Rect};
+use zenthra_core::{Color, EdgeInsets, Role, SemanticNode, Rect, Align};
 
 pub struct TextBuilder<'u, 'a> {
     ui: &'u mut Ui<'a>,
@@ -13,10 +13,12 @@ pub struct TextBuilder<'u, 'a> {
     bg_color: Option<Color>,
     full_width_bg: bool,
     
-    // Layout-specific fields (not in TextOptions)
     margin: EdgeInsets,
     bg_radius: f32, // Not currently in Zentype but used in Zenthra
     cursor: CursorIcon,
+    render_mode: Option<zenthra_core::RenderMode>,
+    start_x: f32,
+    start_y: f32,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -38,7 +40,7 @@ impl<'u, 'a> TextBuilder<'u, 'a> {
             ui,
             content: content.to_string(),
             options: TextOptions::new()
-                .at(x, y)
+                .at(0.0, 0.0) // Relative to pos
                 .max_width(max_width)
                 .scale_factor(sf),
             padding: Padding::ZERO,
@@ -47,6 +49,9 @@ impl<'u, 'a> TextBuilder<'u, 'a> {
             margin: EdgeInsets::ZERO,
             bg_radius: 0.0,
             cursor: CursorIcon::Default,
+            render_mode: None,
+            start_x: x,
+            start_y: y,
         }
     }
 
@@ -84,7 +89,9 @@ impl<'u, 'a> TextBuilder<'u, 'a> {
         self
     }
     pub fn pos(mut self, x: f32, y: f32) -> Self {
-        self.options = self.options.at(x, y);
+        self.start_x = x;
+        self.start_y = y;
+        self.options = self.options.at(0.0, 0.0);
         self
     }
     pub fn max_width(mut self, w: f32) -> Self {
@@ -146,6 +153,47 @@ impl<'u, 'a> TextBuilder<'u, 'a> {
         self.options = self.options.wrap(strategy);
         self
     }
+
+    pub fn align(mut self, alignment: Align) -> Self {
+        let halign = match alignment {
+            Align::Left => HorizontalAlignment::Left,
+            Align::Center => HorizontalAlignment::Center,
+            Align::Right => HorizontalAlignment::Right,
+            _ => HorizontalAlignment::Left,
+        };
+        self.options = self.options.align(halign);
+        self
+    }
+
+    pub fn align_left(mut self) -> Self {
+        self.options = self.options.align(HorizontalAlignment::Left);
+        self
+    }
+
+    pub fn align_center(mut self) -> Self {
+        self.options = self.options.align(HorizontalAlignment::Center);
+        self
+    }
+
+    pub fn align_right(mut self) -> Self {
+        self.options = self.options.align(HorizontalAlignment::Right);
+        self
+    }
+
+    pub fn halign(self, alignment: Align) -> Self {
+        self.align(alignment)
+    }
+
+    pub fn valign(mut self, alignment: Align) -> Self {
+        let valign = match alignment {
+            Align::Top => VerticalAlignment::Top,
+            Align::Center => VerticalAlignment::Center,
+            Align::Bottom => VerticalAlignment::Bottom,
+            _ => VerticalAlignment::Top,
+        };
+        self.options = self.options.valign(valign);
+        self
+    }
     
     pub fn cursor(mut self, c: CursorIcon) -> Self {
         self.cursor = c;
@@ -166,18 +214,42 @@ impl<'u, 'a> TextBuilder<'u, 'a> {
         self
     }
 
+    pub fn render_mode(mut self, mode: zenthra_core::RenderMode) -> Self {
+        self.render_mode = Some(mode);
+        self
+    }
+
+    pub fn continuous(mut self) -> Self {
+        self.render_mode = Some(zenthra_core::RenderMode::Continuous);
+        self
+    }
+
+    pub fn static_mode(mut self) -> Self {
+        self.render_mode = Some(zenthra_core::RenderMode::Static);
+        self
+    }
+
     pub fn show(mut self) -> Option<ShapedBuffer> {
+        if let Some(mode) = self.render_mode {
+            self.ui.render_mode_stack.push(mode);
+        }
+
         let horiz = self.margin.horizontal();
         let vert = self.margin.vertical();
         let (w, h, buffer, start) = self.draw_and_measure();
         
         let id = self.ui.id();
         self.ui.register_semantic(
-            SemanticNode::new(id, Role::Label, Rect::new(self.options.x, self.options.y, w, h))
+            SemanticNode::new(id, Role::Label, Rect::new(self.start_x, self.start_y, w, h))
                 .with_label(self.content.clone())
         );
 
         self.ui.advance(w + horiz, h + vert, start);
+        
+        if self.render_mode.is_some() {
+            self.ui.render_mode_stack.pop();
+        }
+
         buffer
     }
 
@@ -186,7 +258,7 @@ impl<'u, 'a> TextBuilder<'u, 'a> {
              let mut adapter = CosmicFontProvider::new_with_system(fs.clone());
              
              // Calculate layout width available for text (window width - x - outer padding)
-             let max_w = self.options.max_width.unwrap_or(self.ui.width - self.options.x);
+             let max_w = self.options.max_width.unwrap_or(self.ui.width - self.start_x);
              let layout_width = (max_w - self.padding.horizontal()).max(0.0);
              
              self.options.max_width = Some(layout_width);
@@ -225,7 +297,7 @@ impl<'u, 'a> TextBuilder<'u, 'a> {
 
             self.ui.draws.push(DrawCommand::Rect(RectDraw {
                 instance: RectInstance {
-                    pos: [self.options.x, self.options.y],
+                    pos: [self.start_x, self.start_y],
                     size: [w, h],
                     color: bg.to_array(),
                     radius: [self.bg_radius; 4],
@@ -245,7 +317,7 @@ impl<'u, 'a> TextBuilder<'u, 'a> {
         // --- 2. Draw Text (Padded) ---
         self.ui.draws.push(DrawCommand::Text(TextDraw {
             text: self.content.clone().into(),
-            pos: [self.options.x + self.padding.left, self.options.y + self.padding.top],
+            pos: [self.start_x + self.padding.left, self.start_y + self.padding.top],
             options: self.options.clone(),
             clip,
         }));

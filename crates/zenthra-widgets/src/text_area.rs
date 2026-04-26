@@ -26,6 +26,7 @@ pub struct TextAreaBuilder<'u, 'a, 'b> {
     text_bg_full_width: bool,
     full_width: bool,
     wrap: zenthra_text::prelude::TextWrap,
+    render_mode: Option<zenthra_core::RenderMode>,
 }
 
 impl<'u, 'a, 'b> TextAreaBuilder<'u, 'a, 'b> {
@@ -53,6 +54,7 @@ impl<'u, 'a, 'b> TextAreaBuilder<'u, 'a, 'b> {
             full_width: false,
             highlight: None,
             wrap: zenthra_text::prelude::TextWrap::Word,
+            render_mode: None,
         }
     }
 
@@ -134,7 +136,15 @@ impl<'u, 'a, 'b> TextAreaBuilder<'u, 'a, 'b> {
         self
     }
 
+    pub fn render_mode(mut self, mode: zenthra_core::RenderMode) -> Self {
+        self.render_mode = Some(mode);
+        self
+    }
+
     pub fn show(self) {
+        if let Some(mode) = self.render_mode {
+            self.ui.render_mode_stack.push(mode);
+        }
         let is_focused = self.ui.focused_id == Some(self.id);
         
         // --- 1. Handle Scroll State ---
@@ -579,5 +589,9 @@ impl<'u, 'a, 'b> TextAreaBuilder<'u, 'a, 'b> {
 
         // --- 8. Advance UI ---
         self.ui.advance(actual_width, h_box, start_draw);
+
+        if self.render_mode.is_some() {
+            self.ui.render_mode_stack.pop();
+        }
     }
 }

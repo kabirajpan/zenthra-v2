@@ -96,3 +96,17 @@ impl BorderRadius {
         ]
     }
 }
+
+/// A unified alignment enum for both horizontal and vertical axes.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum Align {
+    #[default]
+    Top,
+    Bottom,
+    Left,
+    Right,
+    Center,
+    SpaceBetween,
+    SpaceAround,
+}
+

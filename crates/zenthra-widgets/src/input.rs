@@ -24,6 +24,7 @@ pub struct InputBuilder<'u, 'a, 'b> {
     scrollable: bool,
     full_width: bool,
     text_bg_full_width: bool,
+    render_mode: Option<zenthra_core::RenderMode>,
 }
 
 impl<'u, 'a, 'b> InputBuilder<'u, 'a, 'b> {
@@ -49,6 +50,7 @@ impl<'u, 'a, 'b> InputBuilder<'u, 'a, 'b> {
             full_width: false,
             text_bg_full_width: false,
             highlight: None,
+            render_mode: None,
         }
     }
 
@@ -117,7 +119,15 @@ impl<'u, 'a, 'b> InputBuilder<'u, 'a, 'b> {
         self
     }
 
+    pub fn render_mode(mut self, mode: zenthra_core::RenderMode) -> Self {
+        self.render_mode = Some(mode);
+        self
+    }
+
     pub fn show(self) {
+        if let Some(mode) = self.render_mode {
+            self.ui.render_mode_stack.push(mode);
+        }
         let is_focused = self.ui.focused_id == Some(self.id);
         
         // --- 1. Initial Measure (for hit-testing and initial sizing) ---
@@ -423,5 +433,9 @@ impl<'u, 'a, 'b> InputBuilder<'u, 'a, 'b> {
 
         // --- 9. Advance UI ---
         self.ui.advance(w_box, h_box, start_draw);
+
+        if self.render_mode.is_some() {
+            self.ui.render_mode_stack.pop();
+        }
     }
 }
