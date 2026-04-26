@@ -148,10 +148,10 @@ impl<'u, 'a, 'b> TextAreaBuilder<'u, 'a, 'b> {
         let is_focused = self.ui.focused_id == Some(self.id);
         
         // --- 1. Handle Scroll State ---
-        let mut scroll_y = if self.scrollable {
-            *self.ui.scroll_state.get(&self.id).unwrap_or(&0.0)
+        let (scroll_x, mut scroll_y) = if self.scrollable {
+            *self.ui.scroll_state.get(&self.id).unwrap_or(&(0.0, 0.0))
         } else {
-            0.0
+            (0.0, 0.0)
         };
 
         // --- 2. Initial Measure (to get content height) ---
@@ -465,7 +465,7 @@ impl<'u, 'a, 'b> TextAreaBuilder<'u, 'a, 'b> {
 
         // Update persistent scroll state
         if self.scrollable {
-            self.ui.scroll_state.insert(self.id, scroll_y);
+            self.ui.scroll_state.insert(self.id, (scroll_x, scroll_y));
 
             // --- 5.5 Render Scroll Bar ---
             if h_content > h_box - self.padding.vertical() {

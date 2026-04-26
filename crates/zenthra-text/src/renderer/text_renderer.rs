@@ -67,8 +67,9 @@ impl TextRenderer {
     /// Returns the ShapedBuffer which can be used for hit-testing and interactivity.
     pub fn draw(&mut self, queue: &wgpu::Queue, text: &str, pos: [f32; 2], options: &TextOptions) -> ShapedBuffer {
         // 1. Ensure the shaper knows the available width for alignment/wrapping
-        let layout_width = options.max_width.unwrap_or(self.screen_size[0] - pos[0]);
-        let layout_height = self.screen_size[1] - pos[1];
+        // Use a sufficiently large layout area to avoid clipping text that might scroll into view
+        let layout_width = options.max_width.unwrap_or(20000.0);
+        let layout_height = options.max_height.unwrap_or(20000.0);
 
         self.font_provider.set_layout_size(layout_width, layout_height);
         

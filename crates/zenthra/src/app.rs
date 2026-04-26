@@ -31,13 +31,13 @@ impl App {
         let mut rect_pipeline: Option<RectPipeline> = None;
         let mut zentype: Option<Zentype> = None;
         let mut focused_id: Option<zenthra_core::Id> = None;
-        let mut state: std::collections::HashMap<zenthra_core::Id, f32> = std::collections::HashMap::new();
+        let mut state: std::collections::HashMap<zenthra_core::Id, (f32, f32)> = std::collections::HashMap::new();
         let mut cursor_state: std::collections::HashMap<zenthra_core::Id, usize> = std::collections::HashMap::new();
         let mut interaction_state: std::collections::HashMap<zenthra_core::Id, f32> = std::collections::HashMap::new();
         let mut mouse_pos: (f32, f32) = (0.0, 0.0);
         let mut ui_mouse_down = false;
         let mut active_drag: Option<zenthra_widgets::ui::ScrollDrag> = None;
-        let mut layout_cache: std::collections::HashMap<zenthra_core::Id, zenthra_core::Rect> = std::collections::HashMap::new();
+        let mut layout_cache: std::collections::HashMap<zenthra_core::Id, (zenthra_core::Rect, u64)> = std::collections::HashMap::new();
         let start_time = std::time::Instant::now();
 
         self.platform = self.platform.with_ui(move |frame: &mut Frame| {
@@ -135,6 +135,14 @@ impl App {
                         DrawCommand::Text(td) => {
                             let mut scaled_options = td.options.clone();
                             scaled_options.scale_factor = sf;
+                            
+                            // Scale the current command's clip rect from logical to physical
+                            let clip = td.clip;
+                            scaled_options.clip_rect = Some([
+                                clip[0] * sf, clip[1] * sf,
+                                clip[2] * sf, clip[3] * sf,
+                            ]);
+
                             engine.draw(queue, &td.text, td.pos, &scaled_options);
                         }
                         DrawCommand::OverlayRect(od) => {

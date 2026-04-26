@@ -49,6 +49,20 @@ impl CosmicFontProvider {
         }
 
         self.buffer.set_text(&mut fs, text, &options.as_attrs(), Shaping::Advanced, None);
+        
+        // Apply alignment before final layout
+        if let Some(alignment) = options.align {
+            let align = match alignment {
+                crate::types::options::HorizontalAlignment::Left => cosmic_text::Align::Left,
+                crate::types::options::HorizontalAlignment::Center => cosmic_text::Align::Center,
+                crate::types::options::HorizontalAlignment::Right => cosmic_text::Align::Right,
+                crate::types::options::HorizontalAlignment::Justified => cosmic_text::Align::Justified,
+            };
+            for line in self.buffer.lines.iter_mut() {
+                line.set_align(Some(align));
+            }
+        }
+
         self.buffer.shape_until_scroll(&mut fs, false);
 
         let metrics = self.buffer.metrics();

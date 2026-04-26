@@ -213,10 +213,10 @@ impl<'u, 'a, 'b> InputBuilder<'u, 'a, 'b> {
                     }
                     PlatformEvent::MouseWheel { delta_x, delta_y } if is_hovered => {
                         let _id = self.id;
-                        let mut sx = *self.ui.scroll_state.get(&self.id).unwrap_or(&0.0);
+                        let (mut sx, sy) = *self.ui.scroll_state.get(&self.id).unwrap_or(&(0.0, 0.0));
                         let effect = if delta_x.abs() < 0.001 { *delta_y } else { *delta_x };
                         sx -= effect * 30.0;
-                        self.ui.scroll_state.insert(self.id, sx);
+                        self.ui.scroll_state.insert(self.id, (sx, sy));
                     }
                     _ => {}
                 }
@@ -251,7 +251,7 @@ impl<'u, 'a, 'b> InputBuilder<'u, 'a, 'b> {
 
         // --- 4. Scroll & Auto-Scroll Calculation ---
         let scroll_state_id = self.id;
-        let mut scroll_x = *self.ui.scroll_state.get(&scroll_state_id).unwrap_or(&0.0);
+        let (mut scroll_x, scroll_y) = *self.ui.scroll_state.get(&scroll_state_id).unwrap_or(&(0.0, 0.0));
         let max_scroll = (w_text_raw - w_view).max(0.0f32);
 
         let scroll_bar_h = 4.0;
@@ -310,7 +310,7 @@ impl<'u, 'a, 'b> InputBuilder<'u, 'a, 'b> {
         }
 
         scroll_x = scroll_x.clamp(0.0, max_scroll);
-        self.ui.scroll_state.insert(scroll_state_id, scroll_x);
+        self.ui.scroll_state.insert(scroll_state_id, (scroll_x, scroll_y));
 
         // --- 4. Render Background ---
         let start_draw = self.ui.draws.len();

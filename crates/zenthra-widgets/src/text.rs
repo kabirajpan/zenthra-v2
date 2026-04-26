@@ -1,10 +1,11 @@
 use zenthra_text::prelude::*;
 // use zenthra_text::traits::FontProvider;
 use crate::ui::{DrawCommand, TextDraw, Ui};
-use zenthra_core::{Color, EdgeInsets, Role, SemanticNode, Rect, Align};
+use zenthra_core::{Color, EdgeInsets, Role, SemanticNode, Rect, Align, Id};
 
 pub struct TextBuilder<'u, 'a> {
     ui: &'u mut Ui<'a>,
+    id: Id,
     content: String,
     options: TextOptions,
     
@@ -34,10 +35,24 @@ impl<'u, 'a> TextBuilder<'u, 'a> {
         let x = ui.cursor_x;
         let y = ui.cursor_y;
         let sf = ui.scale_factor;
+        
+        // --- STABLE DETERMINISTIC ID ---
+        let mut hasher = std::collections::hash_map::DefaultHasher::new();
+        use std::hash::{Hash, Hasher};
+        content.hash(&mut hasher);
+        // Include parent ID in hash to differentiate same text in different containers
+        if let Some(parent) = ui.semantic_stack.last() {
+            parent.hash(&mut hasher);
+        }
+        let id_raw = hasher.finish();
+        let id = Id::from_u64(id_raw);
+        ui.id_log.push(id);
+        
         let max_width = (ui.max_x - x).max(0.0);
         
         Self {
             ui,
+            id,
             content: content.to_string(),
             options: TextOptions::new()
                 .at(0.0, 0.0) // Relative to pos
@@ -144,8 +159,19 @@ impl<'u, 'a> TextBuilder<'u, 'a> {
         self
     }
 
-    pub fn full_width_bg(mut self, b: bool) -> Self {
-        self.full_width_bg = b;
+    pub fn full_width_bg(mut self, enabled: bool) -> Self {
+        self.full_width_bg = enabled;
+        self
+    }
+
+    pub fn id(mut self, id: impl std::hash::Hash) -> Self {
+        let mut hasher = std::collections::hash_map::DefaultHasher::new();
+        use std::hash::{Hash, Hasher};
+        id.hash(&mut hasher);
+        if let Some(parent) = self.ui.semantic_stack.last() {
+            parent.hash(&mut hasher);
+        }
+        self.id = zenthra_core::Id::from_u64(hasher.finish());
         self
     }
     
@@ -209,8 +235,7 @@ impl<'u, 'a> TextBuilder<'u, 'a> {
     }
 
     pub fn clip_rect(mut self, x: f32, y: f32, w: f32, h: f32) -> Self {
-        let sf = self.ui.scale_factor;
-        self.options = self.options.clip_rect(x * sf, y * sf, w * sf, h * sf);
+        self.options = self.options.clip_rect(x, y, w, h);
         self
     }
 
@@ -238,9 +263,8 @@ impl<'u, 'a> TextBuilder<'u, 'a> {
         let vert = self.margin.vertical();
         let (w, h, buffer, start) = self.draw_and_measure();
         
-        let id = self.ui.id();
         self.ui.register_semantic(
-            SemanticNode::new(id, Role::Label, Rect::new(self.start_x, self.start_y, w, h))
+            SemanticNode::new(self.id, Role::Label, Rect::new(self.start_x, self.start_y, w, h))
                 .with_label(self.content.clone())
         );
 
@@ -257,40 +281,35 @@ impl<'u, 'a> TextBuilder<'u, 'a> {
         let (w, h, buffer) = if let Some(fs) = self.ui.font_system.as_ref() {
              let mut adapter = CosmicFontProvider::new_with_system(fs.clone());
              
-             // Calculate layout width available for text (window width - x - outer padding)
-             let max_w = self.options.max_width.unwrap_or(self.ui.width - self.start_x);
-             let layout_width = (max_w - self.padding.horizontal()).max(0.0);
+             // Calculate layout width available for text (using container's available width)
+             let layout_width = (self.ui.available_width - self.padding.horizontal()).max(0.0);
              
              self.options.max_width = Some(layout_width);
              
              adapter.set_layout_size(layout_width, self.ui.height);
              
              let buffer = adapter.shape(&self.content, &self.options);
-             let (cw, ch) = buffer.content_size();
-             
-             // Restore original max_width if necessary, but actually for rendering 
-             // generate_instances also needs the shrunken width.
-             
-             let mut w = cw + self.padding.horizontal();
-             
-             if self.full_width_bg {
-                 w = max_w;
-             } else if let Some(min_w) = self.options.min_width {
-                 if w < min_w {
-                     w = min_w;
-                 }
-             }
+             let (cw, ch) = buffer.size();
 
+             // Important: record layout for next frame culling
+             let mut w = cw + self.padding.horizontal();
+             if self.full_width_bg {
+                 w = self.ui.width - self.start_x;
+             } else if let Some(min_w) = self.options.min_width {
+                 if w < min_w { w = min_w; }
+             }
              let h = ch + self.padding.vertical();
+             self.ui.record_layout(self.id, Rect::new(self.start_x, self.start_y, w, h));
+
              (w, h, Some(buffer))
         } else {
-            (100.0, 20.0, None) // Fallback
+            (100.0, 20.0, None)
         };
 
         let start_draw = self.ui.draws.len();
-        let clip = self.options.clip_rect.unwrap_or([0.0, 0.0, 9999.0, 9999.0]);
+        let clip = self.options.clip_rect.unwrap_or([0.0, 0.0, self.ui.width, self.ui.height]);
 
-        // --- 1. Draw Container Background ---
+        // Background
         if let Some(bg) = self.bg_color {
             use zenthra_render::RectInstance;
             use crate::ui::RectDraw;

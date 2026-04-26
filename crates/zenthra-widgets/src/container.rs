@@ -47,10 +47,18 @@ pub struct ContainerBuilder<'u, 'a> {
     shadow_color: Option<Color>,
     opacity: f32,
     render_mode: Option<zenthra_core::RenderMode>,
+    max_width: Option<f32>,
+    max_height: Option<f32>,
+    min_width: Option<f32>,
+    min_height: Option<f32>,
+    scroll_x: bool,
+    scroll_y: bool,
+    id: zenthra_core::Id,
 }
 
 impl<'u, 'a> ContainerBuilder<'u, 'a> {
     pub fn new(ui: &'u mut Ui<'a>) -> Self {
+        let id = ui.id();
         Self {
             ui,
             direction: Direction::Column,
@@ -81,6 +89,13 @@ impl<'u, 'a> ContainerBuilder<'u, 'a> {
             shadow_color: None,
             opacity: 1.0,
             render_mode: None,
+            max_width: None,
+            max_height: None,
+            min_width: None,
+            min_height: None,
+            scroll_x: false,
+            scroll_y: false,
+            id,
         }
     }
 
@@ -110,6 +125,43 @@ impl<'u, 'a> ContainerBuilder<'u, 'a> {
         self.fill_y = true;
         self
     }
+    pub fn full_width(mut self) -> Self {
+        self.fill_x = true;
+        self
+    }
+    pub fn full_height(mut self) -> Self {
+        self.fill_y = true;
+        self
+    }
+    pub fn max_width(mut self, w: f32) -> Self {
+        self.max_width = Some(w);
+        self
+    }
+    pub fn max_height(mut self, h: f32) -> Self {
+        self.max_height = Some(h);
+        self
+    }
+    pub fn min_width(mut self, w: f32) -> Self {
+        self.min_width = Some(w);
+        self
+    }
+    pub fn min_height(mut self, h: f32) -> Self {
+        self.min_height = Some(h);
+        self
+    }
+    pub fn scrollable(mut self, x: bool, y: bool) -> Self {
+        self.scroll_x = x;
+        self.scroll_y = y;
+        self
+    }
+    pub fn scroll_x(mut self, e: bool) -> Self {
+        self.scroll_x = e;
+        self
+    }
+    pub fn scroll_y(mut self, e: bool) -> Self {
+        self.scroll_y = e;
+        self
+    }
     pub fn padding(mut self, p: f32) -> Self {
         self.padding_top = p;
         self.padding_bottom = p;
@@ -135,6 +187,7 @@ impl<'u, 'a> ContainerBuilder<'u, 'a> {
         self.padding_bottom = p;
         self
     }
+
 
     pub fn row(mut self) -> Self {
         self.direction = Direction::Row;
@@ -245,12 +298,24 @@ impl<'u, 'a> ContainerBuilder<'u, 'a> {
         self
     }
 
-    pub fn show<F>(mut self, f: F) 
-    where F: FnOnce(&mut Ui)
+    pub fn id(mut self, id: impl std::hash::Hash) -> Self {
+        let mut hasher = std::collections::hash_map::DefaultHasher::new();
+        use std::hash::{Hash, Hasher};
+        id.hash(&mut hasher);
+        if let Some(parent) = self.ui.semantic_stack.last() {
+            parent.hash(&mut hasher);
+        }
+        self.id = zenthra_core::Id::from_u64(hasher.finish());
+        self
+    }
+
+    pub fn show<F>(mut self, f: F)
+    where
+        F: FnOnce(&mut Ui),
     {
         // 1. Capture the start position and own ID
-        let id = self.ui.id();
-        
+        let id = self.id;
+
         self.start_x = self.ui.cursor_x;
         self.start_y = self.ui.cursor_y;
         let ox = self.pos_x.unwrap_or(self.start_x);
@@ -272,6 +337,8 @@ impl<'u, 'a> ContainerBuilder<'u, 'a> {
         
         let prev_max_x = self.ui.max_x;
         let prev_max_y = self.ui.max_y;
+        
+        let _id_log_start_idx = self.ui.id_log.len();
 
         // Set child environment
         if let Some(w) = self.width {
@@ -314,8 +381,28 @@ impl<'u, 'a> ContainerBuilder<'u, 'a> {
 
         let parent_draws = std::mem::take(&mut self.ui.draws);
 
+        // Update global offsets for children (for visibility/culling logic)
+        let prev_global_ox = self.ui.offset_x;
+        let prev_global_oy = self.ui.offset_y;
+        let prev_avail_w = self.ui.available_width;
+        
+        let (sx, sy) = if self.scroll_x || self.scroll_y {
+            *self.ui.scroll_state.get(&id).unwrap_or(&(0.0, 0.0))
+        } else {
+            (0.0, 0.0)
+        };
+
+        self.ui.offset_x -= sx;
+        self.ui.offset_y -= sy;
+        self.ui.available_width = avail_w;
+
         // -- Run Children --
         f(self.ui);
+
+        // Restore global offsets
+        self.ui.offset_x = prev_global_ox;
+        self.ui.offset_y = prev_global_oy;
+        self.ui.available_width = prev_avail_w;
 
         // -- Restore Stacks and Environment --
         self.ui.render_mode_stack.pop();
@@ -327,6 +414,8 @@ impl<'u, 'a> ContainerBuilder<'u, 'a> {
         self.children_draws = std::mem::replace(&mut self.ui.draws, parent_draws);
         self.child_sizes = std::mem::replace(&mut self.ui.child_sizes, prev_child_sizes);
         self.child_ranges = std::mem::replace(&mut self.ui.child_draw_ranges, prev_child_ranges);
+        
+        let _id_log_end_idx = child_ids_only.len();
 
         // Restore cursor/base
         self.ui.direction = prev_dir;
@@ -348,19 +437,59 @@ impl<'u, 'a> ContainerBuilder<'u, 'a> {
             _ => self.layout_wrap(ox, oy, avail_w, avail_h, &mut target_positions),
         };
 
-        let w = if self.fill_x {
+        let mut w = if self.fill_x {
             self.ui.width - ox
         } else {
             self.width.unwrap_or(content_w + self.padding_left + self.padding_right)
         };
-        let h = if self.fill_y {
+        
+        if let Some(mw) = self.max_width { w = w.min(mw); }
+        if let Some(mw) = self.min_width { w = w.max(mw); }
+
+        let mut h = if self.fill_y {
             self.ui.height - oy
         } else {
             self.height.unwrap_or(content_h + self.padding_top + self.padding_bottom)
         };
 
+        if let Some(mh) = self.max_height { h = h.min(mh); }
+        if let Some(mh) = self.min_height { h = h.max(mh); }
+
         let draw_start = self.ui.draws.len();
         self.ui.record_layout(id, zenthra_core::Rect::new(ox, oy, w, h));
+
+        let max_sx = (content_w + self.padding_left + self.padding_right - w).max(0.0);
+        let max_sy = (content_h + self.padding_top + self.padding_bottom - h).max(0.0);
+
+        let (scroll_x, scroll_y) = if self.scroll_x || self.scroll_y {
+            let (mut sx, mut sy) = *self.ui.scroll_state.get(&id).unwrap_or(&(0.0, 0.0));
+            
+            let is_hover = self.ui.mouse_x >= ox && self.ui.mouse_x <= ox + w &&
+                          self.ui.mouse_y >= oy && self.ui.mouse_y <= oy + h;
+            
+            if is_hover {
+                for event in &self.ui.input_events {
+                    match event {
+                        zenthra_platform::event::PlatformEvent::MouseWheel { delta_y, delta_x, .. } => {
+                            if self.scroll_y { sy -= delta_y * 15.0; }
+                            if self.scroll_x { sx -= delta_x * 15.0; }
+                            self.ui.needs_redraw = true;
+                        },
+                        _ => {}
+                    }
+                }
+            }
+            
+            sx = sx.clamp(0.0, max_sx);
+            sy = sy.clamp(0.0, max_sy);
+            
+            self.ui.scroll_state.insert(id, (sx, sy));
+            (sx, sy)
+        } else {
+            (0.0, 0.0)
+        };
+
+        let clip = [ox, oy, w, h];
 
         // Background
         if let Some(bg) = self.bg {
@@ -385,11 +514,11 @@ impl<'u, 'a> ContainerBuilder<'u, 'a> {
             }));
         }
 
-        // Final Translation Pass
+        // Final Translation pass (Always run to keep cache in sync)
         for (i, (start, end)) in self.child_ranges.iter().enumerate() {
             if i >= target_positions.len() { break; }
             let (tx, ty) = target_positions[i];
-
+            
             let (origin_x, origin_y) = self
                 .children_draws
                 .get(*start)
@@ -398,31 +527,129 @@ impl<'u, 'a> ContainerBuilder<'u, 'a> {
 
             let dx = tx - origin_x;
             let dy = ty - origin_y;
+            
+            let final_dx = dx - scroll_x;
+            let final_dy = dy - scroll_y;
 
-            if dx != 0.0 || dy != 0.0 {
-                // visuals
-                for draw in &mut self.children_draws[*start..*end] {
-                    offset_draw(draw, dx, dy);
+            // Shift visual commands
+            for draw in &mut self.children_draws[*start..*end] {
+                offset_draw(draw, final_dx, final_dy);
+                if self.scroll_x || self.scroll_y {
+                    set_clip(draw, clip);
                 }
-                
-                // hit-test regions
-                if let Some(&(id_s, id_e)) = child_id_ranges.get(i) {
-                    for j in id_s..id_e {
-                        let cid = child_ids_only[j];
-                        if let Some(rect) = self.ui.next_layout_cache.get_mut(&cid) {
-                            rect.origin.x += dx;
-                            rect.origin.y += dy;
-                        }
+            }
+            
+            // Shift IDs RECURSIVELY (Layout shift only, scrolling is handled live)
+            if let Some(&(ids_start, ids_end)) = child_id_ranges.get(i) {
+                for j in ids_start..ids_end {
+                    let cid = child_ids_only[j];
+                    if let Some((rect, _)) = self.ui.next_layout_cache.get_mut(&cid) {
+                        rect.origin.x += dx;
+                        rect.origin.y += dy;
                     }
                 }
             }
         }
+
 
         // Flush children draws to parent
         for draw in self.children_draws.drain(..) {
             self.ui.draws.push(draw);
         }
         
+        // --- Visual Scrollbars & Dragging ---
+        if self.scroll_x || self.scroll_y {
+            let bar_thickness = 6.0;
+            let bar_margin = 2.0;
+
+            // Vertical Scrollbar
+            if self.scroll_y && max_sy > 0.0 {
+                let thumb_h = (h / (content_h + self.padding_top + self.padding_bottom)) * h;
+                let thumb_h = thumb_h.max(20.0);
+                let scroll_ratio = scroll_y / max_sy;
+                let thumb_y = oy + (h - thumb_h) * scroll_ratio;
+                let thumb_x = ox + w - bar_thickness - bar_margin;
+
+                let is_hover = self.ui.mouse_in_rect(thumb_x - 2.0, thumb_y, bar_thickness + 4.0, thumb_h);
+                let is_dragging = self.ui.active_drag.as_ref().map(|d| d.id == id && d.start_mouse <= -1000.0).unwrap_or(false); // Quick hack to distinguish Y drag
+
+                // Handle Drag Y (Note: Using negative marker for vertical)
+                if self.ui.clicked && is_hover {
+                    self.ui.active_drag = Some(crate::ui::ScrollDrag {
+                        id,
+                        start_mouse: -1000.0 - self.ui.mouse_y, 
+                        start_scroll: scroll_y,
+                    });
+                }
+                
+                if let Some(drag) = &self.ui.active_drag {
+                    if drag.id == id && drag.start_mouse <= -1000.0 {
+                        let current_marker = -1000.0 - self.ui.mouse_y;
+                        let delta = drag.start_mouse - current_marker;
+                        let scroll_range = h - thumb_h;
+                        if scroll_range > 0.0 {
+                            let new_sy = (drag.start_scroll + (delta / scroll_range) * max_sy).clamp(0.0, max_sy);
+                            self.ui.scroll_state.insert(id, (scroll_x, new_sy));
+                            self.ui.needs_redraw = true;
+                        }
+                    }
+                }
+
+                let color = if is_hover || is_dragging { Color::rgba(1.0, 1.0, 1.0, 0.6) } else { Color::rgba(1.0, 1.0, 1.0, 0.2) };
+                self.ui.draws.push(crate::ui::DrawCommand::OverlayRect(crate::ui::OverlayRectDraw {
+                    x: thumb_x,
+                    y: thumb_y,
+                    width: bar_thickness,
+                    height: thumb_h,
+                    color,
+                    clip: [ox, oy, w, h],
+                }));
+            }
+
+            // Horizontal Scrollbar
+            if self.scroll_x && max_sx > 0.0 {
+                let thumb_w = (w / (content_w + self.padding_left + self.padding_right)) * w;
+                let thumb_w = thumb_w.max(20.0);
+                let scroll_ratio = scroll_x / max_sx;
+                let thumb_x = ox + (w - thumb_w) * scroll_ratio;
+                let thumb_y = oy + h - bar_thickness - bar_margin;
+
+                let is_hover = self.ui.mouse_in_rect(thumb_x, thumb_y - 2.0, thumb_w, bar_thickness + 4.0);
+                let is_dragging = self.ui.active_drag.as_ref().map(|d| d.id == id && d.start_mouse > -1000.0).unwrap_or(false);
+
+                if self.ui.clicked && is_hover {
+                    self.ui.active_drag = Some(crate::ui::ScrollDrag {
+                        id,
+                        start_mouse: self.ui.mouse_x,
+                        start_scroll: scroll_x,
+                    });
+                }
+
+                if let Some(drag) = &self.ui.active_drag {
+                    if drag.id == id && drag.start_mouse > -1000.0 {
+                        let delta = self.ui.mouse_x - drag.start_mouse;
+                        let scroll_range = w - thumb_w;
+                        if scroll_range > 0.0 {
+                            let new_sx = (drag.start_scroll + (delta / scroll_range) * max_sx).clamp(0.0, max_sx);
+                            let (_, current_sy) = *self.ui.scroll_state.get(&id).unwrap_or(&(0.0, 0.0));
+                            self.ui.scroll_state.insert(id, (new_sx, current_sy));
+                            self.ui.needs_redraw = true;
+                        }
+                    }
+                }
+
+                let color = if is_hover || is_dragging { Color::rgba(1.0, 1.0, 1.0, 0.6) } else { Color::rgba(1.0, 1.0, 1.0, 0.2) };
+                self.ui.draws.push(crate::ui::DrawCommand::OverlayRect(crate::ui::OverlayRectDraw {
+                    x: thumb_x,
+                    y: thumb_y,
+                    width: thumb_w,
+                    height: bar_thickness,
+                    color,
+                    clip: [ox, oy, w, h],
+                }));
+            }
+        }
+
         // Bubble IDs up to parent's scope
         self.ui.id_log.push(id);
         self.ui.id_log.extend(child_ids_only);
@@ -448,7 +675,7 @@ impl<'u, 'a> ContainerBuilder<'u, 'a> {
                 let h = self.child_sizes.iter().map(|(_, h)| *h).fold(0.0f32, f32::max);
                 (w, h)
             }
-            Direction::Column => {
+             Direction::Column => {
                 let w = self.child_sizes.iter().map(|(w, _)| *w).fold(0.0f32, f32::max);
                 let h = self.child_sizes.iter().map(|(_, h)| h).sum::<f32>()
                     + self.gap * (n.saturating_sub(1)) as f32;
@@ -737,8 +964,6 @@ fn offset_draw(cmd: &mut DrawCommand, dx: f32, dy: f32) {
         DrawCommand::Text(t) => {
             t.pos[0] += dx;
             t.pos[1] += dy;
-            t.clip[0] += dx;
-            t.clip[1] += dy;
         }
         DrawCommand::OverlayRect(c) => {
             c.x += dx;
@@ -752,5 +977,13 @@ fn draw_origin(cmd: &DrawCommand) -> (f32, f32) {
         DrawCommand::Rect(r) => (r.instance.pos[0], r.instance.pos[1]),
         DrawCommand::Text(t) => (t.pos[0], t.pos[1]),
         DrawCommand::OverlayRect(c) => (c.x, c.y),
+    }
+}
+
+fn set_clip(cmd: &mut DrawCommand, clip: [f32; 4]) {
+    match cmd {
+        DrawCommand::Rect(r) => r.instance.clip_rect = clip,
+        DrawCommand::Text(t) => t.clip = clip,
+        DrawCommand::OverlayRect(c) => c.clip = clip,
     }
 }

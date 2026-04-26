@@ -68,7 +68,7 @@ pub struct Ui<'a> {
     pub input_events: Vec<PlatformEvent>,
     pub focused_id: Option<Id>,
     pub id_counter: u64,
-    pub scroll_state: &'a mut std::collections::HashMap<Id, f32>,
+    pub scroll_state: &'a mut std::collections::HashMap<Id, (f32, f32)>,
     pub cursor_state: &'a mut std::collections::HashMap<Id, usize>,
     pub interaction_state: &'a mut std::collections::HashMap<Id, f32>,
     pub active_drag: Option<ScrollDrag>,
@@ -78,8 +78,9 @@ pub struct Ui<'a> {
     pub semantic_stack: Vec<Id>,
     pub render_mode_stack: Vec<zenthra_core::RenderMode>,
     pub needs_redraw: bool,
-    pub layout_cache: &'a std::collections::HashMap<Id, Rect>,
-    pub next_layout_cache: &'a mut std::collections::HashMap<Id, Rect>,
+    pub layout_cache: &'a std::collections::HashMap<Id, (Rect, u64)>,
+    pub next_layout_cache: &'a mut std::collections::HashMap<Id, (Rect, u64)>,
+    pub available_width: f32,
 }
 
 impl<'a> Ui<'a> {
@@ -92,14 +93,14 @@ impl<'a> Ui<'a> {
         initial_focused_id: Option<Id>,
         mouse_pos: (f32, f32),
         mouse_down: bool,
-        scroll_state: &'a mut std::collections::HashMap<Id, f32>,
+        scroll_state: &'a mut std::collections::HashMap<Id, (f32, f32)>,
         cursor_state: &'a mut std::collections::HashMap<Id, usize>,
         interaction_state: &'a mut std::collections::HashMap<Id, f32>,
         active_drag: Option<ScrollDrag>,
         clicked: bool,
         elapsed_time: f32,
-        layout_cache: &'a std::collections::HashMap<Id, Rect>,
-        next_layout_cache: &'a mut std::collections::HashMap<Id, Rect>,
+        layout_cache: &'a std::collections::HashMap<Id, (Rect, u64)>,
+        next_layout_cache: &'a mut std::collections::HashMap<Id, (Rect, u64)>,
     ) -> Self {
         let mouse_x = mouse_pos.0;
         let mouse_y = mouse_pos.1;
@@ -145,6 +146,7 @@ impl<'a> Ui<'a> {
             needs_redraw: false,
             layout_cache,
             next_layout_cache,
+            available_width: width as f32 / scale_factor as f32,
         }
     }
 
@@ -156,10 +158,11 @@ impl<'a> Ui<'a> {
     }
 
     pub fn record_layout(&mut self, id: Id, rect: Rect) {
-        self.next_layout_cache.insert(id, rect);
+        let id_count = self.id_counter.saturating_sub(id.raw());
+        self.next_layout_cache.insert(id, (rect, id_count));
     }
 
-    pub fn get_recorded_layout(&self, id: Id) -> Option<Rect> {
+    pub fn get_recorded_layout(&self, id: Id) -> Option<(Rect, u64)> {
         self.layout_cache.get(&id).cloned()
     }
 
@@ -234,6 +237,24 @@ impl<'a> Ui<'a> {
         let my = self.mouse_y;
         mx >= x && mx <= x + w &&
         my >= y && my <= y + h
+    }
+
+    pub fn is_rect_visible(&self, rect: Rect) -> bool {
+        let rw = rect.size.width;
+        let rh = rect.size.height;
+        let rx = rect.origin.x + self.offset_x;
+        let ry = rect.origin.y + self.offset_y;
+        
+        // Bleed allows items slightly off-screen to remain drawn (prevents flickering)
+        let bleed = 150.0;
+        rx + rw + bleed >= 0.0 && rx - bleed <= self.width &&
+        ry + rh + bleed >= 0.0 && ry - bleed <= self.height
+    }
+
+    /// Converts a logical [x, y, w, h] rect to physical pixels for GPU clipping.
+    pub fn physical_clip(&self, x: f32, y: f32, w: f32, h: f32) -> [f32; 4] {
+        let sf = self.scale_factor;
+        [x * sf, y * sf, w * sf, h * sf]
     }
 
     /// Called by widgets after pushing their draws.

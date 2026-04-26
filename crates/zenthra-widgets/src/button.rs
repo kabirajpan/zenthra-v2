@@ -148,7 +148,7 @@ impl<'u, 'a> ButtonBuilder<'u, 'a> {
         let (x, y) = self.pos.unwrap_or((self.ui.cursor_x, self.ui.cursor_y));
         
         let mut clicked = false;
-        let is_hovered = if let Some(rect) = self.ui.get_recorded_layout(self.id) {
+        let is_hovered = if let Some((rect, _)) = self.ui.get_recorded_layout(self.id) {
             self.ui.mouse_in_rect(rect.origin.x, rect.origin.y, rect.size.width, rect.size.height)
         } else {
             self.ui.mouse_in_rect(x, y, self.width.unwrap_or(100.0), self.height.unwrap_or(40.0))
