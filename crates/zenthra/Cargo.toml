@@ -46,3 +46,7 @@ path = "../../examples/button.rs"
 [[example]]
 name = "render_modes"
 path = "../../examples/render_modes.rs"
+
+[[example]]
+name = "button_default"
+path = "../../examples/button_default.rs"

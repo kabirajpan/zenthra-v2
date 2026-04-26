@@ -1,21 +1,21 @@
 // crates/zenthra-widgets/src/button.rs
 
-use crate::ui::{Ui, DrawCommand, RectDraw, TextDraw};
+use crate::ui::{DrawCommand, RectDraw, TextDraw, Ui};
 // use crate::text::TextBuilder;
-use zenthra_core::{Color, Id, Role, SemanticNode, Rect, EdgeInsets};
+use zenthra_core::{Color, EdgeInsets, Id, Rect, Role, SemanticNode};
 use zenthra_render::RectInstance;
 
 pub struct ButtonBuilder<'u, 'a> {
     ui: &'u mut Ui<'a>,
     id: Id,
     label: String,
-    
+
     // Position & Layout
     pos: Option<(f32, f32)>,
     width: Option<f32>,
     height: Option<f32>,
     padding: EdgeInsets,
-    
+
     // Visuals (Idle)
     bg: Color,
     text_color: Color,
@@ -23,16 +23,17 @@ pub struct ButtonBuilder<'u, 'a> {
     font_size: f32,
     stroke_weight: f32,
     stroke_color: Color,
-    
+
     // Shadows
     shadow_offset: [f32; 2],
     shadow_blur: f32,
     shadow_color: Color,
-    
+    shadow_opacity: f32,
+
     // States
     hover_bg: Option<Color>,
     active_bg: Option<Color>,
-    
+
     // Other
     opacity: f32,
     render_mode: Option<zenthra_core::RenderMode>,
@@ -49,16 +50,17 @@ impl<'u, 'a> ButtonBuilder<'u, 'a> {
             pos: None,
             width: None,
             height: None,
-            padding: EdgeInsets::all(12.0),
+            padding: EdgeInsets::symmetric(6.0, 12.0),
             bg: Color::rgb(0.2, 0.2, 0.25),
             text_color: Color::WHITE,
             radius: [4.0; 4],
-            font_size: 18.0,
+            font_size: 14.0,
             stroke_weight: 0.0,
             stroke_color: Color::TRANSPARENT,
-            shadow_offset: [0.0, 2.0],
-            shadow_blur: 4.0,
-            shadow_color: Color::rgba(0.0, 0.0, 0.0, 0.3),
+            shadow_offset: [0.0, 0.0],
+            shadow_blur: 0.0,
+            shadow_color: Color::TRANSPARENT,
+            shadow_opacity: 1.0,
             hover_bg: Some(Color::rgb(0.25, 0.25, 0.35)),
             active_bg: Some(Color::rgb(0.15, 0.15, 0.2)),
             opacity: 1.0,
@@ -113,15 +115,52 @@ impl<'u, 'a> ButtonBuilder<'u, 'a> {
         self
     }
 
-    pub fn shadow(mut self, color: Color, offset: [f32; 2], blur: f32) -> Self {
+    pub fn shadow(mut self, color: Color, x: f32, y: f32, blur: f32) -> Self {
         self.shadow_color = color;
-        self.shadow_offset = offset;
+        self.shadow_offset = [x, y];
         self.shadow_blur = blur;
         self
     }
 
-    pub fn padding(mut self, padding: impl Into<EdgeInsets>) -> Self {
-        self.padding = padding.into();
+    pub fn shadow_opacity(mut self, opacity: f32) -> Self {
+        self.shadow_opacity = opacity;
+        self
+    }
+
+    pub fn padding(mut self, t: f32, r: f32, b: f32, l: f32) -> Self {
+        self.padding = zenthra_core::EdgeInsets { top: t, right: r, bottom: b, left: l };
+        self
+    }
+
+    pub fn padding_x(mut self, x: f32) -> Self {
+        self.padding.left = x;
+        self.padding.right = x;
+        self
+    }
+
+    pub fn padding_y(mut self, y: f32) -> Self {
+        self.padding.top = y;
+        self.padding.bottom = y;
+        self
+    }
+
+    pub fn padding_top(mut self, t: f32) -> Self {
+        self.padding.top = t;
+        self
+    }
+
+    pub fn padding_bottom(mut self, b: f32) -> Self {
+        self.padding.bottom = b;
+        self
+    }
+
+    pub fn padding_left(mut self, l: f32) -> Self {
+        self.padding.left = l;
+        self
+    }
+
+    pub fn padding_right(mut self, r: f32) -> Self {
+        self.padding.right = r;
         self
     }
 
@@ -146,16 +185,26 @@ impl<'u, 'a> ButtonBuilder<'u, 'a> {
         }
 
         let (x, y) = self.pos.unwrap_or((self.ui.cursor_x, self.ui.cursor_y));
-        
+
         let mut clicked = false;
         let is_hovered = if let Some((rect, _)) = self.ui.get_recorded_layout(self.id) {
-            self.ui.mouse_in_rect(rect.origin.x, rect.origin.y, rect.size.width, rect.size.height)
+            self.ui.mouse_in_rect(
+                rect.origin.x,
+                rect.origin.y,
+                rect.size.width,
+                rect.size.height,
+            )
         } else {
-            self.ui.mouse_in_rect(x, y, self.width.unwrap_or(100.0), self.height.unwrap_or(40.0))
+            self.ui.mouse_in_rect(
+                x,
+                y,
+                self.width.unwrap_or(100.0),
+                self.height.unwrap_or(40.0),
+            )
         };
-        
+
         let is_pressed = is_hovered && self.ui.mouse_down;
-        
+
         if self.ui.clicked && is_hovered {
             clicked = true;
         }
@@ -178,7 +227,8 @@ impl<'u, 'a> ButtonBuilder<'u, 'a> {
         let mut text_h = 0.0;
         if let Some(fs) = self.ui.font_system.as_ref() {
             // use zenthra_text::traits::FontProvider;
-            let mut adapter = zenthra_text::prelude::CosmicFontProvider::new_with_system(fs.clone());
+            let mut adapter =
+                zenthra_text::prelude::CosmicFontProvider::new_with_system(fs.clone());
             let options = zenthra_text::prelude::TextOptions::new().font_size(self.font_size);
             let buffer = adapter.shape(&self.label, &options);
             let (cw, ch) = buffer.content_size();
@@ -200,20 +250,24 @@ impl<'u, 'a> ButtonBuilder<'u, 'a> {
                 radius: self.radius,
                 border_width: self.stroke_weight,
                 border_color: self.stroke_color.to_array(),
-                shadow_color: self.shadow_color.to_array(),
+                shadow_color: {
+                    let mut c = self.shadow_color;
+                    c.a *= self.shadow_opacity;
+                    c.to_array()
+                },
                 shadow_offset: self.shadow_offset,
                 shadow_blur: self.shadow_blur,
                 clip_rect: [0.0, 0.0, 9999.0, 9999.0],
                 grayscale: 0.0,
                 brightness: current_brightness,
                 opacity: self.opacity,
-            }
+            },
         }));
 
         // 2. Draw Text (Centered)
         let tx = x + (final_w - text_w) / 2.0;
         let ty = y + (final_h - text_h) / 2.0;
-        
+
         self.ui.draws.push(DrawCommand::Text(TextDraw {
             text: self.label.clone(),
             pos: [tx, ty],
@@ -221,18 +275,19 @@ impl<'u, 'a> ButtonBuilder<'u, 'a> {
                 .font_size(self.font_size)
                 .color(current_text)
                 .at(tx, ty),
-            clip: [x, y, final_w, final_h],
+            clip: [0.0, 0.0, 9999.0, 9999.0],
         }));
 
         // 3. Register Semantic
         self.ui.register_semantic(
             SemanticNode::new(self.id, Role::Button, Rect::new(x, y, final_w, final_h))
-                .with_label(self.label.clone())
+                .with_label(self.label.clone()),
         );
 
-        self.ui.record_layout(self.id, Rect::new(x, y, final_w, final_h));
+        self.ui
+            .record_layout(self.id, Rect::new(x, y, final_w, final_h));
         self.ui.advance(final_w, final_h, start_draw);
-        
+
         if self.render_mode.is_some() {
             self.ui.render_mode_stack.pop();
         }

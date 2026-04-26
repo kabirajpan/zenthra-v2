@@ -45,6 +45,8 @@ pub struct ContainerBuilder<'u, 'a> {
     border_width: f32,
     shadow_blur: f32,
     shadow_color: Option<Color>,
+    shadow_offset: [f32; 2],
+    shadow_opacity: f32,
     opacity: f32,
     render_mode: Option<zenthra_core::RenderMode>,
     max_width: Option<f32>,
@@ -87,6 +89,8 @@ impl<'u, 'a> ContainerBuilder<'u, 'a> {
             border_width: 0.0,
             shadow_blur: 0.0,
             shadow_color: None,
+            shadow_offset: [0.0, 0.0],
+            shadow_opacity: 1.0,
             opacity: 1.0,
             render_mode: None,
             max_width: None,
@@ -162,11 +166,11 @@ impl<'u, 'a> ContainerBuilder<'u, 'a> {
         self.scroll_y = e;
         self
     }
-    pub fn padding(mut self, p: f32) -> Self {
-        self.padding_top = p;
-        self.padding_bottom = p;
-        self.padding_left = p;
-        self.padding_right = p;
+    pub fn padding(mut self, t: f32, r: f32, b: f32, l: f32) -> Self {
+        self.padding_top = t;
+        self.padding_bottom = b;
+        self.padding_left = l;
+        self.padding_right = r;
         self
     }
     pub fn padding_x(mut self, p: f32) -> Self {
@@ -245,6 +249,13 @@ impl<'u, 'a> ContainerBuilder<'u, 'a> {
         self
     }
 
+    pub fn radius(mut self, tl: f32, _tr: f32, _br: f32, _bl: f32) -> Self {
+        // Since container currently uses a single f32 for radius in its internal struct,
+        // we'll use top_left for now.
+        self.radius = tl;
+        self
+    }
+
     pub fn render_mode(mut self, mode: zenthra_core::RenderMode) -> Self {
         self.render_mode = Some(mode);
         self
@@ -276,21 +287,20 @@ impl<'u, 'a> ContainerBuilder<'u, 'a> {
         self.bg = Some(c);
         self
     }
-    pub fn radius(mut self, r: f32) -> Self {
-        self.radius = r;
-        self
-    }
     pub fn border(mut self, c: Color, w: f32) -> Self {
         self.border_color = Some(c);
         self.border_width = w;
         self
     }
-    pub fn shadow(mut self, blur: f32) -> Self {
+    pub fn shadow(mut self, color: Color, x: f32, y: f32, blur: f32) -> Self {
+        self.shadow_color = Some(color);
+        self.shadow_offset = [x, y];
         self.shadow_blur = blur;
         self
     }
-    pub fn shadow_color(mut self, c: Color) -> Self {
-        self.shadow_color = Some(c);
+
+    pub fn shadow_opacity(mut self, opacity: f32) -> Self {
+        self.shadow_opacity = opacity;
         self
     }
     pub fn opacity(mut self, o: f32) -> Self {
@@ -503,8 +513,15 @@ impl<'u, 'a> ContainerBuilder<'u, 'a> {
                     radius: [self.radius; 4],
                     border_width: self.border_width,
                     border_color: bc.to_array(),
-                    shadow_color: sc.to_array(),
-                    shadow_offset: [0.0, 0.0],
+                    shadow_color: {
+                        if let Some(mut sc) = self.shadow_color {
+                            sc.a *= self.shadow_opacity;
+                            sc.to_array()
+                        } else {
+                            Color::TRANSPARENT.to_array()
+                        }
+                    },
+                    shadow_offset: self.shadow_offset,
                     shadow_blur: self.shadow_blur,
                     clip_rect: [0.0, 0.0, self.ui.width, self.ui.height],
                     grayscale: 0.0,

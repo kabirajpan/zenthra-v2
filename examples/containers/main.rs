@@ -9,7 +9,7 @@ fn main() {
             ui.lazy_container()
                 .id("main_lazy_list")
                 .bg(Color::rgb(0.05, 0.05, 0.07)) // Built-in background
-                .padding(10.0) // Built-in padding
+                .padding(10.0, 10.0, 10.0, 10.0) // Built-in padding
                 .item_size(150.0, 100.0)
                 .gap(15.0)
                 .row()
@@ -27,7 +27,7 @@ fn main() {
                         .width(150.0)
                         .height(100.0)
                         .bg(Color::rgb(r, g, b))
-                        .radius(4.0)
+                        .radius(4.0, 4.0, 4.0, 4.0)
                         .align(Align::Center)
                         .show(|ui| {
                             ui.text(&format!("Box {}", i))

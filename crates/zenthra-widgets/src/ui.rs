@@ -204,10 +204,12 @@ impl<'a> Ui<'a> {
     }
 
     pub fn spacing(&mut self, size: f32) {
-        match self.direction {
-            Direction::Column => self.cursor_y += size,
-            Direction::Row => self.cursor_x += size,
-        }
+        let (w, h) = match self.direction {
+            Direction::Column => (0.0, size),
+            Direction::Row => (size, 0.0),
+        };
+        let draw_start = self.draws.len();
+        self.advance(w, h, draw_start);
     }
 
     /// Moves the cursor down by `h` pixels WITHOUT registering a layout child.

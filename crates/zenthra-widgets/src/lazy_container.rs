@@ -51,8 +51,8 @@ impl<'u, 'a> LazyContainerBuilder<'u, 'a> {
         self
     }
 
-    pub fn padding(mut self, padding: f32) -> Self {
-        self.padding = padding;
+    pub fn padding(mut self, t: f32, _r: f32, _b: f32, _l: f32) -> Self {
+        self.padding = t; // Note: Internal implementation only supports uniform padding for now
         self
     }
 
@@ -61,8 +61,8 @@ impl<'u, 'a> LazyContainerBuilder<'u, 'a> {
         self
     }
 
-    pub fn radius(mut self, radius: f32) -> Self {
-        self.radius = radius;
+    pub fn radius(mut self, tl: f32, _tr: f32, _br: f32, _bl: f32) -> Self {
+        self.radius = tl; // Note: Internal implementation only supports uniform radius for now
         self
     }
 
