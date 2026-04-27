@@ -17,9 +17,9 @@ fn main() {
                         .column()
                         .width(520.0)
                         .gap(30.0)
-                        .padding(40.0)
+                        .padding(40.0, 40.0, 40.0, 40.0)
                         .bg(Color::rgb(0.1, 0.1, 0.12))
-                        .radius(20.0)
+                        .radius(20.0, 20.0, 20.0, 20.0)
                         .halign(Align::Center)
                         .show(|ui| {
                             ui.h1("Interaction Counter").color(Color::WHITE).show();

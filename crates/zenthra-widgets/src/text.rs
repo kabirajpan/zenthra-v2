@@ -48,7 +48,6 @@ impl<'u, 'a> TextBuilder<'u, 'a> {
         let id = Id::from_u64(id_raw);
         ui.id_log.push(id);
         
-        let max_width = (ui.max_x - x).max(0.0);
         
         Self {
             ui,
@@ -56,7 +55,6 @@ impl<'u, 'a> TextBuilder<'u, 'a> {
             content: content.to_string(),
             options: TextOptions::new()
                 .at(0.0, 0.0) // Relative to pos
-                .max_width(max_width)
                 .scale_factor(sf),
             padding: Padding::ZERO,
             bg_color: None,
@@ -114,8 +112,8 @@ impl<'u, 'a> TextBuilder<'u, 'a> {
         self
     }
 
-    pub fn padding(mut self, p: impl Into<Padding>) -> Self {
-        self.padding = p.into();
+    pub fn padding(mut self, t: f32, r: f32, b: f32, l: f32) -> Self {
+        self.padding = Padding { top: t, right: r, bottom: b, left: l };
         self
     }
     pub fn padding_x(mut self, p: f32) -> Self {
@@ -128,9 +126,25 @@ impl<'u, 'a> TextBuilder<'u, 'a> {
         self.padding.bottom = p;
         self
     }
+    pub fn padding_top(mut self, p: f32) -> Self {
+        self.padding.top = p;
+        self
+    }
+    pub fn padding_bottom(mut self, p: f32) -> Self {
+        self.padding.bottom = p;
+        self
+    }
+    pub fn padding_left(mut self, p: f32) -> Self {
+        self.padding.left = p;
+        self
+    }
+    pub fn padding_right(mut self, p: f32) -> Self {
+        self.padding.right = p;
+        self
+    }
 
-    pub fn margin(mut self, m: f32) -> Self {
-        self.margin = EdgeInsets::all(m);
+    pub fn margin(mut self, t: f32, r: f32, b: f32, l: f32) -> Self {
+        self.margin = EdgeInsets { top: t, right: r, bottom: b, left: l };
         self
     }
     pub fn margin_x(mut self, m: f32) -> Self {
@@ -141,6 +155,22 @@ impl<'u, 'a> TextBuilder<'u, 'a> {
     pub fn margin_y(mut self, m: f32) -> Self {
         self.margin.top = m;
         self.margin.bottom = m;
+        self
+    }
+    pub fn margin_top(mut self, m: f32) -> Self {
+        self.margin.top = m;
+        self
+    }
+    pub fn margin_bottom(mut self, m: f32) -> Self {
+        self.margin.bottom = m;
+        self
+    }
+    pub fn margin_left(mut self, m: f32) -> Self {
+        self.margin.left = m;
+        self
+    }
+    pub fn margin_right(mut self, m: f32) -> Self {
+        self.margin.right = m;
         self
     }
 
@@ -281,8 +311,10 @@ impl<'u, 'a> TextBuilder<'u, 'a> {
         let (w, h, buffer) = if let Some(fs) = self.ui.font_system.as_ref() {
              let mut adapter = CosmicFontProvider::new_with_system(fs.clone());
              
-             // Calculate layout width available for text (using container's available width)
-             let layout_width = (self.ui.available_width - self.padding.horizontal()).max(0.0);
+             // Use explicitly set max_width if available, otherwise fallback to container width
+             let layout_width = self.options.max_width.unwrap_or_else(|| {
+                 (self.ui.available_width - self.padding.horizontal()).max(0.0)
+             });
              
              self.options.max_width = Some(layout_width);
              

@@ -13,7 +13,7 @@ fn main() {
             ui.container()
                 .fill()
                 .column()
-                .padding(40.0)
+                .padding(40.0, 40.0, 40.0, 40.0)
                 .gap(30.0)
                 .bg(Color::rgb(0.08, 0.08, 0.1))
                 .center_x()
@@ -25,15 +25,15 @@ fn main() {
                         None => "L1 Snapshot: <Click Button>".to_string(),
                     };
                     ui.h3(&l1_text).color(Color::rgb(0.4, 0.7, 1.0)).full_width_bg(false).show();
-
+                    
                     // LEVEL 2: Continuous (forced rendering)
                     ui.container()
                         .render_mode(RenderMode::Continuous)
                         .width(600.0)
                         .height(250.0)
                         .bg(Color::rgb(0.15, 0.15, 0.2))
-                        .radius(10.0)
-                        .padding(20.0)
+                        .radius(10.0, 10.0, 10.0, 10.0)
+                        .padding(20.0, 20.0, 20.0, 20.0)
                         .center()
                         .show(|ui: &mut Ui| {
                             frame_count += 1;
@@ -54,9 +54,9 @@ fn main() {
                                 ui.container()
                                     .render_mode(RenderMode::Static)
                                     .width(400.0)
-                                    .padding(15.0)
+                                    .padding(15.0, 15.0, 15.0, 15.0)
                                     .bg(Color::rgb(0.05, 0.05, 0.07))
-                                    .radius(5.0)
+                                    .radius(5.0, 5.0, 5.0, 5.0)
                                     .center()
                                     .show(|ui: &mut Ui| {
                                         let l3_text = match l3_snapshot {
@@ -71,7 +71,7 @@ fn main() {
                     // Controls at Bottom
                     ui.row()
                         .gap(15.0)
-                        .padding(20.0)
+                        .padding(20.0, 20.0, 20.0, 20.0)
                         .show(|ui: &mut Ui| {
                             if ui.button("Capture at Level 1").width(220.0).show().clicked {
                                 l1_snapshot = Some(frame_count);

@@ -191,6 +191,14 @@ impl<'u, 'a> ContainerBuilder<'u, 'a> {
         self.padding_bottom = p;
         self
     }
+    pub fn padding_left(mut self, p: f32) -> Self {
+        self.padding_left = p;
+        self
+    }
+    pub fn padding_right(mut self, p: f32) -> Self {
+        self.padding_right = p;
+        self
+    }
 
 
     pub fn row(mut self) -> Self {
@@ -239,6 +247,22 @@ impl<'u, 'a> ContainerBuilder<'u, 'a> {
         self
     }
 
+    pub fn center(mut self) -> Self {
+        self.halign = Align::Center;
+        self.valign = Align::Center;
+        self
+    }
+
+    pub fn center_x(mut self) -> Self {
+        self.halign = Align::Center;
+        self
+    }
+
+    pub fn center_y(mut self) -> Self {
+        self.valign = Align::Center;
+        self
+    }
+
     pub fn continuous(mut self) -> Self {
         self.render_mode = Some(zenthra_core::RenderMode::Continuous);
         self
@@ -271,14 +295,6 @@ impl<'u, 'a> ContainerBuilder<'u, 'a> {
         self
     }
 
-    pub fn padding_left(mut self, p: f32) -> Self {
-        self.padding_left = p;
-        self
-    }
-    pub fn padding_right(mut self, p: f32) -> Self {
-        self.padding_right = p;
-        self
-    }
     pub fn gap(mut self, g: f32) -> Self {
         self.gap = g;
         self
@@ -504,7 +520,6 @@ impl<'u, 'a> ContainerBuilder<'u, 'a> {
         // Background
         if let Some(bg) = self.bg {
             let bc = self.border_color.unwrap_or(Color::TRANSPARENT);
-            let sc = self.shadow_color.unwrap_or(Color::TRANSPARENT);
             self.ui.draws.push(DrawCommand::Rect(RectDraw {
                 instance: RectInstance {
                     pos: [ox, oy],

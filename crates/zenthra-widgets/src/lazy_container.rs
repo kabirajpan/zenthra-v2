@@ -82,7 +82,7 @@ impl<'u, 'a> LazyContainerBuilder<'u, 'a> {
     }
 
     pub fn id(mut self, id: impl std::hash::Hash) -> Self {
-        use std::hash::{Hash, Hasher};
+        use std::hash::Hasher;
         let mut hasher = std::collections::hash_map::DefaultHasher::new();
         id.hash(&mut hasher);
         self.id = Some(Id::from_u64(hasher.finish()));

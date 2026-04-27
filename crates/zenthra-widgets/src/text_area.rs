@@ -96,13 +96,65 @@ impl<'u, 'a, 'b> TextAreaBuilder<'u, 'a, 'b> {
         self
     }
 
-    pub fn padding(mut self, padding: impl Into<EdgeInsets>) -> Self {
-        self.padding = padding.into();
+    pub fn padding(mut self, t: f32, r: f32, b: f32, l: f32) -> Self {
+        self.padding = EdgeInsets { top: t, right: r, bottom: b, left: l };
+        self
+    }
+    pub fn padding_x(mut self, x: f32) -> Self {
+        self.padding.left = x;
+        self.padding.right = x;
+        self
+    }
+    pub fn padding_y(mut self, y: f32) -> Self {
+        self.padding.top = y;
+        self.padding.bottom = y;
+        self
+    }
+    pub fn padding_top(mut self, t: f32) -> Self {
+        self.padding.top = t;
+        self
+    }
+    pub fn padding_bottom(mut self, b: f32) -> Self {
+        self.padding.bottom = b;
+        self
+    }
+    pub fn padding_left(mut self, l: f32) -> Self {
+        self.padding.left = l;
+        self
+    }
+    pub fn padding_right(mut self, r: f32) -> Self {
+        self.padding.right = r;
         self
     }
 
-    pub fn text_padding(mut self, padding: impl Into<EdgeInsets>) -> Self {
-        self.text_padding = padding.into();
+    pub fn text_padding(mut self, t: f32, r: f32, b: f32, l: f32) -> Self {
+        self.text_padding = EdgeInsets { top: t, right: r, bottom: b, left: l };
+        self
+    }
+    pub fn text_padding_x(mut self, x: f32) -> Self {
+        self.text_padding.left = x;
+        self.text_padding.right = x;
+        self
+    }
+    pub fn text_padding_y(mut self, y: f32) -> Self {
+        self.text_padding.top = y;
+        self.text_padding.bottom = y;
+        self
+    }
+    pub fn text_padding_top(mut self, t: f32) -> Self {
+        self.text_padding.top = t;
+        self
+    }
+    pub fn text_padding_bottom(mut self, b: f32) -> Self {
+        self.text_padding.bottom = b;
+        self
+    }
+    pub fn text_padding_left(mut self, l: f32) -> Self {
+        self.text_padding.left = l;
+        self
+    }
+    pub fn text_padding_right(mut self, r: f32) -> Self {
+        self.text_padding.right = r;
         self
     }
 
@@ -438,9 +490,9 @@ impl<'u, 'a, 'b> TextAreaBuilder<'u, 'a, 'b> {
             .line_height(self.line_height)
             .color(self.color)
             .full_width_bg(false)
-            .padding(self.text_padding)
+            .padding(self.text_padding.top, self.text_padding.right, self.text_padding.bottom, self.text_padding.left)
             .wrap(self.wrap)
-            .max_width(actual_width - self.padding.horizontal())
+            .max_width(actual_width - self.padding.horizontal() - self.text_padding.horizontal())
             .pos(self.x + self.padding.left, pos_y);
 
         if self.text_bg_full_width {

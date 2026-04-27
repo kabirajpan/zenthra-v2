@@ -16,7 +16,7 @@ fn main() {
                 .text_bg(Color::BLUE)
                 .text_bg_full_width(true)
                 .bg(Color::RED)
-                .padding(10.0)
+                .padding(10.0, 10.0, 10.0, 10.0)
                 .full_width()
                 .show();
 
@@ -27,8 +27,8 @@ fn main() {
                 .text_bg(Color::BLUE)
                 .highlight(Color::rgb(0.0, 0.5, 0.0))
                 .text_bg_full_width(true)
-                .text_padding(30.0)
-                .padding(10.0)
+                .text_padding(30.0, 30.0, 30.0, 30.0)
+                .padding(10.0, 10.0, 10.0, 10.0)
                 .full_width()
                 .height(150.0)
                 .scrollable(true)
