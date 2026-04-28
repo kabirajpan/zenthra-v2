@@ -49,7 +49,7 @@ fn main() {
                         .column()
                         // 2. Try changing the wrap strategy:
                         // Options: Wrap::Wrap, Wrap::NoWrap, Wrap::WrapReverse, Wrap::RightToLeft, Wrap::RightToLeftReverse
-                        .wrap(Wrap::NoWrap)
+                        .wrap(Wrap::Wrap)
                         // 3. Try uncommenting scrolling! (Make sure the content spills past the width/height limits first)
                         // .scroll_y(true)
                         // .scroll_x(true)
