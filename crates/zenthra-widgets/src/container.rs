@@ -40,7 +40,6 @@ pub struct ContainerBuilder<'u, 'a> {
     padding_right: f32,
     gap: f32,
     bg: Option<Color>,
-    radius: f32,
     border_color: Option<Color>,
     border_width: f32,
     shadow_blur: f32,
@@ -57,6 +56,7 @@ pub struct ContainerBuilder<'u, 'a> {
     scroll_y: bool,
     clip: bool,
     id: zenthra_core::Id,
+    radius: [f32; 4],
 }
 
 impl<'u, 'a> ContainerBuilder<'u, 'a> {
@@ -85,7 +85,6 @@ impl<'u, 'a> ContainerBuilder<'u, 'a> {
             padding_right: 0.0,
             gap: 0.0,
             bg: None,
-            radius: 0.0,
             border_color: None,
             border_width: 0.0,
             shadow_blur: 0.0,
@@ -102,6 +101,7 @@ impl<'u, 'a> ContainerBuilder<'u, 'a> {
             scroll_y: false,
             clip: false,
             id,
+            radius: [0.0; 4],
         }
     }
 
@@ -280,10 +280,8 @@ impl<'u, 'a> ContainerBuilder<'u, 'a> {
         self
     }
 
-    pub fn radius(mut self, tl: f32, _tr: f32, _br: f32, _bl: f32) -> Self {
-        // Since container currently uses a single f32 for radius in its internal struct,
-        // we'll use top_left for now.
-        self.radius = tl;
+    pub fn radius(mut self, tl: f32, tr: f32, br: f32, bl: f32) -> Self {
+        self.radius = [tl, tr, br, bl];
         self
     }
 
@@ -383,10 +381,6 @@ impl<'u, 'a> ContainerBuilder<'u, 'a> {
 
         self.ui.direction = self.direction;
         self.ui.line_height = 0.0;
-        self.ui.base_x = ox + self.padding_left;
-        self.ui.base_y = oy + self.padding_top;
-        self.ui.cursor_x = self.ui.base_x;
-        self.ui.cursor_y = self.ui.base_y;
 
         let mode = self.render_mode.unwrap_or(self.ui.current_render_mode());
         self.ui.render_mode_stack.push(mode);
@@ -395,19 +389,19 @@ impl<'u, 'a> ContainerBuilder<'u, 'a> {
         }
 
         let avail_w = if let Some(w) = self.width {
-            w - self.padding_left - self.padding_right
+            w - self.padding_left - self.padding_right - 2.0 * self.border_width
         } else {
-            (prev_max_x - ox - self.padding_left - self.padding_right).max(0.0)
+            (prev_max_x - ox - self.padding_left - self.padding_right - 2.0 * self.border_width).max(0.0)
         };
 
         let avail_h = if let Some(h) = self.height {
-            h - self.padding_top - self.padding_bottom
+            h - self.padding_top - self.padding_bottom - 2.0 * self.border_width
         } else {
-            (prev_max_y - oy - self.padding_top - self.padding_bottom).max(0.0)
+            (prev_max_y - oy - self.padding_top - self.padding_bottom - 2.0 * self.border_width).max(0.0)
         };
 
-        self.ui.max_x = (ox + self.padding_left + avail_w).min(prev_max_x);
-        self.ui.max_y = (oy + self.padding_top + avail_h).min(prev_max_y);
+        self.ui.max_x = (ox + self.padding_left + self.border_width + avail_w).min(prev_max_x);
+        self.ui.max_y = (oy + self.padding_top + self.border_width + avail_h).min(prev_max_y);
 
         self.ui.semantic_stack.push(id);
         self.ui.register_semantic(zenthra_core::SemanticNode::new(id, zenthra_core::Role::Container, zenthra_core::Rect::new(ox, oy, 0.0, 0.0)));
@@ -428,6 +422,11 @@ impl<'u, 'a> ContainerBuilder<'u, 'a> {
         self.ui.offset_x -= sx;
         self.ui.offset_y -= sy;
         self.ui.available_width = avail_w;
+
+        self.ui.base_x = ox + self.padding_left + self.border_width;
+        self.ui.base_y = oy + self.padding_top + self.border_width;
+        self.ui.cursor_x = self.ui.base_x;
+        self.ui.cursor_y = self.ui.base_y;
 
         // -- Run Children --
         f(self.ui);
@@ -473,7 +472,7 @@ impl<'u, 'a> ContainerBuilder<'u, 'a> {
         let mut w = if self.fill_x {
             self.ui.max_x - ox  // use parent's right boundary, not global window width
         } else {
-            self.width.unwrap_or(content_w + self.padding_left + self.padding_right)
+            self.width.unwrap_or(content_w + self.padding_left + self.padding_right + 2.0 * self.border_width)
         };
         
         if let Some(mw) = self.max_width { w = w.min(mw); }
@@ -482,7 +481,7 @@ impl<'u, 'a> ContainerBuilder<'u, 'a> {
         let mut h = if self.fill_y {
             self.ui.max_y - oy  // use parent's bottom boundary, not global window height
         } else {
-            self.height.unwrap_or(content_h + self.padding_top + self.padding_bottom)
+            self.height.unwrap_or(content_h + self.padding_top + self.padding_bottom + 2.0 * self.border_width)
         };
 
         if let Some(mh) = self.max_height { h = h.min(mh); }
@@ -561,7 +560,7 @@ impl<'u, 'a> ContainerBuilder<'u, 'a> {
                     pos: [ox, oy],
                     size: [w, h],
                     color: bg.to_array(),
-                    radius: [self.radius; 4],
+                    radius: self.radius,
                     border_width: bw,
                     border_color: bc.to_array(),
                     shadow_color: self.shadow_color.map(|c| {
@@ -588,7 +587,7 @@ impl<'u, 'a> ContainerBuilder<'u, 'a> {
                 .children_draws
                 .get(*start)
                 .map(|d| draw_origin(d))
-                .unwrap_or((ox + self.padding_left, oy + self.padding_top));
+                .unwrap_or((ox + self.padding_left + self.border_width, oy + self.padding_top + self.border_width));
 
             let dx = tx - origin_x;
             let dy = ty - origin_y;
@@ -752,8 +751,8 @@ impl<'u, 'a> ContainerBuilder<'u, 'a> {
             }
         };
 
-        let real_w = if inner_w.is_infinite() { content_w } else { inner_w };
-        let real_h = if inner_h.is_infinite() { content_h } else { inner_h };
+        let real_w = if self.width.is_some() || self.fill_x { inner_w } else { content_w };
+        let real_h = if self.height.is_some() || self.fill_y { inner_h } else { content_h };
 
         match self.target_halign_valign(ox, oy, real_w, real_h, content_w, content_h, targets) {
             (w, h) => (w, h),
@@ -765,7 +764,7 @@ impl<'u, 'a> ContainerBuilder<'u, 'a> {
         match self.direction {
             Direction::Row => {
                 let extra = (real_w - content_w).max(0.0);
-                let mut cx = ox + self.padding_left + match self.halign {
+                let mut cx = ox + self.padding_left + self.border_width + match self.halign {
                     Align::Left => 0.0,
                     Align::Center => extra / 2.0,
                     Align::Right => extra,
@@ -779,7 +778,7 @@ impl<'u, 'a> ContainerBuilder<'u, 'a> {
                     _ => self.gap,
                 };
                 for (i, (cw, ch)) in self.child_sizes.iter().enumerate() {
-                    let cy = oy + self.padding_top + match self.valign {
+                    let cy = oy + self.padding_top + self.border_width + match self.valign {
                         Align::Top => 0.0,
                         Align::Center => (real_h - ch) / 2.0,
                         Align::Bottom => real_h - ch,
@@ -791,7 +790,7 @@ impl<'u, 'a> ContainerBuilder<'u, 'a> {
             }
             Direction::Column => {
                 let extra = (real_h - content_h).max(0.0);
-                let mut cy = oy + self.padding_top + match self.valign {
+                let mut cy = oy + self.padding_top + self.border_width + match self.valign {
                     Align::Top => 0.0,
                     Align::Center => extra / 2.0,
                     Align::Bottom => extra,
@@ -805,7 +804,7 @@ impl<'u, 'a> ContainerBuilder<'u, 'a> {
                     _ => self.gap,
                 };
                 for (i, (cw, ch)) in self.child_sizes.iter().enumerate() {
-                    let cx = ox + self.padding_left + match self.halign {
+                    let cx = ox + self.padding_left + self.border_width + match self.halign {
                         Align::Left => 0.0,
                         Align::Center => (real_w - cw) / 2.0,
                         Align::Right => real_w - cw,
@@ -866,18 +865,18 @@ impl<'u, 'a> ContainerBuilder<'u, 'a> {
                     row.iter().map(|&i| self.child_sizes[i].0).sum::<f32>() + self.gap * (row.len().saturating_sub(1)) as f32
                 }).fold(0.0f32, f32::max);
 
-                let real_h = if inner_h.is_infinite() { total_h } else { inner_h };
-                let real_w = if inner_w.is_infinite() { max_row_w } else { inner_w };
+                let real_h = if self.height.is_some() || self.fill_y { inner_h } else { total_h };
+                let real_w = if self.width.is_some() || self.fill_x { inner_w } else { max_row_w };
 
                 let mut cy = if cross_reversed {
-                    oy + self.padding_top + match self.valign {
+                    oy + self.padding_top + self.border_width + match self.valign {
                         Align::Top => total_h,
                         Align::Center => (real_h + total_h) / 2.0,
                         Align::Bottom => real_h,
                         _ => total_h,
                     }
                 } else {
-                    oy + self.padding_top + match self.valign {
+                    oy + self.padding_top + self.border_width + match self.valign {
                         Align::Center => (real_h - total_h).max(0.0) / 2.0,
                         Align::Bottom => (real_h - total_h).max(0.0),
                         _ => 0.0,
@@ -891,14 +890,14 @@ impl<'u, 'a> ContainerBuilder<'u, 'a> {
                     if cross_reversed { cy -= row_h; }
 
                     let mut cx = if main_reversed {
-                        ox + self.padding_left + match self.halign {
+                        ox + self.padding_left + self.border_width + match self.halign {
                             Align::Left => row_content_w,
                             Align::Center => (real_w + row_content_w) / 2.0,
                             Align::Right => real_w,
                             _ => row_content_w,
                         }
                     } else {
-                        ox + self.padding_left + match self.halign {
+                        ox + self.padding_left + self.border_width + match self.halign {
                             Align::Left => 0.0,
                             Align::Center => extra / 2.0,
                             Align::Right => extra,
@@ -956,18 +955,18 @@ impl<'u, 'a> ContainerBuilder<'u, 'a> {
                     col.iter().map(|&i| self.child_sizes[i].1).sum::<f32>() + self.gap * (col.len().saturating_sub(1)) as f32
                 }).fold(0.0f32, f32::max);
 
-                let real_w = if inner_w.is_infinite() { total_w } else { inner_w };
-                let real_h = if inner_h.is_infinite() { max_col_h } else { inner_h };
+                let real_w = if self.width.is_some() || self.fill_x { inner_w } else { total_w };
+                let real_h = if self.height.is_some() || self.fill_y { inner_h } else { max_col_h };
 
                 let mut cx = if cross_reversed {
-                    ox + self.padding_left + match self.halign {
+                    ox + self.padding_left + self.border_width + match self.halign {
                         Align::Left => total_w,
                         Align::Center => (real_w + total_w) / 2.0,
                         Align::Right => real_w,
                         _ => total_w,
                     }
                 } else {
-                    ox + self.padding_left + match self.halign {
+                    ox + self.padding_left + self.border_width + match self.halign {
                         Align::Center => (real_w - total_w).max(0.0) / 2.0,
                         Align::Right => (real_w - total_w).max(0.0),
                         _ => 0.0,
@@ -981,14 +980,14 @@ impl<'u, 'a> ContainerBuilder<'u, 'a> {
                     if cross_reversed { cx -= col_w; }
 
                     let mut cy = if main_reversed {
-                        oy + self.padding_top + match self.valign {
+                        oy + self.padding_top + self.border_width + match self.valign {
                             Align::Top => col_content_h,
                             Align::Center => (real_h + col_content_h) / 2.0,
                             Align::Bottom => real_h,
                             _ => col_content_h,
                         }
                     } else {
-                        oy + self.padding_top + match self.valign {
+                        oy + self.padding_top + self.border_width + match self.valign {
                             Align::Top => 0.0,
                             Align::Center => extra / 2.0,
                             Align::Bottom => extra,

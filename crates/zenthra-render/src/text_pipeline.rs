@@ -122,8 +122,8 @@ impl TextPipeline {
     pub fn set_atlas(&mut self, device: &wgpu::Device, view: &wgpu::TextureView) {
         let sampler = device.create_sampler(&wgpu::SamplerDescriptor {
             label: Some("Text Atlas Sampler"),
-            mag_filter: wgpu::FilterMode::Nearest,
-            min_filter: wgpu::FilterMode::Nearest,
+            mag_filter: wgpu::FilterMode::Linear,
+            min_filter: wgpu::FilterMode::Linear,
             ..Default::default()
         });
         self.atlas_bg = Some(device.create_bind_group(&wgpu::BindGroupDescriptor {

@@ -54,7 +54,7 @@ impl Default for TextOptions {
             highlight_color: None,
             max_width: None,
             max_height: None,
-            line_height: 1.5,
+            line_height: 1.2,
             wrap: TextWrap::Word,
             align: None,
             valign: None,
@@ -225,6 +225,7 @@ pub enum FontWeight {
     Bold,
     ExtraBold,
     Black,
+    Custom(u16),
 }
 
 /// Supported font styles.
@@ -258,7 +259,20 @@ impl From<FontWeight> for cosmic_text::Weight {
             FontWeight::Bold => cosmic_text::Weight::BOLD,
             FontWeight::ExtraBold => cosmic_text::Weight::EXTRA_BOLD,
             FontWeight::Black => cosmic_text::Weight::BLACK,
+            FontWeight::Custom(w) => cosmic_text::Weight(w),
         }
+    }
+}
+
+impl From<u16> for FontWeight {
+    fn from(w: u16) -> Self {
+        FontWeight::Custom(w)
+    }
+}
+
+impl From<f32> for FontWeight {
+    fn from(w: f32) -> Self {
+        FontWeight::Custom(w as u16)
     }
 }
 

@@ -1,4 +1,5 @@
 use zenthra_text::prelude::*;
+pub use zenthra_text::prelude::FontWeight;
 // use zenthra_text::traits::FontProvider;
 use crate::ui::{DrawCommand, TextDraw, Ui};
 use zenthra_core::{Color, EdgeInsets, Role, SemanticNode, Rect, Align, Id};
@@ -81,8 +82,8 @@ impl<'u, 'a> TextBuilder<'u, 'a> {
         self.options = self.options.color(c);
         self
     }
-    pub fn weight(mut self, w: FontWeight) -> Self {
-        self.options = self.options.font_weight(w);
+    pub fn weight(mut self, w: impl Into<FontWeight>) -> Self {
+        self.options = self.options.font_weight(w.into());
         self
     }
     pub fn bold(mut self) -> Self {

@@ -62,10 +62,8 @@ fn main() {
                             for i in 1..=15 {
                                 ui.container()
                                     .id(("box", i))
-                                    .width(60.0)
-                                    .height(60.0)
                                     .bg(BOX_COLOR)
-                                    .radius(6.0, 6.0, 6.0, 6.0)
+                                    // .radius(6.0, 6.0, 6.0, 6.0)
                                     .align(Align::Center)
                                     .show(|ui| {
                                         ui.text(&format!("{}", i))

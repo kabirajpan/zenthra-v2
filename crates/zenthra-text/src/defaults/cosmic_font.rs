@@ -117,7 +117,7 @@ impl CosmicFontProvider {
 
             for glyph in run.glyphs {
                 max_width = max_width.max(glyph.x + glyph.w);
-                let physical = glyph.physical((0.0, 0.0), 1.0);
+                let physical = glyph.physical((0.0, 0.0), options.scale_factor);
                 shaped_glyphs.push(ShapedGlyph {
                     key: physical.cache_key,
                     cluster: paragraph_offset + glyph.start,

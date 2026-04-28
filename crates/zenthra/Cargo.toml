@@ -58,3 +58,7 @@ path = "../../examples/wrapper_test/main.rs"
 [[example]]
 name = "wrapper_modes"
 path = "../../examples/wrapper_modes.rs"
+
+[[example]]
+name = "container_test"
+path = "../../examples/container_test.rs"
