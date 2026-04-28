@@ -160,6 +160,23 @@ impl<'a> Ui<'a> {
 
     pub fn record_layout(&mut self, id: Id, rect: Rect) {
         let id_count = self.id_counter.saturating_sub(id.raw());
+        
+        let mut should_redraw = false;
+        if let Some((old_rect, _)) = self.layout_cache.get(&id) {
+            if (old_rect.origin.x - rect.origin.x).abs() > 0.1 ||
+               (old_rect.origin.y - rect.origin.y).abs() > 0.1 ||
+               (old_rect.size.width - rect.size.width).abs() > 0.1 ||
+               (old_rect.size.height - rect.size.height).abs() > 0.1 {
+                should_redraw = true;
+            }
+        } else {
+            should_redraw = true;
+        }
+
+        if should_redraw {
+            self.needs_redraw = true;
+        }
+
         self.next_layout_cache.insert(id, (rect, id_count));
     }
 

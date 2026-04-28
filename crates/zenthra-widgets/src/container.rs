@@ -55,6 +55,7 @@ pub struct ContainerBuilder<'u, 'a> {
     min_height: Option<f32>,
     scroll_x: bool,
     scroll_y: bool,
+    clip: bool,
     id: zenthra_core::Id,
 }
 
@@ -99,6 +100,7 @@ impl<'u, 'a> ContainerBuilder<'u, 'a> {
             min_height: None,
             scroll_x: false,
             scroll_y: false,
+            clip: false,
             id,
         }
     }
@@ -164,6 +166,11 @@ impl<'u, 'a> ContainerBuilder<'u, 'a> {
     }
     pub fn scroll_y(mut self, e: bool) -> Self {
         self.scroll_y = e;
+        self
+    }
+    /// Force clip the overflowing content bounds of this container regardless of scrolling state
+    pub fn clip(mut self, enabled: bool) -> Self {
+        self.clip = enabled;
         self
     }
     pub fn padding(mut self, t: f32, r: f32, b: f32, l: f32) -> Self {
@@ -592,7 +599,7 @@ impl<'u, 'a> ContainerBuilder<'u, 'a> {
             // Shift visual commands
             for draw in &mut self.children_draws[*start..*end] {
                 offset_draw(draw, final_dx, final_dy);
-                if self.scroll_x || self.scroll_y {
+                if self.scroll_x || self.scroll_y || self.clip {
                     set_clip(draw, clip);
                 }
             }
@@ -864,10 +871,10 @@ impl<'u, 'a> ContainerBuilder<'u, 'a> {
 
                 let mut cy = if cross_reversed {
                     oy + self.padding_top + match self.valign {
-                        Align::Top => real_h,
+                        Align::Top => total_h,
                         Align::Center => (real_h + total_h) / 2.0,
-                        Align::Bottom => total_h,
-                        _ => real_h,
+                        Align::Bottom => real_h,
+                        _ => total_h,
                     }
                 } else {
                     oy + self.padding_top + match self.valign {
@@ -954,10 +961,10 @@ impl<'u, 'a> ContainerBuilder<'u, 'a> {
 
                 let mut cx = if cross_reversed {
                     ox + self.padding_left + match self.halign {
-                        Align::Left => real_w,
+                        Align::Left => total_w,
                         Align::Center => (real_w + total_w) / 2.0,
-                        Align::Right => total_w,
-                        _ => real_w,
+                        Align::Right => real_w,
+                        _ => total_w,
                     }
                 } else {
                     ox + self.padding_left + match self.halign {
@@ -975,10 +982,10 @@ impl<'u, 'a> ContainerBuilder<'u, 'a> {
 
                     let mut cy = if main_reversed {
                         oy + self.padding_top + match self.valign {
-                            Align::Top => real_h,
+                            Align::Top => col_content_h,
                             Align::Center => (real_h + col_content_h) / 2.0,
-                            Align::Bottom => col_content_h,
-                            _ => real_h,
+                            Align::Bottom => real_h,
+                            _ => col_content_h,
                         }
                     } else {
                         oy + self.padding_top + match self.valign {
