@@ -199,7 +199,7 @@ impl<'u, 'a, 'b> InputBuilder<'u, 'a, 'b> {
             (self.min_width, 20.0, None)
         };
 
-        let max_available_w = (self.ui.width - self.x).max(self.min_width);
+        let max_available_w = (self.ui.max_x - self.x).max(self.min_width);
         let mut w_box = if self.full_width { max_available_w } else { self.width.unwrap_or_else(|| (w_text_raw + self.padding.horizontal()).min(max_available_w)).max(self.min_width) };
         let h_box = h_content + self.padding.vertical();
         let mut w_view = w_box - self.padding.horizontal();
@@ -211,7 +211,12 @@ impl<'u, 'a, 'b> InputBuilder<'u, 'a, 'b> {
             cursor_index = self.buffer.len();
         }
 
-        let is_hovered = self.ui.mouse_in_rect(self.x, self.y, w_box, h_box);
+        let (actual_x, actual_y) = if let Some((rect, _)) = self.ui.get_recorded_layout(self.id) {
+            (rect.origin.x + self.ui.offset_x, rect.origin.y + self.ui.offset_y)
+        } else {
+            (self.x + self.ui.offset_x, self.y + self.ui.offset_y)
+        };
+        let is_hovered = self.ui.mouse_in_rect(actual_x, actual_y, w_box, h_box);
         let mut needs_auto_scroll = false;
         let mut changed = false;
 
@@ -320,7 +325,9 @@ impl<'u, 'a, 'b> InputBuilder<'u, 'a, 'b> {
         let track_width = (w_view - thumb_w).max(0.0);
         let thumb_x = self.x + self.padding.left + scroll_percent * track_width;
 
-        let is_over_thumb = self.ui.mouse_in_rect(thumb_x, scroll_bar_y - 2.0, thumb_w, scroll_bar_h + 4.0);
+        let actual_thumb_x = actual_x + self.padding.left + scroll_percent * track_width;
+        let actual_scroll_bar_y = actual_y + h_box - scroll_bar_h - 2.0;
+        let is_over_thumb = self.ui.mouse_in_rect(actual_thumb_x, actual_scroll_bar_y - 2.0, thumb_w, scroll_bar_h + 4.0);
 
         // Handle dragging
         if let Some(drag) = self.ui.active_drag {
@@ -404,7 +411,7 @@ impl<'u, 'a, 'b> InputBuilder<'u, 'a, 'b> {
             .wrap(zenthra_text::prelude::TextWrap::None)
             .max_width(1000000.0) 
             .pos(self.x + self.padding.left - scroll_x, self.y + self.padding.top)
-            .clip_rect(self.x, self.y, w_box, h_box);
+            .clip_rect(actual_x, actual_y, w_box, h_box);
 
         if self.text_bg_full_width {
             text_builder = text_builder.min_width(w_view);
@@ -463,7 +470,7 @@ impl<'u, 'a, 'b> InputBuilder<'u, 'a, 'b> {
                         width: 2.0,
                         height: cursor_height,
                         color: Color::WHITE,
-                        clip: [self.x, self.y, w_box, h_box], 
+                        clip: [actual_x, actual_y, w_box, h_box],
                     }));
                 }
             }
@@ -479,7 +486,7 @@ impl<'u, 'a, 'b> InputBuilder<'u, 'a, 'b> {
                 width: thumb_w,
                 height: scroll_bar_h,
                 color: if is_dragging { Color::rgba(1.0, 1.0, 1.0, 0.8) } else { Color::rgba(1.0, 1.0, 1.0, 0.4) },
-                clip: [self.x, self.y, w_box, h_box],
+                clip: [actual_x, actual_y, w_box, h_box],
             }));
         }
 
@@ -491,6 +498,7 @@ impl<'u, 'a, 'b> InputBuilder<'u, 'a, 'b> {
         );
 
         // --- 9. Advance UI ---
+        self.ui.record_layout(self.id, Rect::new(self.x, self.y, w_box, h_box));
         self.ui.advance(w_box, h_box, start_draw);
 
         if self.render_mode.is_some() {

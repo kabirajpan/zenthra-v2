@@ -275,7 +275,7 @@ impl<'u, 'a> LazyContainerBuilder<'u, 'a> {
                     shadow_color: Color::TRANSPARENT.to_array(),
                     shadow_offset:[0.0, 0.0],
                     shadow_blur:  0.0,
-                    clip_rect:    [0.0, 0.0, ui.width, ui.height],
+                    clip_rect:    [-100000.0, -100000.0, 2000000.0, 2000000.0],
                     grayscale:    0.0,
                     brightness:   1.0,
                     opacity:      1.0,

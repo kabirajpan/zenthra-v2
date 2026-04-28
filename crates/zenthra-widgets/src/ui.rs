@@ -147,7 +147,7 @@ impl<'a> Ui<'a> {
             needs_redraw: false,
             layout_cache,
             next_layout_cache,
-            available_width: width as f32 / scale_factor as f32,
+            available_width: width as f32,
         }
     }
 

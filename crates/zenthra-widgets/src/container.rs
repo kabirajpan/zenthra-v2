@@ -464,7 +464,7 @@ impl<'u, 'a> ContainerBuilder<'u, 'a> {
         };
 
         let mut w = if self.fill_x {
-            self.ui.width - ox
+            self.ui.max_x - ox  // use parent's right boundary, not global window width
         } else {
             self.width.unwrap_or(content_w + self.padding_left + self.padding_right)
         };
@@ -473,7 +473,7 @@ impl<'u, 'a> ContainerBuilder<'u, 'a> {
         if let Some(mw) = self.min_width { w = w.max(mw); }
 
         let mut h = if self.fill_y {
-            self.ui.height - oy
+            self.ui.max_y - oy  // use parent's bottom boundary, not global window height
         } else {
             self.height.unwrap_or(content_h + self.padding_top + self.padding_bottom)
         };
@@ -487,23 +487,47 @@ impl<'u, 'a> ContainerBuilder<'u, 'a> {
         let max_sx = (content_w + self.padding_left + self.padding_right - w).max(0.0);
         let max_sy = (content_h + self.padding_top + self.padding_bottom - h).max(0.0);
 
+        let (actual_ox, actual_oy) = if let Some((rect, _)) = self.ui.get_recorded_layout(id) {
+            (rect.origin.x + self.ui.offset_x, rect.origin.y + self.ui.offset_y)
+        } else {
+            (ox + self.ui.offset_x, oy + self.ui.offset_y)
+        };
+
+        let container_hover = self.ui.mouse_in_rect(actual_ox, actual_oy, w, h);
+
         let (scroll_x, scroll_y) = if self.scroll_x || self.scroll_y {
             let (mut sx, mut sy) = *self.ui.scroll_state.get(&id).unwrap_or(&(0.0, 0.0));
             
-            let is_hover = self.ui.mouse_x >= ox && self.ui.mouse_x <= ox + w &&
-                          self.ui.mouse_y >= oy && self.ui.mouse_y <= oy + h;
-            
-            if is_hover {
-                for event in &self.ui.input_events {
-                    match event {
-                        zenthra_platform::event::PlatformEvent::MouseWheel { delta_y, delta_x, .. } => {
-                            if self.scroll_y { sy -= delta_y * 15.0; }
-                            if self.scroll_x { sx -= delta_x * 15.0; }
+            if container_hover {
+                let mut events = std::mem::take(&mut self.ui.input_events);
+                events.retain(|event| {
+                    let mut keep = true;
+                    if let zenthra_platform::event::PlatformEvent::MouseWheel { delta_y, delta_x, .. } = event {
+                        let mut consumed = false;
+                        if self.scroll_y && *delta_y != 0.0 {
+                            let can_up = sy > 0.0 && *delta_y > 0.0;
+                            let can_down = sy < max_sy && *delta_y < 0.0;
+                            if can_up || can_down {
+                                sy -= delta_y * 15.0;
+                                consumed = true;
+                            }
+                        }
+                        if self.scroll_x && *delta_x != 0.0 {
+                            let can_left = sx > 0.0 && *delta_x > 0.0;
+                            let can_right = sx < max_sx && *delta_x < 0.0;
+                            if can_left || can_right {
+                                sx -= delta_x * 15.0;
+                                consumed = true;
+                            }
+                        }
+                        if consumed {
+                            keep = false;
                             self.ui.needs_redraw = true;
-                        },
-                        _ => {}
+                        }
                     }
-                }
+                    keep
+                });
+                self.ui.input_events = events;
             }
             
             sx = sx.clamp(0.0, max_sx);
@@ -515,30 +539,32 @@ impl<'u, 'a> ContainerBuilder<'u, 'a> {
             (0.0, 0.0)
         };
 
-        let clip = [ox, oy, w, h];
+        let clip = [actual_ox, actual_oy, w, h];
 
         // Background
         if let Some(bg) = self.bg {
-            let bc = self.border_color.unwrap_or(Color::TRANSPARENT);
+            let (bw, bc) = if container_hover {
+                (self.border_width.max(1.5), self.border_color.unwrap_or(Color::rgba(1.0, 1.0, 1.0, 0.15)))
+            } else {
+                (self.border_width, self.border_color.unwrap_or(Color::TRANSPARENT))
+            };
+
             self.ui.draws.push(DrawCommand::Rect(RectDraw {
                 instance: RectInstance {
                     pos: [ox, oy],
                     size: [w, h],
                     color: bg.to_array(),
                     radius: [self.radius; 4],
-                    border_width: self.border_width,
+                    border_width: bw,
                     border_color: bc.to_array(),
-                    shadow_color: {
-                        if let Some(mut sc) = self.shadow_color {
-                            sc.a *= self.shadow_opacity;
-                            sc.to_array()
-                        } else {
-                            Color::TRANSPARENT.to_array()
-                        }
-                    },
+                    shadow_color: self.shadow_color.map(|c| {
+                        let mut a = c.to_array();
+                        a[3] *= self.shadow_opacity;
+                        a
+                    }).unwrap_or([0.0, 0.0, 0.0, 0.0]),
                     shadow_offset: self.shadow_offset,
                     shadow_blur: self.shadow_blur,
-                    clip_rect: [0.0, 0.0, self.ui.width, self.ui.height],
+                    clip_rect: [-100000.0, -100000.0, 2000000.0, 2000000.0],
                     grayscale: 0.0,
                     brightness: 1.0,
                     opacity: self.opacity,
@@ -602,10 +628,10 @@ impl<'u, 'a> ContainerBuilder<'u, 'a> {
                 let thumb_y = oy + (h - thumb_h) * scroll_ratio;
                 let thumb_x = ox + w - bar_thickness - bar_margin;
 
-                let is_hover = self.ui.mouse_in_rect(thumb_x - 2.0, thumb_y, bar_thickness + 4.0, thumb_h);
-                let is_dragging = self.ui.active_drag.as_ref().map(|d| d.id == id && d.start_mouse <= -1000.0).unwrap_or(false); // Quick hack to distinguish Y drag
+                let is_hover = self.ui.mouse_in_rect(actual_ox + w - bar_thickness - bar_margin - 2.0, actual_oy + (h - thumb_h) * scroll_ratio, bar_thickness + 4.0, thumb_h);
+                let is_dragging = self.ui.active_drag.as_ref().map(|d| d.id == id && d.start_mouse <= -1000.0).unwrap_or(false); 
 
-                // Handle Drag Y (Note: Using negative marker for vertical)
+                // Handle Drag Y
                 if self.ui.clicked && is_hover {
                     self.ui.active_drag = Some(crate::ui::ScrollDrag {
                         id,
@@ -627,15 +653,17 @@ impl<'u, 'a> ContainerBuilder<'u, 'a> {
                     }
                 }
 
-                let color = if is_hover || is_dragging { Color::rgba(1.0, 1.0, 1.0, 0.6) } else { Color::rgba(1.0, 1.0, 1.0, 0.2) };
-                self.ui.draws.push(crate::ui::DrawCommand::OverlayRect(crate::ui::OverlayRectDraw {
-                    x: thumb_x,
-                    y: thumb_y,
-                    width: bar_thickness,
-                    height: thumb_h,
-                    color,
-                    clip: [ox, oy, w, h],
-                }));
+                if container_hover || is_dragging {
+                    let color = if is_hover || is_dragging { Color::rgba(1.0, 1.0, 1.0, 0.7) } else { Color::rgba(1.0, 1.0, 1.0, 0.3) };
+                    self.ui.draws.push(crate::ui::DrawCommand::OverlayRect(crate::ui::OverlayRectDraw {
+                        x: thumb_x,
+                        y: thumb_y,
+                        width: bar_thickness,
+                        height: thumb_h,
+                        color,
+                        clip: intersect_rects([actual_ox, actual_oy, w, h], [-100000.0, -100000.0, 2000000.0, 2000000.0]), 
+                    }));
+                }
             }
 
             // Horizontal Scrollbar
@@ -646,7 +674,7 @@ impl<'u, 'a> ContainerBuilder<'u, 'a> {
                 let thumb_x = ox + (w - thumb_w) * scroll_ratio;
                 let thumb_y = oy + h - bar_thickness - bar_margin;
 
-                let is_hover = self.ui.mouse_in_rect(thumb_x, thumb_y - 2.0, thumb_w, bar_thickness + 4.0);
+                let is_hover = self.ui.mouse_in_rect(actual_ox + (w - thumb_w) * scroll_ratio, actual_oy + h - bar_thickness - bar_margin - 2.0, thumb_w, bar_thickness + 4.0);
                 let is_dragging = self.ui.active_drag.as_ref().map(|d| d.id == id && d.start_mouse > -1000.0).unwrap_or(false);
 
                 if self.ui.clicked && is_hover {
@@ -670,15 +698,17 @@ impl<'u, 'a> ContainerBuilder<'u, 'a> {
                     }
                 }
 
-                let color = if is_hover || is_dragging { Color::rgba(1.0, 1.0, 1.0, 0.6) } else { Color::rgba(1.0, 1.0, 1.0, 0.2) };
-                self.ui.draws.push(crate::ui::DrawCommand::OverlayRect(crate::ui::OverlayRectDraw {
-                    x: thumb_x,
-                    y: thumb_y,
-                    width: thumb_w,
-                    height: bar_thickness,
-                    color,
-                    clip: [ox, oy, w, h],
-                }));
+                if container_hover || is_dragging {
+                    let color = if is_hover || is_dragging { Color::rgba(1.0, 1.0, 1.0, 0.7) } else { Color::rgba(1.0, 1.0, 1.0, 0.3) };
+                    self.ui.draws.push(crate::ui::DrawCommand::OverlayRect(crate::ui::OverlayRectDraw {
+                        x: thumb_x,
+                        y: thumb_y,
+                        width: thumb_w,
+                        height: bar_thickness,
+                        color,
+                        clip: [actual_ox, actual_oy, w, h],
+                    }));
+                }
             }
         }
 
@@ -986,12 +1016,15 @@ impl<'u, 'a> ContainerBuilder<'u, 'a> {
     }
 }
 
-/// Offset a draw command's position by (dx, dy).
+/// Offset a draw command's position and its clipping rect by (dx, dy).
 fn offset_draw(cmd: &mut DrawCommand, dx: f32, dy: f32) {
     match cmd {
         DrawCommand::Rect(r) => {
             r.instance.pos[0] += dx;
             r.instance.pos[1] += dy;
+            // IMPORTANT: We do NOT translate the clip_rect. 
+            // The clip_rect defines the boundary of the visible area (usually the parent container).
+            // As children move via scrolling, their clip window stays fixed relative to the parent's screen position.
         }
         DrawCommand::Text(t) => {
             t.pos[0] += dx;
@@ -1014,8 +1047,20 @@ fn draw_origin(cmd: &DrawCommand) -> (f32, f32) {
 
 fn set_clip(cmd: &mut DrawCommand, clip: [f32; 4]) {
     match cmd {
-        DrawCommand::Rect(r) => r.instance.clip_rect = clip,
-        DrawCommand::Text(t) => t.clip = clip,
-        DrawCommand::OverlayRect(c) => c.clip = clip,
+        DrawCommand::Rect(r) => r.instance.clip_rect = intersect_rects(r.instance.clip_rect, clip),
+        DrawCommand::Text(t) => t.clip = intersect_rects(t.clip, clip),
+        DrawCommand::OverlayRect(c) => c.clip = intersect_rects(c.clip, clip),
     }
+}
+
+fn intersect_rects(a: [f32; 4], b: [f32; 4]) -> [f32; 4] {
+    let x1 = a[0].max(b[0]);
+    let y1 = a[1].max(b[1]);
+    let x2 = (a[0] + a[2]).min(b[0] + b[2]);
+    let y2 = (a[1] + a[3]).min(b[1] + b[3]);
+    
+    let w = (x2 - x1).max(0.0);
+    let h = (y2 - y1).max(0.0);
+    
+    [x1, y1, w, h]
 }

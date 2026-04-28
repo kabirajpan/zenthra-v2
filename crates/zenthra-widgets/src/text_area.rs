@@ -1,6 +1,6 @@
 use crate::ui::{Ui, DrawCommand, OverlayRectDraw};
 use crate::text::TextBuilder;
-use zenthra_core::{Color, EdgeInsets, Id};
+use zenthra_core::{Color, EdgeInsets, Id, Rect};
 use zenthra_platform::event::PlatformEvent;
 use zenthra_text::prelude::{TextOptions, CosmicFontProvider, Padding};
 // use zenthra_text::traits::FontProvider;
@@ -208,7 +208,7 @@ impl<'u, 'a, 'b> TextAreaBuilder<'u, 'a, 'b> {
 
         // --- 2. Initial Measure (to get content height) ---
         let actual_width = if self.full_width {
-            (self.ui.width - self.x).max(self.width)
+            (self.ui.max_x - self.x).max(self.width)
         } else {
             self.width
         };
@@ -249,7 +249,12 @@ impl<'u, 'a, 'b> TextAreaBuilder<'u, 'a, 'b> {
             cursor_index = self.buffer.len(); // Safety
         }
 
-        let is_hovered = self.ui.mouse_in_rect(self.x, self.y, actual_width, h_box);
+        let (actual_x, actual_y) = if let Some((rect, _)) = self.ui.get_recorded_layout(self.id) {
+            (rect.origin.x + self.ui.offset_x, rect.origin.y + self.ui.offset_y)
+        } else {
+            (self.x + self.ui.offset_x, self.y + self.ui.offset_y)
+        };
+        let is_hovered = self.ui.mouse_in_rect(actual_x, actual_y, actual_width, h_box);
 
         if is_focused || is_hovered {
             let events = std::mem::take(&mut self.ui.input_events);
@@ -509,7 +514,7 @@ impl<'u, 'a, 'b> TextAreaBuilder<'u, 'a, 'b> {
 
         if self.overflow_hidden {
             // Reverted to full-box clipping so content can merge with edges during scroll
-            text_builder = text_builder.clip_rect(self.x, self.y, actual_width, h_box);
+            text_builder = text_builder.clip_rect(actual_x, actual_y, actual_width, h_box);
         }
         
         // Final draw
@@ -538,7 +543,7 @@ impl<'u, 'a, 'b> TextAreaBuilder<'u, 'a, 'b> {
                     width: scroll_bar_w,
                     height: thumb_h,
                     color: Color::rgba(1.0, 1.0, 1.0, 0.4),
-                    clip: [self.x, self.y, actual_width, h_box], 
+                    clip: [actual_x, actual_y, actual_width, h_box], 
                 }));
             }
         }
@@ -633,13 +638,14 @@ impl<'u, 'a, 'b> TextAreaBuilder<'u, 'a, 'b> {
                         width: 2.0,
                         height: cursor_height,
                         color: Color::WHITE,
-                        clip: [self.x, self.y, actual_width, h_box],
+                        clip: [actual_x, actual_y, actual_width, h_box],
                     }));
                 }
             }
         }
 
         // --- 8. Advance UI ---
+        self.ui.record_layout(self.id, Rect::new(self.x, self.y, actual_width, h_box));
         self.ui.advance(actual_width, h_box, start_draw);
 
         if self.render_mode.is_some() {

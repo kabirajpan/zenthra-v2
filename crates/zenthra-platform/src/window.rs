@@ -29,7 +29,8 @@ impl Window {
     }
 
     pub fn resize(&mut self, new_size: winit::dpi::PhysicalSize<u32>) {
-        self.gpu.resize(new_size);
+        let sf = self.winit_window.scale_factor();
+        self.gpu.resize(new_size, sf);
     }
 
     pub fn request_redraw(&self) {

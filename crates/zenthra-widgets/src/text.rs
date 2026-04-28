@@ -326,7 +326,7 @@ impl<'u, 'a> TextBuilder<'u, 'a> {
              // Important: record layout for next frame culling
              let mut w = cw + self.padding.horizontal();
              if self.full_width_bg {
-                 w = self.ui.width - self.start_x;
+                 w = self.ui.max_x - self.start_x;
              } else if let Some(min_w) = self.options.min_width {
                  if w < min_w { w = min_w; }
              }
@@ -339,7 +339,7 @@ impl<'u, 'a> TextBuilder<'u, 'a> {
         };
 
         let start_draw = self.ui.draws.len();
-        let clip = self.options.clip_rect.unwrap_or([0.0, 0.0, self.ui.width, self.ui.height]);
+        let clip = self.options.clip_rect.unwrap_or([-100000.0, -100000.0, 2000000.0, 2000000.0]);
 
         // Background
         if let Some(bg) = self.bg_color {
