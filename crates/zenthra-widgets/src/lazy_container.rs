@@ -322,5 +322,6 @@ fn apply_clip(cmd: &mut DrawCommand, clip: [f32; 4]) {
         DrawCommand::Rect(r)        => r.instance.clip_rect = clip,
         DrawCommand::Text(t)        => t.clip = clip,
         DrawCommand::OverlayRect(o) => o.clip = clip,
+        DrawCommand::Image(i)       => i.instance.clip_rect = clip,
     }
 }

@@ -8,6 +8,7 @@ pub mod text_area;
 pub mod progress_bar;
 pub mod switch;
 pub mod ui;
+pub mod image;
 
 pub use button::ButtonBuilder;
 pub use container::ContainerBuilder;

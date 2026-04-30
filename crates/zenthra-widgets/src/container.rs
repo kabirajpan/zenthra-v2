@@ -1040,6 +1040,10 @@ fn offset_draw(cmd: &mut DrawCommand, dx: f32, dy: f32) {
             c.x += dx;
             c.y += dy;
         }
+        DrawCommand::Image(i) => {
+            i.instance.pos[0] += dx;
+            i.instance.pos[1] += dy;
+        }
     }
 }
 
@@ -1048,6 +1052,7 @@ fn draw_origin(cmd: &DrawCommand) -> (f32, f32) {
         DrawCommand::Rect(r) => (r.instance.pos[0], r.instance.pos[1]),
         DrawCommand::Text(t) => (t.pos[0], t.pos[1]),
         DrawCommand::OverlayRect(c) => (c.x, c.y),
+        DrawCommand::Image(i) => (i.instance.pos[0], i.instance.pos[1]),
     }
 }
 
@@ -1056,6 +1061,7 @@ fn set_clip(cmd: &mut DrawCommand, clip: [f32; 4]) {
         DrawCommand::Rect(r) => r.instance.clip_rect = intersect_rects(r.instance.clip_rect, clip),
         DrawCommand::Text(t) => t.clip = intersect_rects(t.clip, clip),
         DrawCommand::OverlayRect(c) => c.clip = intersect_rects(c.clip, clip),
+        DrawCommand::Image(i) => i.instance.clip_rect = intersect_rects(i.instance.clip_rect, clip),
     }
 }
 

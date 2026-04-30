@@ -27,10 +27,17 @@ pub struct RectDraw {
     pub instance: RectInstance,
 }
 
+pub struct ImageDraw {
+    pub source: zenthra_core::ImageSource,
+    pub instance: zenthra_render::ImageInstance,
+    pub fit: zenthra_core::ObjectFit,
+}
+
 pub enum DrawCommand {
     Rect(RectDraw),
     Text(TextDraw),
     OverlayRect(OverlayRectDraw),
+    Image(ImageDraw),
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -81,6 +88,7 @@ pub struct Ui<'a> {
     pub needs_redraw: bool,
     pub layout_cache: &'a std::collections::HashMap<Id, (Rect, u64)>,
     pub next_layout_cache: &'a mut std::collections::HashMap<Id, (Rect, u64)>,
+    pub image_sizes: &'a std::collections::HashMap<zenthra_core::ImageSource, (u32, u32)>,
     pub available_width: f32,
 }
 
@@ -102,6 +110,7 @@ impl<'a> Ui<'a> {
         elapsed_time: f32,
         layout_cache: &'a std::collections::HashMap<Id, (Rect, u64)>,
         next_layout_cache: &'a mut std::collections::HashMap<Id, (Rect, u64)>,
+        image_sizes: &'a std::collections::HashMap<zenthra_core::ImageSource, (u32, u32)>,
     ) -> Self {
         let mouse_x = mouse_pos.0;
         let mouse_y = mouse_pos.1;
@@ -147,6 +156,7 @@ impl<'a> Ui<'a> {
             needs_redraw: false,
             layout_cache,
             next_layout_cache,
+            image_sizes,
             available_width: width as f32,
         }
     }
@@ -218,6 +228,10 @@ impl<'a> Ui<'a> {
 
     pub fn button(&mut self, label: &str) -> crate::button::ButtonBuilder<'_, 'a> {
         crate::button::ButtonBuilder::new(self, label)
+    }
+
+    pub fn image(&mut self, source: zenthra_core::ImageSource) -> crate::image::ImageBuilder<'_, 'a> {
+        crate::image::ImageBuilder::new(self, source)
     }
 
     pub fn spacing(&mut self, size: f32) {
