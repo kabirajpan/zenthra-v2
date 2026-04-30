@@ -83,3 +83,15 @@ path = "../../examples/image_test.rs"
 [[example]]
 name = "image_simple"
 path = "../../examples/image_simple.rs"
+
+[[example]]
+name = "checkbox_test"
+path = "../../examples/checkbox_test.rs"
+
+[[example]]
+name = "checkbox_list"
+path = "../../examples/checkbox_list.rs"
+
+[[example]]
+name = "toggle_list"
+path = "../../examples/toggle_list.rs"

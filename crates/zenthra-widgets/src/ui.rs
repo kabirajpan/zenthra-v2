@@ -285,13 +285,13 @@ impl<'a> Ui<'a> {
         crate::progress_bar::ProgressBarBuilder::new(self, value)
     }
 
-    pub fn switch<'b>(&mut self, state: &'b mut bool, id: impl std::hash::Hash) -> crate::switch::SwitchBuilder<'_, 'a, 'b> {
-        let mut hasher = std::collections::hash_map::DefaultHasher::new();
-        use std::hash::Hasher;
-        id.hash(&mut hasher);
-        let id = zenthra_core::Id::from_u64(hasher.finish());
-        self.id_log.push(id);
-        crate::switch::SwitchBuilder::new(self, state, id)
+    pub fn checkbox<'b>(&mut self, value: &'b mut bool, label: &str) -> crate::controls::checkbox::CheckboxBuilder<'_, 'a, 'b> {
+        crate::controls::checkbox::CheckboxBuilder::new(self, value, label)
+    }
+
+    pub fn toggle<'b>(&mut self, value: &'b mut bool, label: impl Into<Option<&'b str>>) -> crate::controls::toggle::ToggleBuilder<'_, 'a, 'b> {
+        let l: Option<&str> = label.into();
+        crate::controls::toggle::ToggleBuilder::new(self, value, l)
     }
 
     pub fn text_area<'b>(&mut self, buffer: &'b mut String, id: impl std::hash::Hash) -> crate::text_area::TextAreaBuilder<'_, 'a, 'b> {

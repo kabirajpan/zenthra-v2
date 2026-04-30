@@ -6,9 +6,9 @@ pub mod slider;
 pub mod text;
 pub mod text_area;
 pub mod progress_bar;
-pub mod switch;
 pub mod ui;
 pub mod image;
+pub mod controls;
 
 pub use button::ButtonBuilder;
 pub use container::ContainerBuilder;
@@ -17,3 +17,4 @@ pub use slider::SliderBuilder;
 pub use text::TextBuilder;
 pub use text_area::TextAreaBuilder;
 pub use ui::Ui;
+pub use controls::*;

@@ -39,6 +39,8 @@ pub enum Role {
     ScrollRegion,
     /// A popup or contextual menu.
     Menu,
+    /// A toggle switch.
+    Switch,
 }
 
 /// A node in the semantic/accessibility tree.

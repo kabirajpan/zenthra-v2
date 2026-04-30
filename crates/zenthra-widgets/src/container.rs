@@ -1028,21 +1028,27 @@ fn offset_draw(cmd: &mut DrawCommand, dx: f32, dy: f32) {
         DrawCommand::Rect(r) => {
             r.instance.pos[0] += dx;
             r.instance.pos[1] += dy;
-            // IMPORTANT: We do NOT translate the clip_rect. 
-            // The clip_rect defines the boundary of the visible area (usually the parent container).
-            // As children move via scrolling, their clip window stays fixed relative to the parent's screen position.
+            // Translate the widget's internal clip rect so it stays with the widget
+            r.instance.clip_rect[0] += dx;
+            r.instance.clip_rect[1] += dy;
         }
         DrawCommand::Text(t) => {
             t.pos[0] += dx;
             t.pos[1] += dy;
+            t.clip[0] += dx;
+            t.clip[1] += dy;
         }
         DrawCommand::OverlayRect(c) => {
             c.x += dx;
             c.y += dy;
+            c.clip[0] += dx;
+            c.clip[1] += dy;
         }
         DrawCommand::Image(i) => {
             i.instance.pos[0] += dx;
             i.instance.pos[1] += dy;
+            i.instance.clip_rect[0] += dx;
+            i.instance.clip_rect[1] += dy;
         }
     }
 }
