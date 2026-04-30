@@ -253,8 +253,9 @@ impl<'u, 'a, 'b> InputBuilder<'u, 'a, 'b> {
                                     let mut chars = self.buffer[..cursor_index].chars();
                                     if let Some(c) = chars.next_back() {
                                         cursor_index -= c.len_utf8();
-                                        needs_auto_scroll = true;
                                         self.ui.interaction_state.insert(self.id, self.ui.elapsed_time);
+                                        self.ui.needs_redraw = true;
+                                        needs_auto_scroll = true;
                                     }
                                 }
                             }
@@ -263,8 +264,9 @@ impl<'u, 'a, 'b> InputBuilder<'u, 'a, 'b> {
                                     let mut chars = self.buffer[cursor_index..].chars();
                                     if let Some(c) = chars.next() {
                                         cursor_index += c.len_utf8();
-                                        needs_auto_scroll = true;
                                         self.ui.interaction_state.insert(self.id, self.ui.elapsed_time);
+                                        self.ui.needs_redraw = true;
+                                        needs_auto_scroll = true;
                                     }
                                 }
                             }

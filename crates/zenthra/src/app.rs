@@ -104,288 +104,217 @@ impl App {
             let font_system = engine.font_system();
             let (logical_w, logical_h) = (width as f32 / sf, height as f32 / sf);
 
-            let mut image_buffers = Vec::new();
 
             {
-                let mut ui = Ui::new(
-                    logical_w as u32,
-                    logical_h as u32,
-                    frame.scale_factor(),
-                    Some(font_system),
-                    frame.events.to_vec(),
-                    focused_id,
-                    mouse_pos,
-                    ui_mouse_down,
-                    &mut state,
-                    &mut cursor_state,
-                    &mut interaction_state,
-                    active_drag,
-                    ui_clicked,
-                    elapsed,
-                    &layout_cache,
-                    &mut next_layout_cache,
-                    &image_sizes,
-                );
+                let (draws, overlays) = {
+                    let mut ui = Ui::new(
+                        logical_w as u32,
+                        logical_h as u32,
+                        frame.scale_factor(),
+                        Some(font_system),
+                        frame.events.to_vec(),
+                        focused_id,
+                        mouse_pos,
+                        ui_mouse_down,
+                        &mut state,
+                        &mut cursor_state,
+                        &mut interaction_state,
+                        active_drag,
+                        ui_clicked,
+                        elapsed,
+                        &layout_cache,
+                        &mut next_layout_cache,
+                        &image_sizes,
+                    );
 
-                f(&mut ui);
+                    f(&mut ui);
 
-                focused_id = ui.focused_id;
-                active_drag = ui.active_drag;
-                needs_redraw |= ui.needs_redraw;
+                    focused_id = ui.focused_id;
+                    active_drag = ui.active_drag;
+                    needs_redraw |= ui.needs_redraw;
+                    
+                    (ui.draws, ui.overlays)
+                };
 
-                let mut rect_instances = Vec::new();
-                let mut image_draw_calls: Vec<(
-                    std::sync::Arc<wgpu::BindGroup>,
-                    zenthra_render::ImageInstance,
-                )> = Vec::new();
+                let mut main_rects = Vec::new();
+                let mut main_images = Vec::new();
+                let mut main_overlay_rects = Vec::new();
 
-                // Process draw commands
-                for cmd in &ui.draws {
+                // 1. Process Main Pass Commands
+                for cmd in &draws {
                     match cmd {
                         DrawCommand::Rect(rd) => {
                             let mut inst = rd.instance;
-                            inst.pos[0] *= sf;
-                            inst.pos[1] *= sf;
-                            inst.size[0] *= sf;
-                            inst.size[1] *= sf;
-                            inst.shadow_offset[0] *= sf;
-                            inst.shadow_offset[1] *= sf;
+                            inst.pos[0] *= sf; inst.pos[1] *= sf;
+                            inst.size[0] *= sf; inst.size[1] *= sf;
+                            inst.shadow_offset[0] *= sf; inst.shadow_offset[1] *= sf;
                             inst.shadow_blur *= sf;
-                            inst.clip_rect[0] *= sf;
-                            inst.clip_rect[1] *= sf;
-                            inst.clip_rect[2] *= sf;
-                            inst.clip_rect[3] *= sf;
-                            rect_instances.push(inst);
+                            inst.clip_rect[0] *= sf; inst.clip_rect[1] *= sf;
+                            inst.clip_rect[2] *= sf; inst.clip_rect[3] *= sf;
+                            main_rects.push(inst);
                         }
                         DrawCommand::Image(id_cmd) => {
-                            let mut inst = id_cmd.instance;
-                            inst.pos[0] *= sf;
-                            inst.pos[1] *= sf;
-                            inst.size[0] *= sf;
-                            inst.size[1] *= sf;
-                            inst.shadow_offset[0] *= sf;
-                            inst.shadow_offset[1] *= sf;
-                            inst.shadow_blur *= sf;
-                            inst.clip_rect[0] *= sf;
-                            inst.clip_rect[1] *= sf;
-                            inst.clip_rect[2] *= sf;
-                            inst.clip_rect[3] *= sf;
-
-                            // Load texture if needed
                             if !texture_cache.contains_key(&id_cmd.source) {
                                 let bytes = match &id_cmd.source {
-                                    zenthra_core::ImageSource::Path(p) => {
-                                        std::fs::read(p).unwrap_or_default()
-                                    }
+                                    zenthra_core::ImageSource::Path(p) => std::fs::read(p).unwrap_or_default(),
                                     zenthra_core::ImageSource::Bytes(b) => b.to_vec(),
                                 };
-                                if let Ok((bg, w, h)) =
-                                    zenthra_render::texture::create_texture_bind_group(
-                                        &device,
-                                        queue,
-                                        &ip.texture_bgl,
-                                        &bytes,
-                                    )
-                                {
-                                    texture_cache.insert(
-                                        id_cmd.source.clone(),
-                                        (std::sync::Arc::new(bg), w, h),
-                                    );
+                                if let Ok((bg, w, h)) = zenthra_render::texture::create_texture_bind_group(&device, queue, &ip.texture_bgl, &bytes) {
+                                    texture_cache.insert(id_cmd.source.clone(), (std::sync::Arc::new(bg), w, h));
                                     image_sizes.insert(id_cmd.source.clone(), (w, h));
-                                    needs_redraw = true; // Redraw now that we have the real size
+                                    needs_redraw = true;
                                 }
                             }
-
-                            if let Some((bg, tw, th)) = texture_cache.get(&id_cmd.source) {
-                                let img_w = *tw as f32;
-                                let img_h = *th as f32;
-                                let img_aspect = img_w / img_h;
-                                let box_aspect = inst.size[0] / inst.size[1];
-
-                                // 1. Base Fit logic (Contain/Cover/Fill)
-                                match id_cmd.fit {
-                                    zenthra_core::ObjectFit::Fill => {
-                                        inst.uv_rect = [0.0, 0.0, 1.0, 1.0];
-                                    }
-
-                                    zenthra_core::ObjectFit::Contain => {
-                                        if img_aspect > box_aspect {
-                                            let new_h = inst.size[0] / img_aspect;
-                                            inst.pos[1] += (inst.size[1] - new_h) / 2.0;
-                                            inst.size[1] = new_h;
-                                        } else {
-                                            let new_w = inst.size[1] * img_aspect;
-                                            inst.pos[0] += (inst.size[0] - new_w) / 2.0;
-                                            inst.size[0] = new_w;
-                                        }
-                                        inst.uv_rect = [0.0, 0.0, 1.0, 1.0];
-                                    }
-
-                                    zenthra_core::ObjectFit::Cover => {
-                                        if img_aspect > box_aspect {
-                                            let scale = inst.size[1] / img_h;
-                                            let drawn_w = img_w * scale;
-                                            let u_size = inst.size[0] / drawn_w;
-                                            let u_start = (1.0 - u_size) / 2.0;
-                                            inst.uv_rect = [u_start, 0.0, u_size, 1.0];
-                                        } else {
-                                            let scale = inst.size[0] / img_w;
-                                            let drawn_h = img_h * scale;
-                                            let v_size = inst.size[1] / drawn_h;
-                                            let v_start = (1.0 - v_size) / 2.0;
-                                            inst.uv_rect = [0.0, v_start, 1.0, v_size];
-                                        }
-                                    }
-                                    zenthra_core::ObjectFit::None => {
-                                        // Display the image at its natural pixel size (no scaling).
-                                        // If the image is larger than the box, crop it (centred).
-                                        // If smaller, shrink the draw box to match (centred).
-
-                                        // --- Horizontal axis ---
-                                        let (u_start, u_size) = if img_w > inst.size[0] {
-                                            // Image wider than box → crop: show only the centre strip
-                                            let u_size = inst.size[0] / img_w;
-                                            let u_start = (1.0 - u_size) / 2.0;
-                                            (u_start, u_size)
-                                        } else {
-                                            // Image narrower than box → shrink the draw box
-                                            let dw = (inst.size[0] - img_w) / 2.0;
-                                            inst.pos[0] += dw;
-                                            inst.size[0] = img_w;
-                                            (0.0, 1.0)
-                                        };
-
-                                        // --- Vertical axis ---
-                                        let (v_start, v_size) = if img_h > inst.size[1] {
-                                            // Image taller than box → crop: show only the centre strip
-                                            let v_size = inst.size[1] / img_h;
-                                            let v_start = (1.0 - v_size) / 2.0;
-                                            (v_start, v_size)
-                                        } else {
-                                            // Image shorter than box → shrink the draw box
-                                            let dh = (inst.size[1] - img_h) / 2.0;
-                                            inst.pos[1] += dh;
-                                            inst.size[1] = img_h;
-                                            (0.0, 1.0)
-                                        };
-
-                                        inst.uv_rect = [u_start, v_start, u_size, v_size];
-                                    }
-
-                                    _ => {
-                                        inst.uv_rect = [0.0, 0.0, 1.0, 1.0];
-                                    }
-                                }
-
-                                // 2. Apply User Controls (Scale & Offset)
-
-                                let zoom_x = 1.0 / (id_cmd.internal_scale[0] / 1.0);
-                                let zoom_y = 1.0 / (id_cmd.internal_scale[1] / 1.1);
-
-                                let u_offset = (1.0 - zoom_x) / 2.0
-                                    - (id_cmd.internal_offset[0] * sf / inst.size[0]);
-                                let v_offset = (1.0 - zoom_y) / 2.0
-                                    - (id_cmd.internal_offset[1] * sf / inst.size[1]);
-
-                                inst.uv_rect[0] = inst.uv_rect[0] * zoom_x + u_offset;
-                                inst.uv_rect[1] = inst.uv_rect[1] * zoom_y + v_offset;
-                                inst.uv_rect[2] *= zoom_x;
-                                inst.uv_rect[3] *= zoom_y;
-
-                                image_draw_calls.push((bg.clone(), inst));
+                            if let Some((bg, _tw, _th)) = texture_cache.get(&id_cmd.source) {
+                                let mut inst = id_cmd.instance;
+                                inst.pos[0] *= sf; inst.pos[1] *= sf;
+                                inst.size[0] *= sf; inst.size[1] *= sf;
+                                inst.clip_rect[0] *= sf; inst.clip_rect[1] *= sf;
+                                inst.clip_rect[2] *= sf; inst.clip_rect[3] *= sf;
+                                main_images.push((bg.clone(), inst));
                             }
                         }
                         DrawCommand::Text(td) => {
-                            let mut scaled_options = td.options.clone();
-                            scaled_options.scale_factor = sf;
-
-                            // Scale the current command's clip rect from logical to physical
-                            let clip = td.clip;
-                            scaled_options.clip_rect =
-                                Some([clip[0] * sf, clip[1] * sf, clip[2] * sf, clip[3] * sf]);
-
-                            engine.draw(queue, &td.text, td.pos, &scaled_options);
+                            let mut opts = td.options.clone();
+                            opts.scale_factor = sf;
+                            opts.clip_rect = Some([td.clip[0] * sf, td.clip[1] * sf, td.clip[2] * sf, td.clip[3] * sf]);
+                            engine.draw(queue, &td.text, td.pos, &opts);
                         }
                         DrawCommand::OverlayRect(od) => {
-                            engine.draw_rect(
-                                [od.x * sf, od.y * sf],
-                                [od.width * sf, od.height * sf],
-                                od.color,
-                                [
-                                    od.clip[0] * sf,
-                                    od.clip[1] * sf,
-                                    od.clip[2] * sf,
-                                    od.clip[3] * sf,
-                                ],
-                            );
+                            main_overlay_rects.push(zenthra_render::RectInstance {
+                                pos: [od.x * sf, od.y * sf],
+                                size: [od.width * sf, od.height * sf],
+                                color: od.color.to_array(),
+                                clip_rect: [od.clip[0] * sf, od.clip[1] * sf, od.clip[2] * sf, od.clip[3] * sf],
+                                ..Default::default()
+                            });
                         }
+                        _ => {}
+                    }
+                }
+                
+                // 2. Process Overlay Pass Commands
+                let mut overlay_rects = Vec::new();
+                let mut overlay_text_cmds = Vec::new();
+                for cmd in &overlays {
+                    match cmd {
+                        DrawCommand::Rect(rd) => {
+                            let mut inst = rd.instance;
+                            inst.pos[0] *= sf; inst.pos[1] *= sf;
+                            inst.size[0] *= sf; inst.size[1] *= sf;
+                            inst.shadow_offset[0] *= sf; inst.shadow_offset[1] *= sf;
+                            inst.shadow_blur *= sf;
+                            inst.clip_rect[0] *= sf; inst.clip_rect[1] *= sf;
+                            inst.clip_rect[2] *= sf; inst.clip_rect[3] *= sf;
+                            overlay_rects.push(inst);
+                        }
+                        DrawCommand::OverlayRect(od) => {
+                            overlay_rects.push(zenthra_render::RectInstance {
+                                pos: [od.x * sf, od.y * sf],
+                                size: [od.width * sf, od.height * sf],
+                                color: od.color.to_array(),
+                                clip_rect: [od.clip[0] * sf, od.clip[1] * sf, od.clip[2] * sf, od.clip[3] * sf],
+                                ..Default::default()
+                            });
+                        }
+                        DrawCommand::Text(td) => {
+                            overlay_text_cmds.push(td);
+                        }
+                        _ => {}
                     }
                 }
 
-                rp.prepare(&device, queue, width, height, &rect_instances);
+                // Prepare Pipeline Buffers
+                rp.prepare(&device, queue, width, height, &main_rects);
+                let mut overlay_p_rp = zenthra_render::RectPipeline::new(&device, config.format);
+                overlay_p_rp.prepare(&device, queue, width, height, &main_overlay_rects);
+                let mut overlay_rp = zenthra_render::RectPipeline::new(&device, config.format);
+                overlay_rp.prepare(&device, queue, width, height, &overlay_rects);
 
-                // Upload image instances to buffers
-                for (bg, inst) in image_draw_calls {
+                let mut main_img_bufs = Vec::new();
+                for (bg, inst) in main_images {
                     use wgpu::util::DeviceExt;
                     let buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
                         label: Some("Image Instance"),
                         contents: bytemuck::bytes_of(&inst),
                         usage: wgpu::BufferUsages::VERTEX,
                     });
-                    image_buffers.push((bg, buf));
+                    main_img_bufs.push((bg, buf));
                 }
+
+                let surface_texture = match frame.window.gpu.surface.get_current_texture() {
+                    wgpu::CurrentSurfaceTexture::Success(t) => t,
+                    _ => return false,
+                };
+                let view = surface_texture.texture.create_view(&wgpu::TextureViewDescriptor::default());
+                let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: Some("Zenthra Frame") });
+
+                // --- PASS 1: MAIN UI ---
+                {
+                    let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                        label: Some("Main Pass"),
+                        color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                            view: &view,
+                            resolve_target: None,
+                            ops: wgpu::Operations {
+                                load: wgpu::LoadOp::Clear(wgpu::Color { r: 0.05, g: 0.05, b: 0.07, a: 1.0 }),
+                                store: wgpu::StoreOp::Store,
+                            },
+                            depth_slice: None,
+                        })],
+                        depth_stencil_attachment: None,
+                        timestamp_writes: None,
+                        occlusion_query_set: None,
+                        multiview_mask: None,
+                    });
+
+                    rp.draw(&mut pass);
+                    for (bg, buf) in &main_img_bufs {
+                        ip.draw(&mut pass, bg, buf, 1);
+                    }
+                    engine.render(&mut pass);
+                    
+                    // NEW: Draw main overlays (cursor, scrollbars) AFTER text/highlights
+                    overlay_p_rp.draw(&mut pass);
+                }
+
+                // --- PREPARE OVERLAY TEXT ---
+                for td in overlay_text_cmds {
+                    let mut opts = td.options.clone();
+                    opts.scale_factor = sf;
+                    opts.clip_rect = Some([td.clip[0] * sf, td.clip[1] * sf, td.clip[2] * sf, td.clip[3] * sf]);
+                    engine.draw(queue, &td.text, td.pos, &opts);
+                }
+
+                // --- PASS 2: OVERLAYS ---
+                {
+                    let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                        label: Some("Overlay Pass"),
+                        color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                            view: &view,
+                            resolve_target: None,
+                            ops: wgpu::Operations {
+                                load: wgpu::LoadOp::Load, // Keep what we drew in Pass 1
+                                store: wgpu::StoreOp::Store,
+                            },
+                            depth_slice: None,
+                        })],
+                        depth_stencil_attachment: None,
+                        timestamp_writes: None,
+                        occlusion_query_set: None,
+                        multiview_mask: None,
+                    });
+
+                    overlay_rp.draw(&mut pass);
+                    engine.render(&mut pass);
+                }
+
+                queue.submit(std::iter::once(encoder.finish()));
+                surface_texture.present();
             }
 
             // Swap layout caches for next frame
             layout_cache = next_layout_cache;
-
-            let surface_texture = match frame.window.gpu.surface.get_current_texture() {
-                wgpu::CurrentSurfaceTexture::Success(t) => t,
-                wgpu::CurrentSurfaceTexture::Suboptimal(t) => t,
-                _ => return false,
-            };
-
-            let view = surface_texture
-                .texture
-                .create_view(&wgpu::TextureViewDescriptor::default());
-            let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
-                label: Some("Zenthra Frame"),
-            });
-
-            {
-                let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-                    label: Some("Main Pass"),
-                    color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                        view: &view,
-                        resolve_target: None,
-                        ops: wgpu::Operations {
-                            load: wgpu::LoadOp::Clear(wgpu::Color {
-                                r: 0.05,
-                                g: 0.05,
-                                b: 0.07,
-                                a: 1.0,
-                            }),
-                            store: wgpu::StoreOp::Store,
-                        },
-                        depth_slice: None,
-                    })],
-                    depth_stencil_attachment: None,
-                    timestamp_writes: None,
-                    occlusion_query_set: None,
-                    multiview_mask: None,
-                });
-
-                rp.draw(&mut pass);
-
-                for (bg, buf) in &image_buffers {
-                    ip.draw(&mut pass, bg, buf, 1);
-                }
-
-                engine.render(&mut pass);
-            }
-
-            queue.submit(std::iter::once(encoder.finish()));
-            surface_texture.present();
             needs_redraw
         });
         self

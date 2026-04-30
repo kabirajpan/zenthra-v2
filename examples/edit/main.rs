@@ -28,7 +28,7 @@ fn main() {
                 .range(0.0, 1.0)
                 .width(400.0)
                 .show();
-            
+
             if (slider_val - prev_val).abs() > 0.001 {
                 println!("Slider value changed: {}", slider_val);
             }

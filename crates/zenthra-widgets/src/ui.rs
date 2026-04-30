@@ -58,6 +58,7 @@ pub struct Ui<'a> {
     pub mouse_down: bool,
     pub cursor_icon: CursorIcon,
     pub draws: Vec<DrawCommand>,
+    pub overlays: Vec<DrawCommand>,
     pub cursor_x: f32,
     pub cursor_y: f32,
     pub base_x: f32,
@@ -129,6 +130,7 @@ impl<'a> Ui<'a> {
             id_counter: 0,
             cursor_icon: CursorIcon::Default,
             draws: Vec::new(),
+            overlays: Vec::new(),
             cursor_x: 0.0,
             cursor_y: 0.0,
             base_x: 0.0,
@@ -292,6 +294,14 @@ impl<'a> Ui<'a> {
     pub fn toggle<'b>(&mut self, value: &'b mut bool, label: impl Into<Option<&'b str>>) -> crate::controls::toggle::ToggleBuilder<'_, 'a, 'b> {
         let l: Option<&str> = label.into();
         crate::controls::toggle::ToggleBuilder::new(self, value, l)
+    }
+
+    pub fn radio<'b, T: PartialEq + Clone>(&mut self, state: &'b mut T, value: T, label: &str) -> crate::controls::radio::RadioBuilder<'_, 'a, 'b, T> {
+        crate::controls::radio::RadioBuilder::new(self, state, value, label)
+    }
+
+    pub fn dropdown<'b, T: PartialEq + Clone + ToString>(&mut self, selected: &'b mut T, options: Vec<T>) -> crate::controls::dropdown::DropdownBuilder<'_, 'a, 'b, T> {
+        crate::controls::dropdown::DropdownBuilder::new(self, selected, options)
     }
 
     pub fn text_area<'b>(&mut self, buffer: &'b mut String, id: impl std::hash::Hash) -> crate::text_area::TextAreaBuilder<'_, 'a, 'b> {

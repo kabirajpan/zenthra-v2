@@ -95,3 +95,11 @@ path = "../../examples/checkbox_list.rs"
 [[example]]
 name = "toggle_list"
 path = "../../examples/toggle_list.rs"
+
+[[example]]
+name = "radio_list"
+path = "../../examples/radio_list.rs"
+
+[[example]]
+name = "dropdown_test"
+path = "../../examples/dropdown_test.rs"

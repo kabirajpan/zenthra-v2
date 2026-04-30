@@ -40,7 +40,18 @@ pub struct ToggleBuilder<'u, 'a, 'b> {
     // External Label Style
     label_size: f32,
     label_color: Color,
+    active_label_color: Option<Color>,
     label_gap: f32,
+
+    // Premium Effects
+    glow: bool,
+    shadow_color: Color,
+    shadow_offset: [f32; 2],
+    shadow_blur: f32,
+    shadow_opacity: f32,
+    shadow_enabled: bool,
+    hover_scale: f32,
+    pressed_scale: f32,
 
     // State
     disabled: bool,
@@ -76,7 +87,17 @@ impl<'u, 'a, 'b> ToggleBuilder<'u, 'a, 'b> {
 
             label_size: 14.0,
             label_color: Color::WHITE,
+            active_label_color: None,
             label_gap: 10.0,
+
+            glow: false,
+            shadow_enabled: false,
+            shadow_color: Color::rgb(0.0, 0.0, 0.0),
+            shadow_offset: [0.0, 2.0],
+            shadow_blur: 8.0,
+            shadow_opacity: 0.4,
+            hover_scale: 1.0,
+            pressed_scale: 1.0,
 
             disabled: false,
             animation_speed: 15.0,
@@ -155,6 +176,22 @@ impl<'u, 'a, 'b> ToggleBuilder<'u, 'a, 'b> {
         self
     }
 
+    pub fn active_label(mut self, color: Color) -> Self {
+        self.active_label_color = Some(color);
+        self
+    }
+
+    pub fn glow(mut self, enabled: bool) -> Self {
+        self.glow = enabled;
+        self
+    }
+
+    pub fn scaling(mut self, hover: f32, pressed: f32) -> Self {
+        self.hover_scale = hover;
+        self.pressed_scale = pressed;
+        self
+    }
+
     pub fn label_gap(mut self, gap: f32) -> Self {
         self.label_gap = gap;
         self
@@ -204,6 +241,7 @@ impl<'u, 'a, 'b> ToggleBuilder<'u, 'a, 'b> {
         };
 
         let is_hovered = self.ui.mouse_in_rect(actual_ox, actual_oy, actual_w, actual_h) && !self.disabled;
+        let is_pressed = is_hovered && self.ui.mouse_down;
         let mut clicked = false;
 
         if self.ui.clicked && is_hovered {
@@ -212,27 +250,57 @@ impl<'u, 'a, 'b> ToggleBuilder<'u, 'a, 'b> {
             clicked = true;
         }
 
-        // 3. Animation
-        let target_pos = if *self.state { 1.0 } else { 0.0 };
-        let current_pos = *self.ui.interaction_state.entry(self.id).or_insert(target_pos);
-        let mut final_pos = current_pos;
+        // 3. Animation (Generic & Selection)
+        let sel_target = if *self.state { 1.0 } else { 0.0 };
+        let current_sel = *self.ui.interaction_state.entry(self.id).or_insert(sel_target);
+
+        let hover_id = Id::from_u64(self.id.raw().wrapping_add(3000000));
+        let hover_target = if is_pressed { self.pressed_scale } else if is_hovered { self.hover_scale } else { 1.0 };
+        let current_scale = *self.ui.interaction_state.entry(hover_id).or_insert(1.0);
+
+        let mut final_pos = current_sel;
+        let mut final_scale = current_scale;
         
-        let delta = target_pos - current_pos;
-        if delta.abs() > 0.001 {
-            final_pos += delta * (0.15 * self.animation_speed).min(1.0);
+        let s_delta = sel_target - current_sel;
+        if s_delta.abs() > 0.001 {
+            final_pos += s_delta * (0.15 * self.animation_speed).min(1.0);
             self.ui.interaction_state.insert(self.id, final_pos);
             self.ui.needs_redraw = true;
         } else {
-            self.ui.interaction_state.insert(self.id, target_pos);
-            final_pos = target_pos;
+            final_pos = sel_target;
+        }
+
+        let h_delta = hover_target - current_scale;
+        if h_delta.abs() > 0.001 {
+            final_scale += h_delta * 0.3;
+            self.ui.interaction_state.insert(hover_id, final_scale);
+            self.ui.needs_redraw = true;
+        } else {
+            final_scale = hover_target;
         }
 
         let start_draw = self.ui.draws.len();
 
         // 4. Calculate Layout & Radius
-        let current_radius = if self.is_pill { [self.height / 2.0; 4] } else { self.radius };
+        let base_w = self.width * final_scale;
+        let base_h = self.height * final_scale;
+        
+        let current_radius = if self.is_pill { [base_h / 2.0; 4] } else { 
+            let mut r = self.radius;
+            for i in 0..4 { r[i] *= final_scale; }
+            r
+        };
+        
         let toggle_x = if let LabelSide::Left = self.label_side { x + label_w + self.label_gap } else { x };
-        let toggle_y = y + (total_h - self.height) / 2.0;
+        let toggle_y_orig = y + (total_h - self.height) / 2.0;
+        
+        // Midpoint of the original toggle track
+        let mid_x = toggle_x + self.width / 2.0;
+        let mid_y = toggle_y_orig + self.height / 2.0;
+        
+        // Final position for scaled track
+        let tx = mid_x - base_w / 2.0;
+        let ty = mid_y - base_h / 2.0;
 
         // 5. Draw Track
         let mut track_color = if final_pos > 0.5 { self.on_color } else { self.off_color };
@@ -240,19 +308,31 @@ impl<'u, 'a, 'b> ToggleBuilder<'u, 'a, 'b> {
             track_color.a *= 0.5;
         }
 
+        let mut shadow_color = Color::TRANSPARENT;
         self.ui.draws.push(DrawCommand::Rect(RectDraw {
             instance: RectInstance {
-                pos: [toggle_x, toggle_y],
-                size: [self.width, self.height],
+                pos: [tx, ty],
+                size: [base_w, base_h],
                 color: track_color.to_array(),
                 radius: current_radius,
                 brightness: if is_hovered { 1.1 } else { 1.0 },
+                shadow_color: if self.shadow_enabled {
+                    let mut a = self.shadow_color.to_array();
+                    a[3] *= self.shadow_opacity;
+                    a
+                } else if self.glow {
+                    let mut sc = self.on_color.to_array();
+                    sc[3] *= 0.4 * final_pos;
+                    sc
+                } else { [0.0, 0.0, 0.0, 0.0] },
+                shadow_offset: if self.shadow_enabled { self.shadow_offset } else { [0.0, 0.0] },
+                shadow_blur: if self.shadow_enabled { self.shadow_blur } else if self.glow { 12.0 * final_pos } else { 0.0 },
                 ..Default::default()
             }
         }));
 
         // 6. Draw Inner Labels (clipped to track)
-        let clip = [toggle_x, toggle_y, self.width, self.height];
+        let clip = [tx, ty, base_w, base_h];
         if let Some(on_text) = &self.inner_on {
             if let Some(off_text) = &self.inner_off {
                 // Determine which text to show and where
@@ -262,26 +342,26 @@ impl<'u, 'a, 'b> ToggleBuilder<'u, 'a, 'b> {
                 let mut text_h = 0.0;
                 if let Some(fs) = self.ui.font_system.as_ref() {
                     let mut adapter = zenthra_text::prelude::CosmicFontProvider::new_with_system(fs.clone());
-                    let options = zenthra_text::prelude::TextOptions::new().font_size(self.inner_font_size);
+                    let options = zenthra_text::prelude::TextOptions::new().font_size(self.inner_font_size * final_scale);
                     let buffer = adapter.shape(text, &options);
                     let (cw, ch) = buffer.content_size();
                     text_w = cw;
                     text_h = ch;
                 }
 
-                let thumb_h = self.height - (self.padding * 2.0);
-                let thumb_w = self.thumb_width.unwrap_or(thumb_h);
-                let track_w_internal = self.width - thumb_w - (self.padding * 2.0);
+                let thumb_h_adj = base_h - (self.padding * 2.0 * final_scale);
+                let thumb_w_adj = self.thumb_width.map(|w| w * final_scale).unwrap_or(thumb_h_adj);
+                let track_w_internal = base_w - thumb_w_adj - (self.padding * 2.0 * final_scale);
                 
                 // Position text in the space NOT occupied by the thumb
-                let tx = if is_on {
+                let inner_tx = if is_on {
                     // ON state: thumb is on the right, text on the left
-                    toggle_x + self.padding + (track_w_internal - text_w) / 2.0
+                    tx + (self.padding * final_scale) + (track_w_internal - text_w) / 2.0
                 } else {
                     // OFF state: thumb is on the left, text on the right
-                    toggle_x + self.padding + thumb_w + (track_w_internal - text_w) / 2.0
+                    tx + (self.padding * final_scale) + thumb_w_adj + (track_w_internal - text_w) / 2.0
                 };
-                let ty = toggle_y + (self.height - text_h) / 2.0;
+                let inner_ty = ty + (base_h - text_h) / 2.0;
 
                 // Adjust opacity based on animation progress to avoid flickering
                 let mut t_color = self.inner_text_color;
@@ -291,9 +371,9 @@ impl<'u, 'a, 'b> ToggleBuilder<'u, 'a, 'b> {
                 if t_color.a > 0.05 {
                     self.ui.draws.push(DrawCommand::Text(TextDraw {
                         text: text.clone(),
-                        pos: [tx, ty],
+                        pos: [inner_tx, inner_ty],
                         options: zenthra_text::prelude::TextOptions::new()
-                            .font_size(self.inner_font_size)
+                            .font_size(self.inner_font_size * final_scale)
                             .color(t_color),
                         clip,
                     }));
@@ -302,16 +382,17 @@ impl<'u, 'a, 'b> ToggleBuilder<'u, 'a, 'b> {
         }
 
         // 7. Draw Thumb
-        let thumb_h = self.height - (self.padding * 2.0);
-        let thumb_w = self.thumb_width.unwrap_or(thumb_h);
-        let move_range = self.width - thumb_w - (self.padding * 2.0);
-        let thumb_x = toggle_x + self.padding + (final_pos * move_range);
-        let thumb_y = toggle_y + self.padding;
+        let thumb_h_adj = base_h - (self.padding * 2.0 * final_scale);
+        let thumb_w_adj = self.thumb_width.map(|w| w * final_scale).unwrap_or(thumb_h_adj);
+        let move_range = base_w - thumb_w_adj - (self.padding * 2.0 * final_scale);
+        let thumb_x = tx + (self.padding * final_scale) + (final_pos * move_range);
+        let thumb_y = ty + (self.padding * final_scale);
 
-        let t_radius = self.thumb_radius.unwrap_or_else(|| {
-            let r = thumb_h / 2.0;
+        let t_radius = self.thumb_radius.map(|mut r| { for i in 0..4 { r[i] *= final_scale; } r }).unwrap_or_else(|| {
+            let r = thumb_h_adj / 2.0;
             if self.is_pill { [r; 4] } else { 
-                if self.radius[0] < r { self.radius } else { [r; 4] }
+                let tr = self.radius[0] * final_scale;
+                if tr < r { [tr; 4] } else { [r; 4] }
             }
         });
 
@@ -321,24 +402,31 @@ impl<'u, 'a, 'b> ToggleBuilder<'u, 'a, 'b> {
         self.ui.draws.push(DrawCommand::Rect(RectDraw {
             instance: RectInstance {
                 pos: [thumb_x, thumb_y],
-                size: [thumb_w, thumb_h],
+                size: [thumb_w_adj, thumb_h_adj],
                 color: t_color.to_array(),
                 radius: t_radius,
                 ..Default::default()
             }
         }));
 
-        // 8. Draw External Label
+        // 8. Draw External Label (Color Transition)
         if let Some(label_text) = &self.label {
             let lx = if let LabelSide::Left = self.label_side { x } else { toggle_x + self.width + self.label_gap };
             let ly = y + (total_h - label_h) / 2.0;
+            
+            let mut l_color = self.label_color;
+            if let Some(active_c) = self.active_label_color {
+                if final_pos > 0.5 {
+                    l_color = active_c;
+                }
+            }
+
             self.ui.draws.push(DrawCommand::Text(TextDraw {
                 text: label_text.clone(),
                 pos: [lx, ly],
                 options: zenthra_text::prelude::TextOptions::new()
                     .font_size(self.label_size)
-                    .color(self.label_color)
-                    .at(lx, ly),
+                    .color(l_color),
                 clip: [0.0, 0.0, 9999.0, 9999.0],
             }));
         }

@@ -289,6 +289,7 @@ impl<'u, 'a, 'b> TextAreaBuilder<'u, 'a, 'b> {
                                     if let Some(c) = chars.next_back() {
                                         cursor_index -= c.len_utf8();
                                         self.ui.interaction_state.insert(self.id, self.ui.elapsed_time);
+                                        self.ui.needs_redraw = true;
                                     }
                                 }
                             }
@@ -298,12 +299,14 @@ impl<'u, 'a, 'b> TextAreaBuilder<'u, 'a, 'b> {
                                     if let Some(c) = chars.next() {
                                         cursor_index += c.len_utf8();
                                         self.ui.interaction_state.insert(self.id, self.ui.elapsed_time);
+                                        self.ui.needs_redraw = true;
                                     }
                                 }
                             }
                             winit::keyboard::KeyCode::ArrowUp => {
                                 if let Some(sb) = &shaped_buffer {
                                     self.ui.interaction_state.insert(self.id, self.ui.elapsed_time);
+                                    self.ui.needs_redraw = true;
                                     let row_threshold = (self.font_size * self.line_height) * 0.5;
 
                                     // 1. Find EXACTLY which line index the cursor is on
@@ -361,6 +364,7 @@ impl<'u, 'a, 'b> TextAreaBuilder<'u, 'a, 'b> {
                             winit::keyboard::KeyCode::ArrowDown => {
                                 if let Some(sb) = &shaped_buffer {
                                     self.ui.interaction_state.insert(self.id, self.ui.elapsed_time);
+                                    self.ui.needs_redraw = true;
                                     let row_threshold = (self.font_size * self.line_height) * 0.5;
 
                                     // 1. Find EXACTLY which line index the cursor is on
@@ -458,10 +462,34 @@ impl<'u, 'a, 'b> TextAreaBuilder<'u, 'a, 'b> {
                     if self.scrollable {
                         let usable_h = h_box - self.padding.vertical();
                         let max_scroll = (h_content - usable_h).max(0.0);
+                        
+                        // Vertical Auto-scroll
+                        if let Some(sb) = &shaped_buffer {
+                            let mut ly = 0.0;
+                            let mut found = false;
+                            for line in sb.lines() {
+                                if line.start_cluster <= cursor_index {
+                                    ly = line.y;
+                                    found = true;
+                                } else { break; }
+                            }
+                            if found {
+                                let line_h = self.font_size * self.line_height;
+                                let cursor_y_v = ly + self.text_padding.top;
+                                
+                                if cursor_y_v > scroll_y + usable_h - line_h {
+                                    scroll_y = cursor_y_v - usable_h + line_h;
+                                } else if cursor_y_v < scroll_y {
+                                    scroll_y = cursor_y_v;
+                                }
+                            }
+                        }
+
                         scroll_y = scroll_y.clamp(0.0, max_scroll);
                     }
                     self.ui.input_events = events;
                     self.ui.cursor_state.insert(self.id, cursor_index);
+                    self.ui.scroll_state.insert(self.id, (scroll_x, scroll_y));
                 }
 
         // --- 4. Render Background (FIXED) ---
