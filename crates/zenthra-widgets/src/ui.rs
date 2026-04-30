@@ -247,13 +247,43 @@ impl<'a> Ui<'a> {
     }
 
 
-    pub fn input<'b>(&mut self, buffer: &'b mut String) -> crate::input::InputBuilder<'_, 'a, 'b> {
-        let id = self.id();
+    pub fn input<'b>(&mut self, buffer: &'b mut String, id: impl std::hash::Hash) -> crate::input::InputBuilder<'_, 'a, 'b> {
+        let mut hasher = std::collections::hash_map::DefaultHasher::new();
+        use std::hash::Hasher;
+        id.hash(&mut hasher);
+        let id = zenthra_core::Id::from_u64(hasher.finish());
+        self.id_log.push(id);
         crate::input::InputBuilder::new(self, buffer, id)
     }
 
-    pub fn text_area<'b>(&mut self, buffer: &'b mut String) -> crate::text_area::TextAreaBuilder<'_, 'a, 'b> {
-        let id = self.id();
+    pub fn slider<'b>(&mut self, value: &'b mut f32, id: impl std::hash::Hash) -> crate::slider::SliderBuilder<'_, 'a, 'b> {
+        let mut hasher = std::collections::hash_map::DefaultHasher::new();
+        use std::hash::Hasher;
+        id.hash(&mut hasher);
+        let id = zenthra_core::Id::from_u64(hasher.finish());
+        self.id_log.push(id);
+        crate::slider::SliderBuilder::new(self, value, id)
+    }
+
+    pub fn progress_bar(&mut self, value: f32) -> crate::progress_bar::ProgressBarBuilder<'_, 'a> {
+        crate::progress_bar::ProgressBarBuilder::new(self, value)
+    }
+
+    pub fn switch<'b>(&mut self, state: &'b mut bool, id: impl std::hash::Hash) -> crate::switch::SwitchBuilder<'_, 'a, 'b> {
+        let mut hasher = std::collections::hash_map::DefaultHasher::new();
+        use std::hash::Hasher;
+        id.hash(&mut hasher);
+        let id = zenthra_core::Id::from_u64(hasher.finish());
+        self.id_log.push(id);
+        crate::switch::SwitchBuilder::new(self, state, id)
+    }
+
+    pub fn text_area<'b>(&mut self, buffer: &'b mut String, id: impl std::hash::Hash) -> crate::text_area::TextAreaBuilder<'_, 'a, 'b> {
+        let mut hasher = std::collections::hash_map::DefaultHasher::new();
+        use std::hash::Hasher;
+        id.hash(&mut hasher);
+        let id = zenthra_core::Id::from_u64(hasher.finish());
+        self.id_log.push(id);
         crate::text_area::TextAreaBuilder::new(self, buffer, id)
     }
 

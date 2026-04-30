@@ -71,6 +71,8 @@ impl App {
                         if ui_mouse_down && !was_down {
                             ui_clicked = true;
                         }
+                        // Only clear active_drag on a real release event, 
+                        // and let the UI handle the rest.
                         if !ui_mouse_down {
                             active_drag = None;
                         }

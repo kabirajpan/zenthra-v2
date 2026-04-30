@@ -59,6 +59,12 @@ pub struct SemanticNode {
     pub focused: bool,
     /// Whether this node is currently disabled (non-interactive).
     pub disabled: bool,
+    /// Current numeric value (for sliders, progress bars, etc).
+    pub value: Option<f32>,
+    /// Minimum numeric value.
+    pub min_value: Option<f32>,
+    /// Maximum numeric value.
+    pub max_value: Option<f32>,
 }
 
 impl SemanticNode {
@@ -71,6 +77,9 @@ impl SemanticNode {
             children: Vec::new(),
             focused: false,
             disabled: false,
+            value: None,
+            min_value: None,
+            max_value: None,
         }
     }
 
@@ -81,6 +90,21 @@ impl SemanticNode {
 
     pub fn with_focus(mut self, focused: bool) -> Self {
         self.focused = focused;
+        self
+    }
+
+    pub fn with_value(mut self, value: f32) -> Self {
+        self.value = Some(value);
+        self
+    }
+
+    pub fn with_min_value(mut self, min: f32) -> Self {
+        self.min_value = Some(min);
+        self
+    }
+
+    pub fn with_max_value(mut self, max: f32) -> Self {
+        self.max_value = Some(max);
         self
     }
 }

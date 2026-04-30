@@ -2,13 +2,17 @@ pub mod button;
 pub mod container;
 pub mod input;
 pub mod lazy_container;
+pub mod slider;
 pub mod text;
 pub mod text_area;
+pub mod progress_bar;
+pub mod switch;
 pub mod ui;
 
 pub use button::ButtonBuilder;
 pub use container::ContainerBuilder;
 pub use input::InputBuilder;
+pub use slider::SliderBuilder;
 pub use text::TextBuilder;
 pub use text_area::TextAreaBuilder;
 pub use ui::Ui;
