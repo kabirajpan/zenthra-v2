@@ -31,6 +31,8 @@ pub struct ImageDraw {
     pub source: zenthra_core::ImageSource,
     pub instance: zenthra_render::ImageInstance,
     pub fit: zenthra_core::ObjectFit,
+    pub internal_scale: [f32; 2],
+    pub internal_offset: [f32; 2],
 }
 
 pub enum DrawCommand {

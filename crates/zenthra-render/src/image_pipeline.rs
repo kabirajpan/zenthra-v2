@@ -17,6 +17,8 @@ pub struct ImageInstance {
     pub opacity: f32,
     pub uv_rect: [f32; 4],
     pub bg_color: [f32; 4],
+    pub rotation: [f32; 3], // (x, y, z) in radians
+    pub flip: [f32; 2],     // (horizontal, vertical) - 1.0 for normal, -1.0 for flipped
 }
 
 impl Default for ImageInstance {
@@ -36,6 +38,8 @@ impl Default for ImageInstance {
             opacity: 1.0,
             uv_rect: [0.0, 0.0, 1.0, 1.0],
             bg_color: [0.0; 4],
+            rotation: [0.0; 3],
+            flip: [1.0, 1.0],
         }
     }
 }
@@ -60,6 +64,8 @@ impl ImageInstance {
                 wgpu::VertexAttribute { offset: 104, shader_location: 11, format: wgpu::VertexFormat::Float32 },
                 wgpu::VertexAttribute { offset: 108, shader_location: 12, format: wgpu::VertexFormat::Float32x4 },
                 wgpu::VertexAttribute { offset: 124, shader_location: 13, format: wgpu::VertexFormat::Float32x4 },
+                wgpu::VertexAttribute { offset: 140, shader_location: 14, format: wgpu::VertexFormat::Float32x3 },
+                wgpu::VertexAttribute { offset: 152, shader_location: 15, format: wgpu::VertexFormat::Float32x2 },
             ],
         }
     }

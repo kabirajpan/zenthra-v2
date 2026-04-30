@@ -22,6 +22,8 @@ struct ImageInstance {
     @location(11) opacity:       f32,
     @location(12) uv_rect:       vec4<f32>, // (u_start, v_start, u_size, v_size)
     @location(13) bg_color:      vec4<f32>,
+    @location(14) rotation:      vec3<f32>,
+    @location(15) flip:          vec2<f32>,
 }
 
 struct VertexOutput {
@@ -58,19 +60,57 @@ fn vs_main(
         vec2<f32>(1.0, 1.0),
     );
     let corner = corners[in_vertex_index];
+    let expansion = max(2.0, instance.shadow_blur * 3.0);
+    
+    // 1. Calculate Local Vertex Position (centred at 0,0 for rotation)
+    // We add expansion to the quad size to accommodate the shadow blur
+    let quad_size = instance.size + expansion * 2.0;
+    let local_v_pos = (corner - 0.5) * quad_size;
 
-    let expansion    = max(2.0, instance.shadow_blur * 3.0);
-    let expanded_size = instance.size + expansion * 2.0;
-    let expanded_pos  = instance.pos  - expansion;
+    // 2. Apply 3D Rotation
+    // rotation: (x_tilt, y_tilt, z_rot)
+    let rot = instance.rotation;
+    
+    // Rotation Z (2D Rotation)
+    let sz = sin(rot.z); let cz = cos(rot.z);
+    let rxz = local_v_pos.x * cz - local_v_pos.y * sz;
+    let ryz = local_v_pos.x * sz + local_v_pos.y * cz;
+    var rotated_pos = vec3<f32>(rxz, ryz, 0.0);
 
-    let pixel_pos = expanded_pos + corner * expanded_size;
+    // Rotation X (Tilt forward/back)
+    let sx = sin(rot.x); let cx = cos(rot.x);
+    let ryx = rotated_pos.y * cx - rotated_pos.z * sx;
+    let rzx = rotated_pos.y * sx + rotated_pos.z * cx;
+    rotated_pos.y = ryx;
+    rotated_pos.z = rzx;
+
+    // Rotation Y (Tilt side-to-side)
+    let sy = sin(rot.y); let cy = cos(rot.y);
+    let rxy = rotated_pos.x * cy + rotated_pos.z * sy;
+    let rzy = -rotated_pos.x * sy + rotated_pos.z * cy;
+    rotated_pos.x = rxy;
+    rotated_pos.z = rzy;
+
+    // 3. Simple Perspective Projection
+    // We move the camera back a bit to see the tilt effect
+    let dist = 1000.0; 
+    let perspective = dist / (dist - rotated_pos.z);
+    let final_local_pos = rotated_pos.xy * perspective;
+
+    // 4. Transform to Screen Coordinates
+    let center_pos = instance.pos + instance.size * 0.5;
+    let pixel_pos = center_pos + final_local_pos;
 
     let clip_x = (pixel_pos.x / uniforms.screen_size.x) * 2.0 - 1.0;
     let clip_y = 1.0 - (pixel_pos.y / uniforms.screen_size.y) * 2.0;
 
     out.clip_position = vec4<f32>(clip_x, clip_y, 0.0, 1.0);
     out.half_size     = instance.size * 0.5;
-    out.local_pos     = pixel_pos - (instance.pos + out.half_size);
+    
+    // local_pos for SDF needs to be the UN-ROTATED, UN-EXPANDED position relative to image center
+    // But we need to handle the scale/perspective too. 
+    // For now, we'll use the corner-based mapping which is more robust for SDFs with rotation.
+    out.local_pos     = (corner - 0.5) * quad_size; 
 
     out.radius        = instance.radius;
     out.border_width  = instance.border_width;
@@ -84,17 +124,17 @@ fn vs_main(
     out.opacity       = instance.opacity;
     out.bg_color      = instance.bg_color;
 
-    // We only want to map UVs for the actual image rect, not the shadow padding.
-    // Pixel pos relative to the actual image box:
-    let rel_pos = pixel_pos - instance.pos;
-    let norm_pos = rel_pos / instance.size;
+    // 5. UV Mapping with Flipping
+    // We only map UVs for the actual image rect, excluding expansion
+    let img_norm = (out.local_pos / instance.size) + 0.5;
+    let clamped_norm = clamp(img_norm, vec2<f32>(0.0), vec2<f32>(1.0));
     
-    // clamp UV to [0, 1] so padding areas don't sample outside
-    let clamped_norm = clamp(norm_pos, vec2<f32>(0.0), vec2<f32>(1.0));
+    // Apply Flip
+    let flipped_norm = (clamped_norm - 0.5) * instance.flip + 0.5;
     
     out.uv = vec2<f32>(
-        instance.uv_rect.x + clamped_norm.x * instance.uv_rect.z,
-        instance.uv_rect.y + clamped_norm.y * instance.uv_rect.w
+        instance.uv_rect.x + flipped_norm.x * instance.uv_rect.z,
+        instance.uv_rect.y + flipped_norm.y * instance.uv_rect.w
     );
 
     return out;

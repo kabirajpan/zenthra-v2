@@ -39,6 +39,13 @@ pub struct ImageBuilder<'u, 'a> {
     hover_border: Option<Color>,
     active_opacity: Option<f32>,
 
+    // Advanced Controls
+    internal_scale: [f32; 2],
+    internal_offset: [f32; 2],
+    rotation: [f32; 3], // (x, y, z)
+    flip_h: bool,
+    flip_v: bool,
+
     // Framework Mechanics
     cursor: crate::text::CursorIcon,
     render_mode: Option<zenthra_core::RenderMode>,
@@ -75,6 +82,11 @@ impl<'u, 'a> ImageBuilder<'u, 'a> {
             active_opacity: None,
             aspect_ratio: None,
             original_size: false,
+            internal_scale: [1.0, 1.0],
+            internal_offset: [0.0; 2],
+            rotation: [0.0; 3],
+            flip_h: false,
+            flip_v: false,
             cursor: crate::text::CursorIcon::Default,
             render_mode: None,
         }
@@ -215,6 +227,52 @@ impl<'u, 'a> ImageBuilder<'u, 'a> {
         self
     }
 
+    // Advanced Controls
+    pub fn scale(mut self, s: f32) -> Self {
+        self.internal_scale = [s, s];
+        self
+    }
+    pub fn scale_x(mut self, x: f32) -> Self {
+        self.internal_scale[0] = x;
+        self
+    }
+    pub fn scale_y(mut self, y: f32) -> Self {
+        self.internal_scale[1] = y;
+        self
+    }
+    pub fn zoom(mut self, z: f32) -> Self {
+        self.internal_scale = [z, z];
+        self
+    }
+    pub fn offset(mut self, x: f32, y: f32) -> Self {
+        self.internal_offset = [x, y];
+        self
+    }
+    pub fn rotate(mut self, x: f32, y: f32, z: f32) -> Self {
+        self.rotation = [x.to_radians(), y.to_radians(), z.to_radians()];
+        self
+    }
+    pub fn rotate_x(mut self, x: f32) -> Self {
+        self.rotation[0] = x.to_radians();
+        self
+    }
+    pub fn rotate_y(mut self, y: f32) -> Self {
+        self.rotation[1] = y.to_radians();
+        self
+    }
+    pub fn rotate_z(mut self, z: f32) -> Self {
+        self.rotation[2] = z.to_radians();
+        self
+    }
+    pub fn flip_h(mut self, flip: bool) -> Self {
+        self.flip_h = flip;
+        self
+    }
+    pub fn flip_v(mut self, flip: bool) -> Self {
+        self.flip_v = flip;
+        self
+    }
+
     // Interaction Styling
     pub fn hover_opacity(mut self, alpha: f32) -> Self {
         self.hover_opacity = Some(alpha);
@@ -334,6 +392,8 @@ impl<'u, 'a> ImageBuilder<'u, 'a> {
         self.ui.draws.push(DrawCommand::Image(ImageDraw {
             source: self.source.clone(),
             fit: self.fit,
+            internal_scale: self.internal_scale,
+            internal_offset: self.internal_offset,
             instance: ImageInstance {
                 pos: [ox, oy],
                 size: [w, h],
@@ -349,6 +409,8 @@ impl<'u, 'a> ImageBuilder<'u, 'a> {
                 opacity: current_opacity,
                 uv_rect: [0.0, 0.0, 1.0, 1.0], // App texture manager will compute this based on ObjectFit
                 bg_color: self.bg.to_array(),
+                rotation: self.rotation,
+                flip: [if self.flip_h { -1.0 } else { 1.0 }, if self.flip_v { -1.0 } else { 1.0 }],
             },
         }));
 

@@ -202,60 +202,40 @@ impl App {
                                 let img_aspect = img_w / img_h;
                                 let box_aspect = inst.size[0] / inst.size[1];
 
-                                // uv_rect layout: [u_start, v_start, u_size, v_size]
-                                // i.e. the shader samples from u_start..(u_start+u_size)
-                                //                              v_start..(v_start+v_size)
+                                // 1. Base Fit logic (Contain/Cover/Fill)
                                 match id_cmd.fit {
                                     zenthra_core::ObjectFit::Fill => {
-                                        // Stretch to fill the box exactly — no aspect correction
                                         inst.uv_rect = [0.0, 0.0, 1.0, 1.0];
                                     }
 
                                     zenthra_core::ObjectFit::Contain => {
-                                        let internal_scale = 0.9;
-                                        let uv_zoom = 1.0 / internal_scale;
-                                        let uv_shift = (1.0 - uv_zoom) / 2.0;
-
-                                        let final_u_size = uv_zoom * 0.93; // 👈 YOUR WIDE SETTING
-                                        let final_u_start = (1.0 - final_u_size) / 2.0;
-
                                         if img_aspect > box_aspect {
-                                            let v_ratio = box_aspect / img_aspect;
-                                            let v_size = uv_zoom / v_ratio;
-                                            let v_start = (1.0 - v_size) / 2.0;
-                                            inst.uv_rect =
-                                                [final_u_start, v_start, final_u_size, v_size];
+                                            let new_h = inst.size[0] / img_aspect;
+                                            inst.pos[1] += (inst.size[1] - new_h) / 2.0;
+                                            inst.size[1] = new_h;
                                         } else {
-                                            let u_ratio = img_aspect / box_aspect;
-                                            let u_size = final_u_size / u_ratio; // 👈 Apply wide setting here too
-                                            let u_start = (1.0 - u_size) / 2.0;
-                                            inst.uv_rect = [u_start, uv_shift, u_size, uv_zoom];
+                                            let new_w = inst.size[1] * img_aspect;
+                                            inst.pos[0] += (inst.size[0] - new_w) / 2.0;
+                                            inst.size[0] = new_w;
                                         }
+                                        inst.uv_rect = [0.0, 0.0, 1.0, 1.0];
                                     }
 
                                     zenthra_core::ObjectFit::Cover => {
-                                        // Crop the image so it fills the box with no letterboxing.
-                                        // Draw box stays the same size; UV window is narrowed.
                                         if img_aspect > box_aspect {
-                                            // Image is wider than the box → crop left/right
-                                            let scale = inst.size[1] / img_h; // scale to fit height
-                                            let drawn_w = img_w * scale; // how wide it would be at that scale
-                                            let u_size = inst.size[0] / drawn_w; // fraction of image width visible
-                                            let u_start = (1.0 - u_size) / 2.0; // centre the crop
+                                            let scale = inst.size[1] / img_h;
+                                            let drawn_w = img_w * scale;
+                                            let u_size = inst.size[0] / drawn_w;
+                                            let u_start = (1.0 - u_size) / 2.0;
                                             inst.uv_rect = [u_start, 0.0, u_size, 1.0];
-                                        } else if img_aspect < box_aspect {
-                                            // Image is taller than the box → crop top/bottom
-                                            let scale = inst.size[0] / img_w; // scale to fit width
-                                            let drawn_h = img_h * scale; // how tall it would be at that scale
-                                            let v_size = inst.size[1] / drawn_h; // fraction of image height visible
-                                            let v_start = (1.0 - v_size) / 2.0; // centre the crop
-                                            inst.uv_rect = [0.0, v_start, 1.0, v_size];
                                         } else {
-                                            // Perfect match — no cropping required
-                                            inst.uv_rect = [0.0, 0.0, 1.0, 1.0];
+                                            let scale = inst.size[0] / img_w;
+                                            let drawn_h = img_h * scale;
+                                            let v_size = inst.size[1] / drawn_h;
+                                            let v_start = (1.0 - v_size) / 2.0;
+                                            inst.uv_rect = [0.0, v_start, 1.0, v_size];
                                         }
                                     }
-
                                     zenthra_core::ObjectFit::None => {
                                         // Display the image at its natural pixel size (no scaling).
                                         // If the image is larger than the box, crop it (centred).
@@ -296,6 +276,21 @@ impl App {
                                         inst.uv_rect = [0.0, 0.0, 1.0, 1.0];
                                     }
                                 }
+
+                                // 2. Apply User Controls (Scale & Offset)
+
+                                let zoom_x = 1.0 / (id_cmd.internal_scale[0] / 1.0);
+                                let zoom_y = 1.0 / (id_cmd.internal_scale[1] / 1.1);
+
+                                let u_offset = (1.0 - zoom_x) / 2.0
+                                    - (id_cmd.internal_offset[0] * sf / inst.size[0]);
+                                let v_offset = (1.0 - zoom_y) / 2.0
+                                    - (id_cmd.internal_offset[1] * sf / inst.size[1]);
+
+                                inst.uv_rect[0] = inst.uv_rect[0] * zoom_x + u_offset;
+                                inst.uv_rect[1] = inst.uv_rect[1] * zoom_y + v_offset;
+                                inst.uv_rect[2] *= zoom_x;
+                                inst.uv_rect[3] *= zoom_y;
 
                                 image_draw_calls.push((bg.clone(), inst));
                             }
