@@ -37,7 +37,10 @@ pub struct ButtonBuilder<'u, 'a> {
     // Other
     opacity: f32,
     render_mode: Option<zenthra_core::RenderMode>,
-    // on_click: Option<Box<dyn FnMut()>>,
+    hover_brightness: f32,
+    hover_scale: f32,
+    hover_stroke_color: Option<Color>,
+    hover_stroke_weight: Option<f32>,
 }
 
 impl<'u, 'a> ButtonBuilder<'u, 'a> {
@@ -60,12 +63,15 @@ impl<'u, 'a> ButtonBuilder<'u, 'a> {
             shadow_offset: [0.0, 0.0],
             shadow_blur: 0.0,
             shadow_color: Color::TRANSPARENT,
-            shadow_opacity: 1.0,
-            hover_bg: Some(Color::rgb(0.25, 0.25, 0.35)),
-            active_bg: Some(Color::rgb(0.15, 0.15, 0.2)),
+            shadow_opacity: 0.0,
+            hover_bg: None,
+            active_bg: None,
             opacity: 1.0,
             render_mode: None,
-            // on_click: None,
+            hover_brightness: 1.0,
+            hover_scale: 1.0,
+            hover_stroke_color: None,
+            hover_stroke_weight: None,
         }
     }
 
@@ -169,6 +175,22 @@ impl<'u, 'a> ButtonBuilder<'u, 'a> {
         self
     }
 
+    pub fn hover_brightness(mut self, b: f32) -> Self {
+        self.hover_brightness = b;
+        self
+    }
+
+    pub fn hover_scale(mut self, s: f32) -> Self {
+        self.hover_scale = s;
+        self
+    }
+
+    pub fn hover_stroke(mut self, color: Color, weight: f32) -> Self {
+        self.hover_stroke_color = Some(color);
+        self.hover_stroke_weight = Some(weight);
+        self
+    }
+
     pub fn size(mut self, size: f32) -> Self {
         self.font_size = size;
         self
@@ -222,7 +244,7 @@ impl<'u, 'a> ButtonBuilder<'u, 'a> {
             current_brightness = 0.8;
         } else if is_hovered {
             current_bg = self.hover_bg.unwrap_or(self.bg);
-            current_brightness = 1.1;
+            current_brightness = self.hover_brightness;
         }
 
         // Measure Text
@@ -239,8 +261,18 @@ impl<'u, 'a> ButtonBuilder<'u, 'a> {
             text_h = ch;
         }
 
-        let final_w = self.width.unwrap_or(text_w + self.padding.horizontal());
-        let final_h = self.height.unwrap_or(text_h + self.padding.vertical());
+        let mut final_w = self.width.unwrap_or(text_w + self.padding.horizontal());
+        let mut final_h = self.height.unwrap_or(text_h + self.padding.vertical());
+
+        let mut final_stroke_w = self.stroke_weight;
+        let mut final_stroke_c = self.stroke_color;
+
+        if is_hovered {
+            final_w *= self.hover_scale;
+            final_h *= self.hover_scale;
+            if let Some(c) = self.hover_stroke_color { final_stroke_c = c; }
+            if let Some(w) = self.hover_stroke_weight { final_stroke_w = w; }
+        }
 
         let start_draw = self.ui.draws.len();
 
@@ -251,8 +283,8 @@ impl<'u, 'a> ButtonBuilder<'u, 'a> {
                 size: [final_w, final_h],
                 color: current_bg.to_array(),
                 radius: self.radius,
-                border_width: self.stroke_weight,
-                border_color: self.stroke_color.to_array(),
+                border_width: final_stroke_w,
+                border_color: final_stroke_c.to_array(),
                 shadow_color: {
                     let mut c = self.shadow_color;
                     c.a *= self.shadow_opacity;
@@ -264,6 +296,7 @@ impl<'u, 'a> ButtonBuilder<'u, 'a> {
                 grayscale: 0.0,
                 brightness: current_brightness,
                 opacity: self.opacity,
+                ..Default::default()
             },
         }));
 

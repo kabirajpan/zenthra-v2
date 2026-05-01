@@ -38,6 +38,7 @@ pub struct CheckboxBuilder<'u, 'a, 'b> {
     shadow_enabled: bool,
     hover_scale: f32,
     pressed_scale: f32,
+    hover_brightness: f32,
 
     // Interaction
     hover_bg: Option<Color>,
@@ -82,6 +83,7 @@ impl<'u, 'a, 'b> CheckboxBuilder<'u, 'a, 'b> {
 
             hover_bg: None,
             active_bg: None,
+            hover_brightness: 1.0,
         }
     }
 
@@ -154,6 +156,11 @@ impl<'u, 'a, 'b> CheckboxBuilder<'u, 'a, 'b> {
 
     pub fn active_bg(mut self, color: Color) -> Self {
         self.active_bg = Some(color);
+        self
+    }
+
+    pub fn hover_brightness(mut self, b: f32) -> Self {
+        self.hover_brightness = b;
         self
     }
 
@@ -255,7 +262,7 @@ impl<'u, 'a, 'b> CheckboxBuilder<'u, 'a, 'b> {
                 radius: [self.radius * final_scale; 4],
                 border_width: self.stroke_weight,
                 border_color: self.stroke_color.to_array(),
-                brightness: if is_hovered { 1.15 } else { 1.0 },
+                brightness: if is_hovered { self.hover_brightness } else { 1.0 },
                 shadow_color: if self.shadow_enabled {
                     let mut a = self.shadow_color.to_array();
                     a[3] *= self.shadow_opacity;

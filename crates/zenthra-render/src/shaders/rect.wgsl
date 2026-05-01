@@ -19,6 +19,7 @@ struct RectInstance {
     @location(10) grayscale:     f32,
     @location(11) brightness:    f32,
     @location(12) opacity:       f32,
+    @location(13) border_alignment: f32,
 }
 
 struct VertexOutput {
@@ -36,6 +37,8 @@ struct VertexOutput {
     @location(10) grayscale:     f32,
     @location(11) brightness:    f32,
     @location(12) opacity:       f32,
+    @location(13) border_alignment: f32,
+    @location(14) world_pos:      vec2<f32>,
 }
 
 @vertex
@@ -79,6 +82,8 @@ fn vs_main(
     out.grayscale     = instance.grayscale;
     out.brightness    = instance.brightness;
     out.opacity       = instance.opacity;
+    out.border_alignment = instance.border_alignment;
+    out.world_pos     = pixel_pos;
 
     return out;
 }
@@ -103,10 +108,10 @@ fn gaussian_shadow(d: f32, sigma: f32) -> f32 {
 @fragment
 fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
     // 0. Clip
-    if in.clip_position.x < in.clip_rect.x ||
-       in.clip_position.x > (in.clip_rect.x + in.clip_rect.z) ||
-       in.clip_position.y < in.clip_rect.y ||
-       in.clip_position.y > (in.clip_rect.y + in.clip_rect.w) {
+    if in.world_pos.x < in.clip_rect.x ||
+       in.world_pos.x > (in.clip_rect.x + in.clip_rect.z) ||
+       in.world_pos.y < in.clip_rect.y ||
+       in.world_pos.y > (in.clip_rect.y + in.clip_rect.w) {
         discard;
     }
 
@@ -126,18 +131,21 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
     );
 
     // 2. Rect SDF + AA
-    let d        = sdf_rounded_box(in.local_pos, in.half_size, r);
-    let aa_width = fwidth(d);
-    let rect_alpha = 1.0 - smoothstep(-aa_width, aa_width, d);
+    // Adjust SDF for border alignment: 0=inside, 0.5=center, 1=outside
+    let border_offset = in.border_alignment * in.border_width;
+    let d             = sdf_rounded_box(in.local_pos, in.half_size, r);
+    let d_shifted     = d - border_offset;
+    
+    let aa_width      = fwidth(d);
+    let rect_alpha    = 1.0 - smoothstep(-aa_width, aa_width, d_shifted);
 
     let premul_fill   = vec4<f32>(in.color.rgb * in.color.a, in.color.a);
     let premul_border = vec4<f32>(in.border_color.rgb * in.border_color.a, in.border_color.a);
 
     var rect_body = premul_fill;
     if in.border_width > 0.1 {
-        // Border exists from d = -border_width to d = 0
-        // border_factor is 1.0 (border) at the edge, 0.0 (fill) inside
-        let border_factor = smoothstep(-in.border_width - aa_width, -in.border_width + aa_width, d);
+        // Border exists from d_shifted = -border_width to d_shifted = 0
+        let border_factor = smoothstep(-in.border_width - aa_width, -in.border_width + aa_width, d_shifted);
         rect_body = mix(premul_fill, premul_border, border_factor);
     }
     let premul_rect = rect_body * rect_alpha;

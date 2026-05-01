@@ -32,8 +32,9 @@ pub struct RectInstance {
     pub shadow_blur: f32,        // offset 80
     pub clip_rect: [f32; 4],     // offset 84
     pub grayscale: f32,          // offset 100
-    pub brightness: f32,         // offset 104
-    pub opacity: f32,            // offset 108
+    pub brightness: f32,         
+    pub opacity: f32,            
+    pub border_alignment: f32,   
 }
 
 impl Default for RectInstance {
@@ -52,6 +53,7 @@ impl Default for RectInstance {
             grayscale: 0.0,
             brightness: 1.0,
             opacity: 1.0,
+            border_alignment: 0.0, // Default: Inside
         }
     }
 }
@@ -125,6 +127,11 @@ impl RectInstance {
                 wgpu::VertexAttribute {
                     offset: 120,
                     shader_location: 12,
+                    format: wgpu::VertexFormat::Float32,
+                },
+                wgpu::VertexAttribute {
+                    offset: 124,
+                    shader_location: 13,
                     format: wgpu::VertexFormat::Float32,
                 },
             ],

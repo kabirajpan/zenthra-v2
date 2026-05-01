@@ -1,5 +1,5 @@
 use crate::ui::{DrawCommand, RectDraw, Ui};
-use zenthra_core::{Color, Align};
+use zenthra_core::{Color, Align, BorderAlignment};
 use zenthra_render::RectInstance;
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -57,6 +57,11 @@ pub struct ContainerBuilder<'u, 'a> {
     clip: bool,
     id: zenthra_core::Id,
     radius: [f32; 4],
+    border_alignment: BorderAlignment,
+    hover_bg: Option<Color>,
+    hover_border_color: Option<Color>,
+    hover_border_width: Option<f32>,
+    hover_scale: f32,
 }
 
 impl<'u, 'a> ContainerBuilder<'u, 'a> {
@@ -102,6 +107,11 @@ impl<'u, 'a> ContainerBuilder<'u, 'a> {
             clip: false,
             id,
             radius: [0.0; 4],
+            border_alignment: BorderAlignment::Inside,
+            hover_bg: None,
+            hover_border_color: None,
+            hover_border_width: None,
+            hover_scale: 1.0,
         }
     }
 
@@ -162,10 +172,12 @@ impl<'u, 'a> ContainerBuilder<'u, 'a> {
     }
     pub fn scroll_x(mut self, e: bool) -> Self {
         self.scroll_x = e;
+        if e { self.clip = true; }
         self
     }
     pub fn scroll_y(mut self, e: bool) -> Self {
         self.scroll_y = e;
+        if e { self.clip = true; }
         self
     }
     /// Force clip the overflowing content bounds of this container regardless of scrolling state
@@ -337,6 +349,27 @@ impl<'u, 'a> ContainerBuilder<'u, 'a> {
             parent.hash(&mut hasher);
         }
         self.id = zenthra_core::Id::from_u64(hasher.finish());
+        self
+    }
+
+    pub fn hover_bg(mut self, color: Color) -> Self {
+        self.hover_bg = Some(color);
+        self
+    }
+
+    pub fn hover_border(mut self, color: Color, width: f32) -> Self {
+        self.hover_border_color = Some(color);
+        self.hover_border_width = Some(width);
+        self
+    }
+
+    pub fn hover_scale(mut self, scale: f32) -> Self {
+        self.hover_scale = scale;
+        self
+    }
+
+    pub fn border_alignment(mut self, alignment: BorderAlignment) -> Self {
+        self.border_alignment = alignment;
         self
     }
 
@@ -545,20 +578,29 @@ impl<'u, 'a> ContainerBuilder<'u, 'a> {
             (0.0, 0.0)
         };
 
-        let clip = [actual_ox, actual_oy, w, h];
+        let clip = [ox, oy, w, h];
 
         // Background
-        if let Some(bg) = self.bg {
-            let (bw, bc) = if container_hover {
-                (self.border_width.max(1.5), self.border_color.unwrap_or(Color::rgba(1.0, 1.0, 1.0, 0.15)))
-            } else {
-                (self.border_width, self.border_color.unwrap_or(Color::TRANSPARENT))
-            };
+        if let Some(mut bg) = self.bg {
+            let mut bw = self.border_width;
+            let mut bc = self.border_color.unwrap_or(Color::TRANSPARENT);
+
+            if container_hover {
+                if let Some(hbg) = self.hover_bg {
+                    bg = hbg;
+                }
+                if let Some(hbc) = self.hover_border_color {
+                    bc = hbc;
+                }
+                if let Some(hbw) = self.hover_border_width {
+                    bw = hbw;
+                }
+            }
 
             self.ui.draws.push(DrawCommand::Rect(RectDraw {
                 instance: RectInstance {
                     pos: [ox, oy],
-                    size: [w, h],
+                    size: [w * if container_hover { self.hover_scale } else { 1.0 }, h * if container_hover { self.hover_scale } else { 1.0 }],
                     color: bg.to_array(),
                     radius: self.radius,
                     border_width: bw,
@@ -574,6 +616,11 @@ impl<'u, 'a> ContainerBuilder<'u, 'a> {
                     grayscale: 0.0,
                     brightness: 1.0,
                     opacity: self.opacity,
+                    border_alignment: match self.border_alignment {
+                        BorderAlignment::Inside => 0.0,
+                        BorderAlignment::Center => 0.5,
+                        BorderAlignment::Outside => 1.0,
+                    },
                 },
             }));
         }
@@ -667,7 +714,7 @@ impl<'u, 'a> ContainerBuilder<'u, 'a> {
                         width: bar_thickness,
                         height: thumb_h,
                         color,
-                        clip: intersect_rects([actual_ox, actual_oy, w, h], [-100000.0, -100000.0, 2000000.0, 2000000.0]), 
+                        clip: intersect_rects([ox, oy, w, h], [-100000.0, -100000.0, 2000000.0, 2000000.0]), 
                     }));
                 }
             }
@@ -712,14 +759,13 @@ impl<'u, 'a> ContainerBuilder<'u, 'a> {
                         width: thumb_w,
                         height: bar_thickness,
                         color,
-                        clip: [actual_ox, actual_oy, w, h],
+                        clip: [ox, oy, w, h],
                     }));
                 }
             }
         }
 
         // Bubble IDs up to parent's scope
-        self.ui.id_log.push(id);
         self.ui.id_log.extend(child_ids_only);
         
         self.ui.advance(w, h, draw_start);

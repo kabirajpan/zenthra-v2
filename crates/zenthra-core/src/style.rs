@@ -109,3 +109,11 @@ pub enum Align {
     SpaceBetween,
     SpaceAround,
 }
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum BorderAlignment {
+    #[default]
+    Inside,
+    Center,
+    Outside,
+}

@@ -345,8 +345,8 @@ impl<'u, 'a> ImageBuilder<'u, 'a> {
 
         let draw_start = self.ui.draws.len();
 
-        let ox = start_x + self.ui.offset_x + self.margin.left;
-        let oy = start_y + self.ui.offset_y + self.margin.top;
+        let local_x = start_x + self.margin.left;
+        let local_y = start_y + self.margin.top;
 
         let is_hovered = if let Some((rect, _)) = self.ui.get_recorded_layout(self.id) {
             self.ui.mouse_in_rect(
@@ -356,7 +356,7 @@ impl<'u, 'a> ImageBuilder<'u, 'a> {
                 rect.size.height,
             )
         } else {
-            self.ui.mouse_in_rect(ox, oy, w, h)
+            self.ui.mouse_in_rect(local_x + self.ui.offset_x, local_y + self.ui.offset_y, w, h)
         };
 
         let is_pressed = is_hovered && self.ui.mouse_down;
@@ -395,7 +395,7 @@ impl<'u, 'a> ImageBuilder<'u, 'a> {
             internal_scale: self.internal_scale,
             internal_offset: self.internal_offset,
             instance: ImageInstance {
-                pos: [ox, oy],
+                pos: [local_x, local_y],
                 size: [w, h],
                 radius: self.radius,
                 border_width: self.border_width,

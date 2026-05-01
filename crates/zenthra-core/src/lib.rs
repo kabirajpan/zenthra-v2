@@ -20,6 +20,6 @@ pub use id::Id;
 pub use rect::{Point, Rect, Size};
 pub use render_mode::RenderMode;
 pub use response::Response;
-pub use style::{BorderRadius, EdgeInsets, Align};
+pub use style::{BorderRadius, EdgeInsets, Align, BorderAlignment};
 pub use widget::Widget;
 pub use image::{ImageSource, ObjectFit};

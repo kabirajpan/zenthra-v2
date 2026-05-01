@@ -47,7 +47,6 @@ impl<'u, 'a> TextBuilder<'u, 'a> {
         }
         let id_raw = hasher.finish();
         let id = Id::from_u64(id_raw);
-        ui.id_log.push(id);
         
         
         Self {
@@ -362,6 +361,7 @@ impl<'u, 'a> TextBuilder<'u, 'a> {
                     grayscale: 0.0,
                     brightness: 1.0,
                     opacity: 1.0,
+                    ..Default::default()
                 }
             }));
         }

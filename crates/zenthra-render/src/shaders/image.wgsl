@@ -40,8 +40,9 @@ struct VertexOutput {
     @location(9)  grayscale:     f32,
     @location(10) brightness:    f32,
     @location(11) opacity:       f32,
-    @location(12) uv:            vec2<f32>,
-    @location(13) bg_color:      vec4<f32>,
+    @location(13) uv:            vec2<f32>,
+    @location(14) bg_color:      vec4<f32>,
+    @location(15) world_pos:     vec2<f32>,
 }
 
 @vertex
@@ -136,6 +137,7 @@ fn vs_main(
         instance.uv_rect.x + flipped_norm.x * instance.uv_rect.z,
         instance.uv_rect.y + flipped_norm.y * instance.uv_rect.w
     );
+    out.world_pos = pixel_pos;
 
     return out;
 }
@@ -160,10 +162,10 @@ fn gaussian_shadow(d: f32, sigma: f32) -> f32 {
 @fragment
 fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
     // 0. Clip
-    if in.clip_position.x < in.clip_rect.x ||
-       in.clip_position.x > (in.clip_rect.x + in.clip_rect.z) ||
-       in.clip_position.y < in.clip_rect.y ||
-       in.clip_position.y > (in.clip_rect.y + in.clip_rect.w) {
+    if in.world_pos.x < in.clip_rect.x ||
+       in.world_pos.x > (in.clip_rect.x + in.clip_rect.z) ||
+       in.world_pos.y < in.clip_rect.y ||
+       in.world_pos.y > (in.clip_rect.y + in.clip_rect.w) {
         discard;
     }
 

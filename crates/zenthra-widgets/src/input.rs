@@ -399,6 +399,7 @@ impl<'u, 'a, 'b> InputBuilder<'u, 'a, 'b> {
                     grayscale: 0.0,
                     brightness: 1.0,
                     opacity: 1.0,
+                    ..Default::default()
                 }
             }));
         }

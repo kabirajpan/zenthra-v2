@@ -57,6 +57,7 @@ pub struct ToggleBuilder<'u, 'a, 'b> {
     disabled: bool,
     animation_speed: f32,
     is_pill: bool,
+    hover_brightness: f32,
 }
 
 impl<'u, 'a, 'b> ToggleBuilder<'u, 'a, 'b> {
@@ -102,6 +103,7 @@ impl<'u, 'a, 'b> ToggleBuilder<'u, 'a, 'b> {
             disabled: false,
             animation_speed: 15.0,
             is_pill: false,
+            hover_brightness: 1.0,
         }
     }
 
@@ -204,6 +206,11 @@ impl<'u, 'a, 'b> ToggleBuilder<'u, 'a, 'b> {
 
     pub fn animation_speed(mut self, speed: f32) -> Self {
         self.animation_speed = speed;
+        self
+    }
+
+    pub fn hover_brightness(mut self, b: f32) -> Self {
+        self.hover_brightness = b;
         self
     }
 
@@ -315,7 +322,7 @@ impl<'u, 'a, 'b> ToggleBuilder<'u, 'a, 'b> {
                 size: [base_w, base_h],
                 color: track_color.to_array(),
                 radius: current_radius,
-                brightness: if is_hovered { 1.1 } else { 1.0 },
+                brightness: if is_hovered { self.hover_brightness } else { 1.0 },
                 shadow_color: if self.shadow_enabled {
                     let mut a = self.shadow_color.to_array();
                     a[3] *= self.shadow_opacity;

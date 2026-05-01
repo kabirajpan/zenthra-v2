@@ -101,5 +101,9 @@ name = "radio_list"
 path = "../../examples/radio_list.rs"
 
 [[example]]
+name = "scroll_test"
+path = "../../examples/scroll_test.rs"
+
+[[example]]
 name = "dropdown_test"
 path = "../../examples/dropdown_test.rs"

@@ -167,9 +167,7 @@ impl<'a> Ui<'a> {
 
     pub fn id(&mut self) -> Id {
         self.id_counter += 1;
-        let id = Id::from_u64(self.id_counter);
-        self.id_log.push(id);
-        id
+        Id::from_u64(self.id_counter)
     }
 
     pub fn record_layout(&mut self, id: Id, rect: Rect) {
@@ -192,6 +190,7 @@ impl<'a> Ui<'a> {
         }
 
         self.next_layout_cache.insert(id, (rect, id_count));
+        self.id_log.push(id);
     }
 
     pub fn get_recorded_layout(&self, id: Id) -> Option<(Rect, u64)> {
@@ -270,7 +269,6 @@ impl<'a> Ui<'a> {
         use std::hash::Hasher;
         id.hash(&mut hasher);
         let id = zenthra_core::Id::from_u64(hasher.finish());
-        self.id_log.push(id);
         crate::input::InputBuilder::new(self, buffer, id)
     }
 
@@ -279,7 +277,6 @@ impl<'a> Ui<'a> {
         use std::hash::Hasher;
         id.hash(&mut hasher);
         let id = zenthra_core::Id::from_u64(hasher.finish());
-        self.id_log.push(id);
         crate::slider::SliderBuilder::new(self, value, id)
     }
 

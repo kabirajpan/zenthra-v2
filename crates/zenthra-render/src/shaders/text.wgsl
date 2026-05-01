@@ -56,8 +56,8 @@ fn vs_main(
 @fragment
 fn fs_main(@builtin(position) sc_pos: vec4<f32>, in: VertexOutput) -> @location(0) vec4<f32> {
     // Hardware clipping
-    if (sc_pos.x < in.clip_rect.x || sc_pos.x > in.clip_rect.x + in.clip_rect.z ||
-        sc_pos.y < in.clip_rect.y || sc_pos.y > in.clip_rect.y + in.clip_rect.w) {
+    if (in.screen_pos.x < in.clip_rect.x || in.screen_pos.x > in.clip_rect.x + in.clip_rect.z ||
+        in.screen_pos.y < in.clip_rect.y || in.screen_pos.y > in.clip_rect.y + in.clip_rect.w) {
         discard;
     }
 

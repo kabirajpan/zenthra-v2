@@ -279,6 +279,7 @@ impl<'u, 'a> LazyContainerBuilder<'u, 'a> {
                     grayscale:    0.0,
                     brightness:   1.0,
                     opacity:      1.0,
+                    ..Default::default()
                 },
             }));
         }
