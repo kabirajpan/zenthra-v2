@@ -93,6 +93,7 @@ pub struct Ui<'a> {
     pub next_layout_cache: &'a mut std::collections::HashMap<Id, (Rect, u64)>,
     pub image_sizes: &'a std::collections::HashMap<zenthra_core::ImageSource, (u32, u32)>,
     pub available_width: f32,
+    pub skip_clip_stack: Vec<bool>,
 }
 
 impl<'a> Ui<'a> {
@@ -162,6 +163,7 @@ impl<'a> Ui<'a> {
             next_layout_cache,
             image_sizes,
             available_width: width as f32,
+            skip_clip_stack: Vec::new(),
         }
     }
 
@@ -205,6 +207,10 @@ impl<'a> Ui<'a> {
         self.needs_redraw = true;
     }
 
+    pub fn get_max_bounds(&self) -> (f32, f32) {
+        (self.max_x, self.max_y)
+    }
+
     pub fn row(&mut self) -> ContainerBuilder<'_, 'a> {
         ContainerBuilder::new(self).row()
     }
@@ -219,14 +225,6 @@ impl<'a> Ui<'a> {
 
     pub fn lazy_container(&mut self) -> LazyContainerBuilder<'_, 'a> {
         LazyContainerBuilder::new(self)
-    }
-
-    pub fn continuous(&mut self) -> ContainerBuilder<'_, 'a> {
-        ContainerBuilder::new(self).continuous()
-    }
-
-    pub fn static_mode(&mut self) -> ContainerBuilder<'_, 'a> {
-        ContainerBuilder::new(self).static_mode()
     }
 
     pub fn button(&mut self, label: &str) -> crate::button::ButtonBuilder<'_, 'a> {

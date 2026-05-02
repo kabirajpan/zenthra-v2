@@ -62,6 +62,10 @@ pub struct ContainerBuilder<'u, 'a> {
     hover_border_color: Option<Color>,
     hover_border_width: Option<f32>,
     hover_scale: f32,
+    active_bg: Option<Color>,
+    active_border_color: Option<Color>,
+    active_border_width: Option<f32>,
+    active_scale: f32,
 }
 
 impl<'u, 'a> ContainerBuilder<'u, 'a> {
@@ -112,6 +116,10 @@ impl<'u, 'a> ContainerBuilder<'u, 'a> {
             hover_border_color: None,
             hover_border_width: None,
             hover_scale: 1.0,
+            active_bg: None,
+            active_border_color: None,
+            active_border_width: None,
+            active_scale: 1.0,
         }
     }
 
@@ -202,6 +210,13 @@ impl<'u, 'a> ContainerBuilder<'u, 'a> {
         self.padding_bottom = p;
         self
     }
+    pub fn padding_all(mut self, p: f32) -> Self {
+        self.padding_top = p;
+        self.padding_bottom = p;
+        self.padding_left = p;
+        self.padding_right = p;
+        self
+    }
     pub fn padding_top(mut self, p: f32) -> Self {
         self.padding_top = p;
         self
@@ -240,55 +255,9 @@ impl<'u, 'a> ContainerBuilder<'u, 'a> {
         self
     }
 
-    pub fn align_top(mut self) -> Self {
-        self.valign = Align::Top;
-        self
-    }
-
-    pub fn align_bottom(mut self) -> Self {
-        self.valign = Align::Bottom;
-        self
-    }
-
-    pub fn align_left(mut self) -> Self {
-        self.halign = Align::Left;
-        self
-    }
-
-    pub fn align_right(mut self) -> Self {
-        self.halign = Align::Right;
-        self
-    }
-
     pub fn align(mut self, align: Align) -> Self {
         self.halign = align;
         self.valign = align;
-        self
-    }
-
-    pub fn center(mut self) -> Self {
-        self.halign = Align::Center;
-        self.valign = Align::Center;
-        self
-    }
-
-    pub fn center_x(mut self) -> Self {
-        self.halign = Align::Center;
-        self
-    }
-
-    pub fn center_y(mut self) -> Self {
-        self.valign = Align::Center;
-        self
-    }
-
-    pub fn continuous(mut self) -> Self {
-        self.render_mode = Some(zenthra_core::RenderMode::Continuous);
-        self
-    }
-
-    pub fn static_mode(mut self) -> Self {
-        self.render_mode = Some(zenthra_core::RenderMode::Static);
         self
     }
 
@@ -297,8 +266,8 @@ impl<'u, 'a> ContainerBuilder<'u, 'a> {
         self
     }
 
-    pub fn render_mode(mut self, mode: zenthra_core::RenderMode) -> Self {
-        self.render_mode = Some(mode);
+    pub fn radius_all(mut self, r: f32) -> Self {
+        self.radius = [r, r, r, r];
         self
     }
 
@@ -309,6 +278,68 @@ impl<'u, 'a> ContainerBuilder<'u, 'a> {
 
     pub fn valign(mut self, align: Align) -> Self {
         self.valign = align;
+        self
+    }
+
+    pub fn radius_top_left(mut self, r: f32) -> Self {
+        self.radius[0] = r;
+        self
+    }
+    pub fn radius_top_right(mut self, r: f32) -> Self {
+        self.radius[1] = r;
+        self
+    }
+    pub fn radius_bottom_right(mut self, r: f32) -> Self {
+        self.radius[2] = r;
+        self
+    }
+    pub fn radius_bottom_left(mut self, r: f32) -> Self {
+        self.radius[3] = r;
+        self
+    }
+
+    pub fn radius_top(mut self, r: f32) -> Self {
+        self.radius[0] = r;
+        self.radius[1] = r;
+        self
+    }
+    pub fn radius_bottom(mut self, r: f32) -> Self {
+        self.radius[2] = r;
+        self.radius[3] = r;
+        self
+    }
+    pub fn radius_left(mut self, r: f32) -> Self {
+        self.radius[0] = r;
+        self.radius[3] = r;
+        self
+    }
+    pub fn radius_right(mut self, r: f32) -> Self {
+        self.radius[1] = r;
+        self.radius[2] = r;
+        self
+    }
+    pub fn radius_x(mut self, r: f32) -> Self {
+        self.radius = [r, r, r, r];
+        self
+    }
+    pub fn radius_y(mut self, r: f32) -> Self {
+        self.radius = [r, r, r, r];
+        self
+    }
+
+    pub fn active_bg(mut self, color: Color) -> Self {
+        self.active_bg = Some(color);
+        self
+    }
+
+    pub fn active_border(mut self, color: Color, width: f32) -> Self {
+        self.active_border_color = Some(color);
+        self.active_border_width = Some(width);
+        self
+    }
+
+    pub fn active_scale(mut self, scale: f32) -> Self {
+        self.active_scale = scale;
         self
     }
 
@@ -370,6 +401,11 @@ impl<'u, 'a> ContainerBuilder<'u, 'a> {
 
     pub fn border_alignment(mut self, alignment: BorderAlignment) -> Self {
         self.border_alignment = alignment;
+        self
+    }
+
+    pub fn render_mode(mut self, mode: zenthra_core::RenderMode) -> Self {
+        self.render_mode = Some(mode);
         self
     }
 
@@ -532,7 +568,24 @@ impl<'u, 'a> ContainerBuilder<'u, 'a> {
             (ox + self.ui.offset_x, oy + self.ui.offset_y)
         };
 
-        let container_hover = self.ui.mouse_in_rect(actual_ox, actual_oy, w, h);
+        // Parent Content Clipping for Hit Detection Accuracy
+        let (max_x, max_y) = self.ui.get_max_bounds();
+        let (base_x, base_y) = (self.ui.base_x, self.ui.base_y);
+        let screen_base_x = base_x + prev_global_ox;
+        let screen_base_y = base_y + prev_global_oy;
+        let screen_max_x = max_x + prev_global_ox;
+        let screen_max_y = max_y + prev_global_oy;
+
+        let mouse_in_parent = if self.ui.skip_clip_stack.last().cloned().unwrap_or(false) {
+            true
+        } else {
+            self.ui.mouse_x >= screen_base_x && self.ui.mouse_x <= screen_max_x &&
+            self.ui.mouse_y >= screen_base_y && self.ui.mouse_y <= screen_max_y
+        };
+
+        let container_hover = mouse_in_parent && self.ui.mouse_in_rect(actual_ox, actual_oy, w, h);
+        let container_active = container_hover && self.ui.mouse_down;
+        let mut final_scale = 1.0;
 
         let (scroll_x, scroll_y) = if self.scroll_x || self.scroll_y {
             let (mut sx, mut sy) = *self.ui.scroll_state.get(&id).unwrap_or(&(0.0, 0.0));
@@ -585,24 +638,34 @@ impl<'u, 'a> ContainerBuilder<'u, 'a> {
             let mut bw = self.border_width;
             let mut bc = self.border_color.unwrap_or(Color::TRANSPARENT);
 
-            if container_hover {
-                if let Some(hbg) = self.hover_bg {
-                    bg = hbg;
-                }
-                if let Some(hbc) = self.hover_border_color {
-                    bc = hbc;
-                }
-                if let Some(hbw) = self.hover_border_width {
-                    bw = hbw;
-                }
+            if container_active {
+                bg = self.active_bg.unwrap_or(bg);
+                bw = self.active_border_width.unwrap_or(bw);
+                bc = self.active_border_color.unwrap_or(bc);
+                final_scale = self.active_scale;
+            } else if container_hover {
+                bg = self.hover_bg.unwrap_or(bg);
+                bw = self.hover_border_width.unwrap_or(bw);
+                bc = self.hover_border_color.unwrap_or(bc);
+                final_scale = self.hover_scale;
             }
+
+            let visual_w = w * final_scale;
+            let visual_h = h * final_scale;
+            let visual_ox = ox - (visual_w - w) / 2.0;
+            let visual_oy = oy - (visual_h - h) / 2.0;
 
             self.ui.draws.push(DrawCommand::Rect(RectDraw {
                 instance: RectInstance {
-                    pos: [ox, oy],
-                    size: [w * if container_hover { self.hover_scale } else { 1.0 }, h * if container_hover { self.hover_scale } else { 1.0 }],
+                    pos: [visual_ox, visual_oy],
+                    size: [visual_w, visual_h],
                     color: bg.to_array(),
-                    radius: self.radius,
+                    radius: [
+                        self.radius[3], // Bottom-Left -> Top-Left
+                        self.radius[2], // Bottom-Right -> Top-Right
+                        self.radius[1], // Top-Right -> Bottom-Right
+                        self.radius[0], // Top-Left -> Bottom-Left
+                    ],
                     border_width: bw,
                     border_color: bc.to_array(),
                     shadow_color: self.shadow_color.map(|c| {
