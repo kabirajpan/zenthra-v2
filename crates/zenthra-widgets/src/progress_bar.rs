@@ -1,9 +1,10 @@
 use crate::ui::{Ui, DrawCommand, RectDraw};
-use zenthra_core::{Color, EdgeInsets, Response};
+use zenthra_core::{Color, EdgeInsets, Response, Id};
 use zenthra_render::RectInstance;
 
 pub struct ProgressBarBuilder<'u, 'a> {
     ui: &'u mut Ui<'a>,
+    id: Id,
     value: f32, // 0.0 to 1.0
     
     // 1. Overall Widget Style
@@ -40,8 +41,10 @@ pub struct ProgressBarBuilder<'u, 'a> {
 
 impl<'u, 'a> ProgressBarBuilder<'u, 'a> {
     pub fn new(ui: &'u mut Ui<'a>, value: f32) -> Self {
+        let id = ui.id();
         Self {
             ui,
+            id,
             value: value.clamp(0.0, 1.0),
             
             width: None,
@@ -72,6 +75,14 @@ impl<'u, 'a> ProgressBarBuilder<'u, 'a> {
         }
     }
 
+    pub fn id(mut self, id: impl std::hash::Hash) -> Self {
+        let mut hasher = std::collections::hash_map::DefaultHasher::new();
+        use std::hash::Hasher;
+        id.hash(&mut hasher);
+        self.id = Id::from_u64(hasher.finish());
+        self
+    }
+
     // --- 1. Overall Widget Methods ---
     pub fn size(mut self, w: f32, h: f32) -> Self {
         self.width = Some(w);
@@ -97,6 +108,55 @@ impl<'u, 'a> ProgressBarBuilder<'u, 'a> {
 
     pub fn radius(mut self, tl: f32, tr: f32, br: f32, bl: f32) -> Self {
         self.radius = [tl, tr, br, bl];
+        self
+    }
+
+    pub fn radius_all(mut self, r: f32) -> Self {
+        self.radius = [r; 4];
+        self
+    }
+
+    pub fn radius_top(mut self, r: f32) -> Self {
+        self.radius[0] = r;
+        self.radius[1] = r;
+        self
+    }
+
+    pub fn radius_bottom(mut self, r: f32) -> Self {
+        self.radius[2] = r;
+        self.radius[3] = r;
+        self
+    }
+
+    pub fn radius_top_left(mut self, r: f32) -> Self {
+        self.radius[0] = r;
+        self
+    }
+
+    pub fn radius_top_right(mut self, r: f32) -> Self {
+        self.radius[1] = r;
+        self
+    }
+
+    pub fn radius_bottom_right(mut self, r: f32) -> Self {
+        self.radius[2] = r;
+        self
+    }
+
+    pub fn radius_bottom_left(mut self, r: f32) -> Self {
+        self.radius[3] = r;
+        self
+    }
+
+    pub fn radius_left(mut self, r: f32) -> Self {
+        self.radius[0] = r;
+        self.radius[3] = r;
+        self
+    }
+
+    pub fn radius_right(mut self, r: f32) -> Self {
+        self.radius[1] = r;
+        self.radius[2] = r;
         self
     }
 
@@ -272,6 +332,7 @@ impl<'u, 'a> ProgressBarBuilder<'u, 'a> {
             }
         }
 
+        self.ui.record_layout(self.id, zenthra_core::Rect::new(x, y, w, h));
         self.ui.advance(w, h, start_draw);
         
         Response {

@@ -6,8 +6,8 @@ fn main() {
     App::new()
         .title("Zenthra Editor")
         .size(600, 400)
-        .with_ui(move |ui| {
-            ui.h1("Interactive Editor").show();
+        .with_ui(move |ui: &mut Ui| {
+            ui.text("Interactive Editor").size(32.0).bold().show();
 
             ui.text("Click the box below to start typing:").show();
 

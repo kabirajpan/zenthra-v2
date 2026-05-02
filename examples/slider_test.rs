@@ -1,18 +1,18 @@
 use zenthra::prelude::*;
 
 fn main() {
-    let mut val = 50.0;
+    let mut val: f32 = 50.0;
 
     App::new()
         .title("Slider Test")
         .size(400, 300)
-        .with_ui(move |ui| {
+        .with_ui(move |ui: &mut Ui| {
             ui.container()
-                .fill()
-                .center()
-                .padding(20.0, 20.0, 20.0, 20.0)
+                .fill_x()
+                .align(Align::Center)
+                .padding_all(20.0)
                 .gap(20.0)
-                .show(|ui| {
+                .show(|ui: &mut Ui| {
                     ui.text(&format!("Value: {:.2}", val)).size(24.0).show();
                     let prev_val = val;
 

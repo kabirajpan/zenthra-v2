@@ -1,7 +1,7 @@
 // crates/zenthra-widgets/src/controls/dropdown.rs
 
 use crate::ui::{DrawCommand, RectDraw, TextDraw, Ui};
-use zenthra_core::{Color, Id, Rect, Response, Role, SemanticNode};
+use zenthra_core::{Color, Id, Rect, Response};
 use zenthra_render::RectInstance;
 
 pub struct DropdownBuilder<'u, 'a, 'b, T: PartialEq + Clone + ToString> {
@@ -13,11 +13,12 @@ pub struct DropdownBuilder<'u, 'a, 'b, T: PartialEq + Clone + ToString> {
     // Layout
     width: f32,
     height: f32,
-    radius: f32,
+    radius: [f32; 4],
 
     // Colors
     bg: Color,
     border_color: Color,
+    border_width: f32,
     text_color: Color,
     hover_bg: Color,
     
@@ -45,10 +46,11 @@ impl<'u, 'a, 'b, T: PartialEq + Clone + ToString> DropdownBuilder<'u, 'a, 'b, T>
 
             width: 180.0,
             height: 32.0,
-            radius: 4.0,
+            radius: [4.0; 4],
 
             bg: Color::rgb(0.12, 0.12, 0.14), // Solid default
             border_color: Color::rgb(0.25, 0.25, 0.3),
+            border_width: 1.0,
             text_color: Color::WHITE,
             hover_bg: Color::rgb(0.18, 0.18, 0.22),
 
@@ -60,8 +62,27 @@ impl<'u, 'a, 'b, T: PartialEq + Clone + ToString> DropdownBuilder<'u, 'a, 'b, T>
             shadow_color: Color::rgb(0.0, 0.0, 0.0),
             shadow_offset: [0.0, 4.0],
             shadow_blur: 20.0,
-            shadow_opacity: 0.6,
+            shadow_opacity: 1.0,
         }
+    }
+
+    pub fn id(mut self, id: impl std::hash::Hash) -> Self {
+        let mut hasher = std::collections::hash_map::DefaultHasher::new();
+        use std::hash::Hasher;
+        id.hash(&mut hasher);
+        self.id = Id::from_u64(hasher.finish());
+        self
+    }
+
+    pub fn bg(mut self, color: Color) -> Self {
+        self.bg = color;
+        self
+    }
+
+    pub fn border(mut self, color: Color, width: f32) -> Self {
+        self.border_color = color;
+        self.border_width = width;
+        self
     }
 
     pub fn width(mut self, width: f32) -> Self {
@@ -78,6 +99,60 @@ impl<'u, 'a, 'b, T: PartialEq + Clone + ToString> DropdownBuilder<'u, 'a, 'b, T>
     pub fn colors(mut self, bg: Color, border: Color) -> Self {
         self.bg = bg;
         self.border_color = border;
+        self
+    }
+
+    pub fn radius(mut self, tl: f32, tr: f32, br: f32, bl: f32) -> Self {
+        self.radius = [tl, tr, br, bl];
+        self
+    }
+
+    pub fn radius_all(mut self, r: f32) -> Self {
+        self.radius = [r; 4];
+        self
+    }
+
+    pub fn radius_top(mut self, r: f32) -> Self {
+        self.radius[0] = r;
+        self.radius[1] = r;
+        self
+    }
+
+    pub fn radius_bottom(mut self, r: f32) -> Self {
+        self.radius[2] = r;
+        self.radius[3] = r;
+        self
+    }
+
+    pub fn radius_top_left(mut self, r: f32) -> Self {
+        self.radius[0] = r;
+        self
+    }
+
+    pub fn radius_top_right(mut self, r: f32) -> Self {
+        self.radius[1] = r;
+        self
+    }
+
+    pub fn radius_bottom_right(mut self, r: f32) -> Self {
+        self.radius[2] = r;
+        self
+    }
+
+    pub fn radius_bottom_left(mut self, r: f32) -> Self {
+        self.radius[3] = r;
+        self
+    }
+
+    pub fn radius_left(mut self, r: f32) -> Self {
+        self.radius[0] = r;
+        self.radius[3] = r;
+        self
+    }
+
+    pub fn radius_right(mut self, r: f32) -> Self {
+        self.radius[1] = r;
+        self.radius[2] = r;
         self
     }
 
@@ -139,8 +214,8 @@ impl<'u, 'a, 'b, T: PartialEq + Clone + ToString> DropdownBuilder<'u, 'a, 'b, T>
                 pos: [x, y],
                 size: [self.width, self.height],
                 color: (if is_hovered { self.hover_bg } else { self.bg }).to_array(),
-                radius: [self.radius; 4],
-                border_width: 1.0,
+                radius: self.radius,
+                border_width: self.border_width,
                 border_color: border_color.to_array(),
                 // Subtle glow if enabled
                 shadow_color: if self.glow && is_hovered { [0.4, 0.7, 1.0, 0.3] } else { [0.0, 0.0, 0.0, 0.0] },
@@ -201,7 +276,7 @@ impl<'u, 'a, 'b, T: PartialEq + Clone + ToString> DropdownBuilder<'u, 'a, 'b, T>
                     pos: [menu_ox, menu_oy],
                     size: [self.width, menu_h],
                     color: self.menu_bg.to_array(),
-                    radius: [self.radius; 4],
+                    radius: self.radius,
                     border_width: 1.0,
                     border_color: self.border_color.to_array(),
                     shadow_color: if self.shadow_enabled {
@@ -236,7 +311,12 @@ impl<'u, 'a, 'b, T: PartialEq + Clone + ToString> DropdownBuilder<'u, 'a, 'b, T>
                             pos: [menu_ox + 2.0, item_oy + 2.0],
                             size: [self.width - 4.0, item_h - 4.0],
                             color: self.hover_bg.to_array(),
-                            radius: [self.radius - 2.0; 4],
+                            radius: [
+                                self.radius[0] - 2.0,
+                                self.radius[1] - 2.0,
+                                self.radius[2] - 2.0,
+                                self.radius[3] - 2.0,
+                            ],
                             ..Default::default()
                         }
                     }));

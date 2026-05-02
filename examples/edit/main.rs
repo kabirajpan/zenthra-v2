@@ -15,10 +15,10 @@ fn main() {
             ui.input(&mut input_text, "main-input")
                 .size(20.0)
                 .text_bg(Color::BLUE)
-                .text_bg_full_width(true)
+                .text_bg_fill_x(true)
                 .bg(Color::RED)
                 .padding(10.0, 10.0, 10.0, 10.0)
-                .full_width()
+                .fill_x()
                 .show();
 
             ui.spacing(20.0);
@@ -40,10 +40,10 @@ fn main() {
                 .bg(Color::RED)
                 .text_bg(Color::BLUE)
                 .highlight(Color::rgb(0.0, 0.5, 0.0))
-                .text_bg_full_width(true)
+                .text_bg_fill_x(true)
                 .text_padding(30.0, 30.0, 30.0, 30.0)
                 .padding(10.0, 10.0, 10.0, 10.0)
-                .full_width()
+                .fill_x()
                 .height(150.0)
                 .scrollable(true)
                 .show();

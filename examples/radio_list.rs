@@ -8,35 +8,44 @@ fn main() {
     App::new()
         .title("Zenthra - Radio Buttons")
         .size(800, 600)
-        .with_ui(move |ui| {
+        .with_ui(move |ui: &mut Ui| {
             ui.container()
-                .fill()
+                .fill_x()
+                .fill_y()
                 .bg(Color::rgb(0.05, 0.05, 0.07)) // Deep Dark Background
-                .center()
-                .show(|ui| {
+                .align(Align::Center)
+                .show(|ui: &mut Ui| {
                     ui.container()
                         .width(450.0)
-                        .padding_y(40.0)
-                        .padding_x(40.0)
+                        .padding_all(40.0)
                         .bg(Color::rgb(0.1, 0.1, 0.12))
-                        .radius(20.0, 20.0, 20.0, 20.0)
+                        .radius_all(20.0)
                         .border(Color::rgba(1.0, 1.0, 1.0, 0.05), 1.0)
                         .gap(30.0)
-                        .show(|ui| {
-                            ui.h1("Radio Groups").color(Color::WHITE).show();
+                        .show(|ui: &mut Ui| {
+                            ui.text("Radio Groups")
+                                .size(32.0)
+                                .color(Color::WHITE)
+                                .show();
 
                             // --- 1. Theme Selection ---
-                            ui.column().gap(12.0).show(|ui| {
-                                ui.h4("Select Theme").color(Color::rgb(0.5, 0.5, 0.5)).show();
+                            ui.column().gap(12.0).show(|ui: &mut Ui| {
+                                ui.text("Select Theme")
+                                    .size(14.0)
+                                    .color(Color::rgb(0.5, 0.5, 0.5))
+                                    .show();
                                 ui.radio(&mut selected_theme, 0, "Dark Mode").show();
                                 ui.radio(&mut selected_theme, 1, "Light Mode").show();
                                 ui.radio(&mut selected_theme, 2, "System Default").show();
                             });
 
                             // --- 2. String/Enum Based Selection ---
-                            ui.column().gap(12.0).show(|ui| {
-                                ui.h4("Difficulty").color(Color::rgb(0.5, 0.5, 0.5)).show();
-                                ui.row().gap(25.0).show(|ui| {
+                            ui.column().gap(12.0).show(|ui: &mut Ui| {
+                                ui.text("Difficulty")
+                                    .size(14.0)
+                                    .color(Color::rgb(0.5, 0.5, 0.5))
+                                    .show();
+                                ui.row().gap(25.0).show(|ui: &mut Ui| {
                                     ui.radio(&mut difficulty, "Easy".to_string(), "Easy").show();
                                     ui.radio(&mut difficulty, "Normal".to_string(), "Normal").show();
                                     ui.radio(&mut difficulty, "Hard".to_string(), "Hard").show();
@@ -44,9 +53,12 @@ fn main() {
                             });
 
                             // --- 3. Custom Colors ---
-                            ui.column().gap(12.0).show(|ui| {
-                                ui.h4("Accent Color").color(Color::rgb(0.5, 0.5, 0.5)).show();
-                                ui.row().gap(25.0).show(|ui| {
+                            ui.column().gap(12.0).show(|ui: &mut Ui| {
+                                ui.text("Accent Color")
+                                    .size(14.0)
+                                    .color(Color::rgb(0.5, 0.5, 0.5))
+                                    .show();
+                                ui.row().gap(25.0).show(|ui: &mut Ui| {
                                     ui.radio(&mut color_choice, 0, "Ocean")
                                         .colors(Color::rgb(0.3, 0.3, 0.3), Color::rgb(0.2, 0.6, 1.0))
                                         .show();
@@ -60,9 +72,12 @@ fn main() {
                             });
 
                             // --- 4. Premium Effects (Opt-in) ---
-                            ui.column().gap(12.0).show(|ui| {
-                                ui.h4("Premium Effects").color(Color::rgb(0.5, 0.5, 0.5)).show();
-                                ui.row().gap(25.0).show(|ui| {
+                            ui.column().gap(12.0).show(|ui: &mut Ui| {
+                                ui.text("Premium Effects")
+                                    .size(14.0)
+                                    .color(Color::rgb(0.5, 0.5, 0.5))
+                                    .show();
+                                ui.row().gap(25.0).show(|ui: &mut Ui| {
                                     ui.radio(&mut color_choice, 0, "Glow")
                                         .glow(true)
                                         .colors(Color::rgb(0.3, 0.3, 0.3), Color::rgb(0.0, 1.0, 0.8))
@@ -81,8 +96,11 @@ fn main() {
                             });
 
                             // --- 5. Disabled State ---
-                            ui.column().gap(12.0).show(|ui| {
-                                ui.h4("Status").color(Color::rgb(0.5, 0.5, 0.5)).show();
+                            ui.column().gap(12.0).show(|ui: &mut Ui| {
+                                ui.text("Status")
+                                    .size(14.0)
+                                    .color(Color::rgb(0.5, 0.5, 0.5))
+                                    .show();
                                 // We use a dummy local state for disabled example
                                 let mut dummy = 1;
                                 ui.radio(&mut dummy, 1, "Connected (Read-only)")

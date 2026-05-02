@@ -4,13 +4,14 @@ fn main() {
     App::new()
         .title("Progress Bar Test")
         .size(500, 400)
-        .with_ui(move |ui| {
+        .with_ui(move |ui: &mut Ui| {
             ui.container()
-                .fill()
-                .center()
-                .padding(40.0, 40.0, 40.0, 40.0)
+                .fill_x()
+                .fill_y()
+                .align(Align::Center)
+                .padding_all(40.0)
                 .gap(30.0)
-                .show(|ui| {
+                .show(|ui: &mut Ui| {
                     ui.text("Progress Bars").size(32.0).show();
 
                     // 1. Basic Progress Bar

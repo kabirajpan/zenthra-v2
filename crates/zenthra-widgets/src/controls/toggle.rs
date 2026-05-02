@@ -58,6 +58,7 @@ pub struct ToggleBuilder<'u, 'a, 'b> {
     animation_speed: f32,
     is_pill: bool,
     hover_brightness: f32,
+    opacity: f32,
 }
 
 impl<'u, 'a, 'b> ToggleBuilder<'u, 'a, 'b> {
@@ -102,9 +103,18 @@ impl<'u, 'a, 'b> ToggleBuilder<'u, 'a, 'b> {
 
             disabled: false,
             animation_speed: 15.0,
-            is_pill: false,
-            hover_brightness: 1.0,
+            is_pill: true,
+            hover_brightness: 1.05,
+            opacity: 1.0,
         }
+    }
+
+    pub fn id(mut self, id: impl std::hash::Hash) -> Self {
+        let mut hasher = std::collections::hash_map::DefaultHasher::new();
+        use std::hash::Hasher;
+        id.hash(&mut hasher);
+        self.id = Id::from_u64(hasher.finish());
+        self
     }
 
     pub fn size(mut self, w: f32, h: f32) -> Self {
@@ -112,9 +122,83 @@ impl<'u, 'a, 'b> ToggleBuilder<'u, 'a, 'b> {
         self.height = h;
         self
     }
+    pub fn width(mut self, w: f32) -> Self {
+        self.width = w;
+        self
+    }
+    pub fn height(mut self, h: f32) -> Self {
+        self.height = h;
+        self
+    }
+    pub fn padding(mut self, p: f32) -> Self {
+        self.padding = p;
+        self
+    }
+    pub fn opacity(mut self, a: f32) -> Self {
+        self.opacity = a;
+        self
+    }
 
-    pub fn radius(mut self, r: f32) -> Self {
+    pub fn radius(mut self, tl: f32, tr: f32, br: f32, bl: f32) -> Self {
+        self.radius = [tl, tr, br, bl];
+        self.is_pill = false;
+        self
+    }
+
+    pub fn radius_all(mut self, r: f32) -> Self {
         self.radius = [r; 4];
+        self.is_pill = false;
+        self
+    }
+
+    pub fn radius_top(mut self, r: f32) -> Self {
+        self.radius[0] = r;
+        self.radius[1] = r;
+        self.is_pill = false;
+        self
+    }
+
+    pub fn radius_bottom(mut self, r: f32) -> Self {
+        self.radius[2] = r;
+        self.radius[3] = r;
+        self.is_pill = false;
+        self
+    }
+
+    pub fn radius_top_left(mut self, r: f32) -> Self {
+        self.radius[0] = r;
+        self.is_pill = false;
+        self
+    }
+
+    pub fn radius_top_right(mut self, r: f32) -> Self {
+        self.radius[1] = r;
+        self.is_pill = false;
+        self
+    }
+
+    pub fn radius_bottom_right(mut self, r: f32) -> Self {
+        self.radius[2] = r;
+        self.is_pill = false;
+        self
+    }
+
+    pub fn radius_bottom_left(mut self, r: f32) -> Self {
+        self.radius[3] = r;
+        self.is_pill = false;
+        self
+    }
+
+    pub fn radius_left(mut self, r: f32) -> Self {
+        self.radius[0] = r;
+        self.radius[3] = r;
+        self.is_pill = false;
+        self
+    }
+
+    pub fn radius_right(mut self, r: f32) -> Self {
+        self.radius[1] = r;
+        self.radius[2] = r;
         self.is_pill = false;
         self
     }
@@ -211,6 +295,17 @@ impl<'u, 'a, 'b> ToggleBuilder<'u, 'a, 'b> {
 
     pub fn hover_brightness(mut self, b: f32) -> Self {
         self.hover_brightness = b;
+        self
+    }
+    pub fn shadow(mut self, color: Color, x: f32, y: f32, blur: f32) -> Self {
+        self.shadow_color = color;
+        self.shadow_offset = [x, y];
+        self.shadow_blur = blur;
+        self.shadow_enabled = true;
+        self
+    }
+    pub fn shadow_opacity(mut self, opacity: f32) -> Self {
+        self.shadow_opacity = opacity;
         self
     }
 
@@ -311,11 +406,11 @@ impl<'u, 'a, 'b> ToggleBuilder<'u, 'a, 'b> {
 
         // 5. Draw Track
         let mut track_color = if final_pos > 0.5 { self.on_color } else { self.off_color };
+        track_color.a *= self.opacity;
         if self.disabled {
             track_color.a *= 0.5;
         }
 
-        let mut shadow_color = Color::TRANSPARENT;
         self.ui.draws.push(DrawCommand::Rect(RectDraw {
             instance: RectInstance {
                 pos: [tx, ty],
@@ -373,7 +468,7 @@ impl<'u, 'a, 'b> ToggleBuilder<'u, 'a, 'b> {
                 // Adjust opacity based on animation progress to avoid flickering
                 let mut t_color = self.inner_text_color;
                 let opacity = if is_on { (final_pos - 0.5) * 2.0 } else { (0.5 - final_pos) * 2.0 };
-                t_color.a *= opacity.clamp(0.0, 1.0);
+                t_color.a *= opacity.clamp(0.0, 1.0) * self.opacity;
 
                 if t_color.a > 0.05 {
                     self.ui.draws.push(DrawCommand::Text(TextDraw {
@@ -404,6 +499,7 @@ impl<'u, 'a, 'b> ToggleBuilder<'u, 'a, 'b> {
         });
 
         let mut t_color = self.thumb_color;
+        t_color.a *= self.opacity;
         if self.disabled { t_color.a *= 0.8; }
 
         self.ui.draws.push(DrawCommand::Rect(RectDraw {
@@ -427,6 +523,7 @@ impl<'u, 'a, 'b> ToggleBuilder<'u, 'a, 'b> {
                     l_color = active_c;
                 }
             }
+            l_color.a *= self.opacity;
 
             self.ui.draws.push(DrawCommand::Text(TextDraw {
                 text: label_text.clone(),

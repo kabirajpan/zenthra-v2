@@ -21,8 +21,8 @@ pub struct ButtonBuilder<'u, 'a> {
     text_color: Color,
     radius: [f32; 4],
     font_size: f32,
-    stroke_weight: f32,
-    stroke_color: Color,
+    border_width: f32,
+    border_color: Color,
 
     // Shadows
     shadow_offset: [f32; 2],
@@ -39,8 +39,10 @@ pub struct ButtonBuilder<'u, 'a> {
     render_mode: Option<zenthra_core::RenderMode>,
     hover_brightness: f32,
     hover_scale: f32,
-    hover_stroke_color: Option<Color>,
-    hover_stroke_weight: Option<f32>,
+    hover_border_color: Option<Color>,
+    hover_border_width: Option<f32>,
+    active_border_color: Option<Color>,
+    active_border_width: Option<f32>,
 }
 
 impl<'u, 'a> ButtonBuilder<'u, 'a> {
@@ -58,8 +60,8 @@ impl<'u, 'a> ButtonBuilder<'u, 'a> {
             text_color: Color::WHITE,
             radius: [4.0; 4],
             font_size: 14.0,
-            stroke_weight: 0.0,
-            stroke_color: Color::TRANSPARENT,
+            border_width: 0.0,
+            border_color: Color::TRANSPARENT,
             shadow_offset: [0.0, 0.0],
             shadow_blur: 0.0,
             shadow_color: Color::TRANSPARENT,
@@ -70,9 +72,19 @@ impl<'u, 'a> ButtonBuilder<'u, 'a> {
             render_mode: None,
             hover_brightness: 1.0,
             hover_scale: 1.0,
-            hover_stroke_color: None,
-            hover_stroke_weight: None,
+            hover_border_color: None,
+            hover_border_width: None,
+            active_border_color: None,
+            active_border_width: None,
         }
+    }
+
+    pub fn id(mut self, id: impl std::hash::Hash) -> Self {
+        let mut hasher = std::collections::hash_map::DefaultHasher::new();
+        use std::hash::Hasher;
+        id.hash(&mut hasher);
+        self.id = Id::from_u64(hasher.finish());
+        self
     }
 
     pub fn pos(mut self, x: f32, y: f32) -> Self {
@@ -115,9 +127,58 @@ impl<'u, 'a> ButtonBuilder<'u, 'a> {
         self
     }
 
-    pub fn stroke(mut self, color: Color, weight: f32) -> Self {
-        self.stroke_color = color;
-        self.stroke_weight = weight;
+    pub fn radius_all(mut self, r: f32) -> Self {
+        self.radius = [r, r, r, r];
+        self
+    }
+
+    pub fn radius_top(mut self, r: f32) -> Self {
+        self.radius[0] = r;
+        self.radius[1] = r;
+        self
+    }
+
+    pub fn radius_bottom(mut self, r: f32) -> Self {
+        self.radius[2] = r;
+        self.radius[3] = r;
+        self
+    }
+
+    pub fn radius_top_left(mut self, r: f32) -> Self {
+        self.radius[0] = r;
+        self
+    }
+
+    pub fn radius_top_right(mut self, r: f32) -> Self {
+        self.radius[1] = r;
+        self
+    }
+
+    pub fn radius_bottom_right(mut self, r: f32) -> Self {
+        self.radius[2] = r;
+        self
+    }
+
+    pub fn radius_bottom_left(mut self, r: f32) -> Self {
+        self.radius[3] = r;
+        self
+    }
+
+    pub fn radius_left(mut self, r: f32) -> Self {
+        self.radius[0] = r;
+        self.radius[3] = r;
+        self
+    }
+
+    pub fn radius_right(mut self, r: f32) -> Self {
+        self.radius[1] = r;
+        self.radius[2] = r;
+        self
+    }
+
+    pub fn border(mut self, color: Color, width: f32) -> Self {
+        self.border_color = color;
+        self.border_width = width;
         self
     }
 
@@ -185,9 +246,15 @@ impl<'u, 'a> ButtonBuilder<'u, 'a> {
         self
     }
 
-    pub fn hover_stroke(mut self, color: Color, weight: f32) -> Self {
-        self.hover_stroke_color = Some(color);
-        self.hover_stroke_weight = Some(weight);
+    pub fn hover_border(mut self, color: Color, weight: f32) -> Self {
+        self.hover_border_color = Some(color);
+        self.hover_border_width = Some(weight);
+        self
+    }
+
+    pub fn active_border(mut self, color: Color, weight: f32) -> Self {
+        self.active_border_color = Some(color);
+        self.active_border_width = Some(weight);
         self
     }
 
@@ -247,6 +314,17 @@ impl<'u, 'a> ButtonBuilder<'u, 'a> {
             current_brightness = self.hover_brightness;
         }
 
+        let mut final_border_w = self.border_width;
+        let mut final_border_c = self.border_color;
+
+        if is_pressed {
+            if let Some(c) = self.active_border_color { final_border_c = c; }
+            if let Some(w) = self.active_border_width { final_border_w = w; }
+        } else if is_hovered {
+            if let Some(c) = self.hover_border_color { final_border_c = c; }
+            if let Some(w) = self.hover_border_width { final_border_w = w; }
+        }
+
         // Measure Text
         let mut text_w = 0.0;
         let mut text_h = 0.0;
@@ -264,14 +342,12 @@ impl<'u, 'a> ButtonBuilder<'u, 'a> {
         let mut final_w = self.width.unwrap_or(text_w + self.padding.horizontal());
         let mut final_h = self.height.unwrap_or(text_h + self.padding.vertical());
 
-        let mut final_stroke_w = self.stroke_weight;
-        let mut final_stroke_c = self.stroke_color;
+        let final_border_w = final_border_w;
+        let final_border_c = final_border_c;
 
         if is_hovered {
             final_w *= self.hover_scale;
             final_h *= self.hover_scale;
-            if let Some(c) = self.hover_stroke_color { final_stroke_c = c; }
-            if let Some(w) = self.hover_stroke_weight { final_stroke_w = w; }
         }
 
         let start_draw = self.ui.draws.len();
@@ -282,9 +358,14 @@ impl<'u, 'a> ButtonBuilder<'u, 'a> {
                 pos: [x, y],
                 size: [final_w, final_h],
                 color: current_bg.to_array(),
-                radius: self.radius,
-                border_width: final_stroke_w,
-                border_color: final_stroke_c.to_array(),
+                radius: [
+                    self.radius[3],
+                    self.radius[2],
+                    self.radius[1],
+                    self.radius[0],
+                ],
+                border_width: final_border_w,
+                border_color: final_border_c.to_array(),
                 shadow_color: {
                     let mut c = self.shadow_color;
                     c.a *= self.shadow_opacity;

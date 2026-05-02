@@ -46,7 +46,8 @@ pub struct SliderBuilder<'u, 'a, 'b> {
 }
 
 impl<'u, 'a, 'b> SliderBuilder<'u, 'a, 'b> {
-    pub fn new(ui: &'u mut Ui<'a>, value: &'b mut f32, id: Id) -> Self {
+    pub fn new(ui: &'u mut Ui<'a>, value: &'b mut f32) -> Self {
+        let id = ui.id();
         Self {
             ui,
             value,
@@ -103,6 +104,14 @@ impl<'u, 'a, 'b> SliderBuilder<'u, 'a, 'b> {
         self
     }
 
+    pub fn id(mut self, id: impl std::hash::Hash) -> Self {
+        let mut hasher = std::collections::hash_map::DefaultHasher::new();
+        use std::hash::Hasher;
+        id.hash(&mut hasher);
+        self.id = Id::from_u64(hasher.finish());
+        self
+    }
+
     // --- 1. Overall Widget Methods ---
     pub fn size(mut self, w: f32, h: f32) -> Self {
         self.width = Some(w);
@@ -122,6 +131,55 @@ impl<'u, 'a, 'b> SliderBuilder<'u, 'a, 'b> {
 
     pub fn radius(mut self, tl: f32, tr: f32, br: f32, bl: f32) -> Self {
         self.radius = [tl, tr, br, bl];
+        self
+    }
+
+    pub fn radius_all(mut self, r: f32) -> Self {
+        self.radius = [r; 4];
+        self
+    }
+
+    pub fn radius_top(mut self, r: f32) -> Self {
+        self.radius[0] = r;
+        self.radius[1] = r;
+        self
+    }
+
+    pub fn radius_bottom(mut self, r: f32) -> Self {
+        self.radius[2] = r;
+        self.radius[3] = r;
+        self
+    }
+
+    pub fn radius_top_left(mut self, r: f32) -> Self {
+        self.radius[0] = r;
+        self
+    }
+
+    pub fn radius_top_right(mut self, r: f32) -> Self {
+        self.radius[1] = r;
+        self
+    }
+
+    pub fn radius_bottom_right(mut self, r: f32) -> Self {
+        self.radius[2] = r;
+        self
+    }
+
+    pub fn radius_bottom_left(mut self, r: f32) -> Self {
+        self.radius[3] = r;
+        self
+    }
+
+    pub fn radius_left(mut self, r: f32) -> Self {
+        self.radius[0] = r;
+        self.radius[3] = r;
+        self
+    }
+
+    pub fn radius_right(mut self, r: f32) -> Self {
+        self.radius[1] = r;
+        self.radius[2] = r;
         self
     }
 

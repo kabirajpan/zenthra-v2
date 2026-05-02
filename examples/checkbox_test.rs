@@ -8,15 +8,19 @@ fn main() {
     App::new()
         .title("Checkbox Test")
         .size(400, 400)
-        .with_ui(move |ui| {
+        .with_ui(move |ui: &mut Ui| {
             ui.container()
-                .fill()
-                .center()
+                .fill_x()
+                .fill_y()
+                .align(Align::Center)
                 .bg(Color::rgb(0.05, 0.05, 0.07))
-                .padding(40.0, 40.0, 40.0, 40.0)
+                .padding_all(40.0)
                 .gap(20.0)
-                .show(|ui| {
-                    ui.h1("Checkboxes").color(Color::WHITE).show();
+                .show(|ui: &mut Ui| {
+                    ui.text("Checkboxes")
+                        .size(32.0)
+                        .color(Color::WHITE)
+                        .show();
 
                     // 1. Default Style
                     ui.checkbox(&mut check1, "Default jjg Checkbox").show();
@@ -24,7 +28,7 @@ fn main() {
                     // 2. Custom Sizing and Colors
                     ui.checkbox(&mut check2, "Custom Style")
                         .size(24.0)
-                        .radius(0.0)
+                        .radius_all(0.0)
                         .gap(12.0)
                         .check_bg(Color::rgb(0.2, 0.8, 0.4))
                         .check_color(Color::rgb(0.0, 0.2, 0.0))
@@ -35,7 +39,7 @@ fn main() {
                     // 3. Outlined Style
                     ui.checkbox(&mut check3, "Outlined")
                         .bg(Color::TRANSPARENT)
-                        .stroke(Color::rgb(1.0, 0.5, 0.0), 2.0)
+                        .border(Color::rgb(1.0, 0.5, 0.0), 2.0)
                         .check_bg(Color::rgb(1.0, 0.5, 0.0))
                         .show();
 

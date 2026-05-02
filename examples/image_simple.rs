@@ -21,9 +21,9 @@ fn main() {
                         .fit(ObjectFit::Contain) // 👈 This tells Zenthra: "Don't stretch or squeeze anything"
                         .bg(Color::GREEN)
                         .scale(1.0)
-                        .rotate_z(40.0)
-                        .opacity(0.4)
-                        .flip_v(true)
+                        // .rotate_z(40.0)
+                        // .opacity(0.4)
+                        // .flip_v(true)
                         .shadow(Color::rgba(0.0, 0.0, 0.0, 0.5), 0.0, 10.0, 20.0)
                         .show();
                 });

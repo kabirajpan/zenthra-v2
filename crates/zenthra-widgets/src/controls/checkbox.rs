@@ -12,13 +12,13 @@ pub struct CheckboxBuilder<'u, 'a, 'b> {
 
     // Layout
     size: f32,
-    radius: f32,
+    radius: [f32; 4],
     gap: f32,
 
     // Visuals (Unchecked)
     bg: Color,
-    stroke_color: Color,
-    stroke_weight: f32,
+    border_color: Color,
+    border_width: f32,
 
     // Visuals (Checked)
     check_bg: Color,
@@ -57,13 +57,13 @@ impl<'u, 'a, 'b> CheckboxBuilder<'u, 'a, 'b> {
 
             // Default Layout
             size: 18.0,
-            radius: 4.0,
+            radius: [4.0; 4],
             gap: 8.0,
 
             // Default Visuals
             bg: Color::rgb(0.15, 0.15, 0.15),
-            stroke_color: Color::rgb(0.3, 0.3, 0.3),
-            stroke_weight: 1.0,
+            border_color: Color::rgb(0.3, 0.3, 0.3),
+            border_width: 1.0,
 
             check_bg: Color::rgb(0.2, 0.5, 1.0),
             check_color: Color::WHITE,
@@ -92,8 +92,57 @@ impl<'u, 'a, 'b> CheckboxBuilder<'u, 'a, 'b> {
         self
     }
 
-    pub fn radius(mut self, radius: f32) -> Self {
-        self.radius = radius;
+    pub fn radius(mut self, tl: f32, tr: f32, br: f32, bl: f32) -> Self {
+        self.radius = [tl, tr, br, bl];
+        self
+    }
+
+    pub fn radius_all(mut self, r: f32) -> Self {
+        self.radius = [r; 4];
+        self
+    }
+
+    pub fn radius_top(mut self, r: f32) -> Self {
+        self.radius[0] = r;
+        self.radius[1] = r;
+        self
+    }
+
+    pub fn radius_bottom(mut self, r: f32) -> Self {
+        self.radius[2] = r;
+        self.radius[3] = r;
+        self
+    }
+
+    pub fn radius_top_left(mut self, r: f32) -> Self {
+        self.radius[0] = r;
+        self
+    }
+
+    pub fn radius_top_right(mut self, r: f32) -> Self {
+        self.radius[1] = r;
+        self
+    }
+
+    pub fn radius_bottom_right(mut self, r: f32) -> Self {
+        self.radius[2] = r;
+        self
+    }
+
+    pub fn radius_bottom_left(mut self, r: f32) -> Self {
+        self.radius[3] = r;
+        self
+    }
+
+    pub fn radius_left(mut self, r: f32) -> Self {
+        self.radius[0] = r;
+        self.radius[3] = r;
+        self
+    }
+
+    pub fn radius_right(mut self, r: f32) -> Self {
+        self.radius[1] = r;
+        self.radius[2] = r;
         self
     }
 
@@ -127,9 +176,9 @@ impl<'u, 'a, 'b> CheckboxBuilder<'u, 'a, 'b> {
         self
     }
 
-    pub fn stroke(mut self, color: Color, weight: f32) -> Self {
-        self.stroke_color = color;
-        self.stroke_weight = weight;
+    pub fn border(mut self, color: Color, weight: f32) -> Self {
+        self.border_color = color;
+        self.border_width = weight;
         self
     }
 
@@ -161,6 +210,14 @@ impl<'u, 'a, 'b> CheckboxBuilder<'u, 'a, 'b> {
 
     pub fn hover_brightness(mut self, b: f32) -> Self {
         self.hover_brightness = b;
+        self
+    }
+
+    pub fn id(mut self, id: impl std::hash::Hash) -> Self {
+        let mut hasher = std::collections::hash_map::DefaultHasher::new();
+        use std::hash::Hasher;
+        id.hash(&mut hasher);
+        self.id = Id::from_u64(hasher.finish());
         self
     }
 
@@ -253,15 +310,19 @@ impl<'u, 'a, 'b> CheckboxBuilder<'u, 'a, 'b> {
         let by = mid_y - base_size / 2.0;
 
         // 4. Draw Box
-        let mut shadow_color = Color::TRANSPARENT;
         self.ui.draws.push(DrawCommand::Rect(RectDraw {
             instance: RectInstance {
                 pos: [bx, by],
                 size: [base_size, base_size],
                 color: current_bg.to_array(),
-                radius: [self.radius * final_scale; 4],
-                border_width: self.stroke_weight,
-                border_color: self.stroke_color.to_array(),
+                radius: [
+                    self.radius[0] * final_scale,
+                    self.radius[1] * final_scale,
+                    self.radius[2] * final_scale,
+                    self.radius[3] * final_scale,
+                ],
+                border_width: self.border_width,
+                border_color: self.border_color.to_array(),
                 brightness: if is_hovered { self.hover_brightness } else { 1.0 },
                 shadow_color: if self.shadow_enabled {
                     let mut a = self.shadow_color.to_array();

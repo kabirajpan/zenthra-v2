@@ -131,6 +131,10 @@ impl<'u, 'a> ImageBuilder<'u, 'a> {
         self.padding = EdgeInsets { top: t, right: r, bottom: b, left: l };
         self
     }
+    pub fn padding_all(mut self, p: f32) -> Self {
+        self.padding = EdgeInsets { top: p, right: p, bottom: p, left: p };
+        self
+    }
     pub fn padding_x(mut self, p: f32) -> Self {
         self.padding.left = p;
         self.padding.right = p;
@@ -196,7 +200,61 @@ impl<'u, 'a> ImageBuilder<'u, 'a> {
         self
     }
     pub fn border_radius(mut self, radius: f32) -> Self {
-        self.radius = [radius; 4];
+        self.radius = [radius; 4] ;
+        self
+    }
+
+    pub fn radius(mut self, tl: f32, tr: f32, br: f32, bl: f32) -> Self {
+        self.radius = [tl, tr, br, bl];
+        self
+    }
+
+    pub fn radius_all(mut self, r: f32) -> Self {
+        self.radius = [r; 4];
+        self
+    }
+
+    pub fn radius_top(mut self, r: f32) -> Self {
+        self.radius[0] = r;
+        self.radius[1] = r;
+        self
+    }
+
+    pub fn radius_bottom(mut self, r: f32) -> Self {
+        self.radius[2] = r;
+        self.radius[3] = r;
+        self
+    }
+
+    pub fn radius_top_left(mut self, r: f32) -> Self {
+        self.radius[0] = r;
+        self
+    }
+
+    pub fn radius_top_right(mut self, r: f32) -> Self {
+        self.radius[1] = r;
+        self
+    }
+
+    pub fn radius_bottom_right(mut self, r: f32) -> Self {
+        self.radius[2] = r;
+        self
+    }
+
+    pub fn radius_bottom_left(mut self, r: f32) -> Self {
+        self.radius[3] = r;
+        self
+    }
+
+    pub fn radius_left(mut self, r: f32) -> Self {
+        self.radius[0] = r;
+        self.radius[3] = r;
+        self
+    }
+
+    pub fn radius_right(mut self, r: f32) -> Self {
+        self.radius[1] = r;
+        self.radius[2] = r;
         self
     }
     pub fn border(mut self, color: Color, width: f32) -> Self {

@@ -13,10 +13,17 @@ pub struct TextBuilder<'u, 'a> {
     // Container/Widget-level styling
     padding: Padding,
     bg_color: Option<Color>,
-    full_width_bg: bool,
+    fill_x: bool,
     
     margin: EdgeInsets,
-    bg_radius: f32, // Not currently in Zentype but used in Zenthra
+    radius: [f32; 4],
+    border_color: Option<Color>,
+    border_width: f32,
+    shadow_color: Option<Color>,
+    shadow_offset: [f32; 2],
+    shadow_blur: f32,
+    shadow_opacity: f32,
+    opacity: f32,
     cursor: CursorIcon,
     render_mode: Option<zenthra_core::RenderMode>,
     start_x: f32,
@@ -58,9 +65,16 @@ impl<'u, 'a> TextBuilder<'u, 'a> {
                 .scale_factor(sf),
             padding: Padding::ZERO,
             bg_color: None,
-            full_width_bg: false,
+            fill_x: false,
             margin: EdgeInsets::ZERO,
-            bg_radius: 0.0,
+            radius: [0.0; 4],
+            border_color: None,
+            border_width: 0.0,
+            shadow_color: None,
+            shadow_offset: [0.0; 2],
+            shadow_blur: 0.0,
+            shadow_opacity: 1.0,
+            opacity: 1.0,
             cursor: CursorIcon::Default,
             render_mode: None,
             start_x: x,
@@ -184,13 +198,85 @@ impl<'u, 'a> TextBuilder<'u, 'a> {
         self
     }
 
+    pub fn border(mut self, color: Color, width: f32) -> Self {
+        self.border_color = Some(color);
+        self.border_width = width;
+        self
+    }
+
+    pub fn radius(mut self, tl: f32, tr: f32, br: f32, bl: f32) -> Self {
+        self.radius = [tl, tr, br, bl];
+        self
+    }
+
+    pub fn radius_all(mut self, r: f32) -> Self {
+        self.radius = [r; 4];
+        self
+    }
+
+    pub fn radius_top(mut self, r: f32) -> Self {
+        self.radius[0] = r;
+        self.radius[1] = r;
+        self
+    }
+
+    pub fn radius_bottom(mut self, r: f32) -> Self {
+        self.radius[2] = r;
+        self.radius[3] = r;
+        self
+    }
+
+    pub fn radius_top_left(mut self, r: f32) -> Self {
+        self.radius[0] = r;
+        self
+    }
+
+    pub fn radius_top_right(mut self, r: f32) -> Self {
+        self.radius[1] = r;
+        self
+    }
+
+    pub fn radius_bottom_right(mut self, r: f32) -> Self {
+        self.radius[2] = r;
+        self
+    }
+
+    pub fn radius_bottom_left(mut self, r: f32) -> Self {
+        self.radius[3] = r;
+        self
+    }
+
+    pub fn radius_left(mut self, r: f32) -> Self {
+        self.radius[0] = r;
+        self.radius[3] = r;
+        self
+    }
+
+    pub fn radius_right(mut self, r: f32) -> Self {
+        self.radius[1] = r;
+        self.radius[2] = r;
+        self
+    }
+
+    pub fn shadow(mut self, color: Color, ox: f32, oy: f32, blur: f32) -> Self {
+        self.shadow_color = Some(color);
+        self.shadow_offset = [ox, oy];
+        self.shadow_blur = blur;
+        self
+    }
+
+    pub fn opacity(mut self, o: f32) -> Self {
+        self.opacity = o;
+        self
+    }
+
     pub fn highlight(mut self, c: Color) -> Self {
         self.options = self.options.highlight(c);
         self
     }
 
-    pub fn full_width_bg(mut self, enabled: bool) -> Self {
-        self.full_width_bg = enabled;
+    pub fn fill_x(mut self, enabled: bool) -> Self {
+        self.fill_x = enabled;
         self
     }
 
@@ -284,7 +370,7 @@ impl<'u, 'a> TextBuilder<'u, 'a> {
         self
     }
 
-    pub fn show(mut self) -> Option<ShapedBuffer> {
+    pub fn show(mut self) -> (zenthra_core::Response, Option<ShapedBuffer>) {
         if let Some(mode) = self.render_mode {
             self.ui.render_mode_stack.push(mode);
         }
@@ -304,7 +390,14 @@ impl<'u, 'a> TextBuilder<'u, 'a> {
             self.ui.render_mode_stack.pop();
         }
 
-        buffer
+        let is_hovered = self.ui.mouse_in_rect(self.start_x + self.ui.offset_x, self.start_y + self.ui.offset_y, w, h);
+        let response = zenthra_core::Response {
+            clicked: self.ui.clicked && is_hovered,
+            hovered: is_hovered,
+            pressed: is_hovered && self.ui.mouse_down,
+        };
+
+        (response, buffer)
     }
 
     pub fn draw_and_measure(&mut self) -> (f32, f32, Option<ShapedBuffer>, usize) {
@@ -325,7 +418,7 @@ impl<'u, 'a> TextBuilder<'u, 'a> {
 
              // Important: record layout for next frame culling
              let mut w = cw + self.padding.horizontal();
-             if self.full_width_bg {
+             if self.fill_x {
                  w = self.ui.max_x - self.start_x;
              } else if let Some(min_w) = self.options.min_width {
                  if w < min_w { w = min_w; }
@@ -351,16 +444,21 @@ impl<'u, 'a> TextBuilder<'u, 'a> {
                     pos: [self.start_x, self.start_y],
                     size: [w, h],
                     color: bg.to_array(),
-                    radius: [self.bg_radius; 4],
-                    border_width: 0.0,
-                    border_color: [0.0, 0.0, 0.0, 0.0],
-                    shadow_color: [0.0, 0.0, 0.0, 0.0],
-                    shadow_offset: [0.0, 0.0],
-                    shadow_blur: 0.0,
+                    radius: [
+                        self.radius[3],
+                        self.radius[2],
+                        self.radius[1],
+                        self.radius[0],
+                    ],
+                    border_width: self.border_width,
+                    border_color: self.border_color.unwrap_or(Color::TRANSPARENT).to_array(),
+                    shadow_color: self.shadow_color.map(|mut c| { c.a *= self.shadow_opacity; c.to_array() }).unwrap_or([0.0; 4]),
+                    shadow_offset: self.shadow_offset,
+                    shadow_blur: self.shadow_blur,
                     clip_rect: clip,
                     grayscale: 0.0,
                     brightness: 1.0,
-                    opacity: 1.0,
+                    opacity: self.opacity,
                     ..Default::default()
                 }
             }));

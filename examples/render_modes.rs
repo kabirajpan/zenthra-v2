@@ -11,20 +11,29 @@ fn main() {
         .with_ui(move |ui: &mut Ui| {
             // LEVEL 1: Root (Static by default)
             ui.container()
-                .fill()
+                .fill_x()
+                .fill_y()
                 .column()
-                .padding(40.0, 40.0, 40.0, 40.0)
+                .padding_all(40.0)
                 .gap(30.0)
                 .bg(Color::rgb(0.08, 0.08, 0.1))
-                .center_x()
+                .halign(Align::Center)
                 .show(|ui: &mut Ui| {
-                    ui.h1("Render Mode Inheritance").full_width_bg(false).show();
+                    ui.text("Render Mode Inheritance")
+                        .size(32.0)
+                        .fill_x(false)
+                        .show();
                     
                     let l1_text = match l1_snapshot {
                         Some(val) => format!("L1 Snapshot (Static): {}", val),
                         None => "L1 Snapshot: <Click Button>".to_string(),
                     };
-                    ui.h3(&l1_text).color(Color::rgb(0.4, 0.7, 1.0)).full_width_bg(false).show();
+                    
+                    ui.text(&l1_text)
+                        .size(18.0)
+                        .color(Color::rgb(0.4, 0.7, 1.0))
+                        .fill_x(false)
+                        .show();
                     
                     // LEVEL 2: Continuous (forced rendering)
                     ui.container()
@@ -32,38 +41,45 @@ fn main() {
                         .width(600.0)
                         .height(250.0)
                         .bg(Color::rgb(0.15, 0.15, 0.2))
-                        .radius(10.0, 10.0, 10.0, 10.0)
-                        .padding(20.0, 20.0, 20.0, 20.0)
-                        .center()
+                        .radius_all(10.0)
+                        .padding_all(20.0)
+                        .align(Align::Center)
                         .show(|ui: &mut Ui| {
                             frame_count += 1;
                             
-                            ui.column().center().show(|ui: &mut Ui| {
-                                ui.h2("Level 2 (Continuous)").full_width_bg(false).show();
+                            ui.column().align(Align::Center).show(|ui: &mut Ui| {
+                                ui.text("Level 2 (Continuous)")
+                                    .size(24.0)
+                                    .fill_x(false)
+                                    .show();
                                 ui.text("This container renders every frame at 120 FPS.")
                                     .color(Color::rgb(0.7, 0.7, 0.7))
-                                    .full_width_bg(false)
+                                    .fill_x(false)
                                     .show();
                                 ui.spacing(10.0);
-                                ui.h1(&format!("{}", frame_count))
+                                ui.text(&format!("{}", frame_count))
+                                    .size(32.0)
                                     .color(Color::rgb(0.3, 1.0, 0.5))
-                                    .full_width_bg(false)
+                                    .fill_x(false)
                                     .show();
 
                                 // LEVEL 3: Explicitly Static (Inside Continuous)
                                 ui.container()
                                     .render_mode(RenderMode::Static)
                                     .width(400.0)
-                                    .padding(15.0, 15.0, 15.0, 15.0)
+                                    .padding_all(15.0)
                                     .bg(Color::rgb(0.05, 0.05, 0.07))
-                                    .radius(5.0, 5.0, 5.0, 5.0)
-                                    .center()
+                                    .radius_all(5.0)
+                                    .align(Align::Center)
                                     .show(|ui: &mut Ui| {
                                         let l3_text = match l3_snapshot {
                                             Some(val) => format!("L3 Snapshot (Static): {}", val),
                                             None => "L3 Snapshot: <Click Button>".to_string(),
                                         };
-                                        ui.text(&l3_text).color(Color::rgb(1.0, 0.4, 0.4)).full_width_bg(false).show();
+                                        ui.text(&l3_text)
+                                            .color(Color::rgb(1.0, 0.4, 0.4))
+                                            .fill_x(false)
+                                            .show();
                                     });
                             });
                         });

@@ -23,14 +23,23 @@ pub struct TextAreaBuilder<'u, 'a, 'b> {
     height: Option<f32>,
     scrollable: bool,
     overflow_hidden: bool,
-    text_bg_full_width: bool,
-    full_width: bool,
+    text_bg_fill_x: bool,
+    fill_x: bool,
     wrap: zenthra_text::prelude::TextWrap,
+    radius: [f32; 4],
+    border_color: Option<Color>,
+    border_width: f32,
+    shadow_color: Option<Color>,
+    shadow_offset: [f32; 2],
+    shadow_blur: f32,
+    shadow_opacity: f32,
+    opacity: f32,
     render_mode: Option<zenthra_core::RenderMode>,
 }
 
 impl<'u, 'a, 'b> TextAreaBuilder<'u, 'a, 'b> {
-    pub fn new(ui: &'u mut Ui<'a>, buffer: &'b mut String, id: Id) -> Self {
+    pub fn new(ui: &'u mut Ui<'a>, buffer: &'b mut String) -> Self {
+        let id = ui.id();
         let x = ui.cursor_x;
         let y = ui.cursor_y;
         Self {
@@ -50,12 +59,28 @@ impl<'u, 'a, 'b> TextAreaBuilder<'u, 'a, 'b> {
             height: None,
             scrollable: false,
             overflow_hidden: false,
-            text_bg_full_width: false,
-            full_width: false,
+            text_bg_fill_x: false,
+            fill_x: false,
             highlight: None,
             wrap: zenthra_text::prelude::TextWrap::Word,
+            radius: [4.0; 4],
+            border_color: None,
+            border_width: 0.0,
+            shadow_color: None,
+            shadow_offset: [0.0; 2],
+            shadow_blur: 0.0,
+            shadow_opacity: 1.0,
+            opacity: 1.0,
             render_mode: None,
         }
+    }
+
+    pub fn id(mut self, id: impl std::hash::Hash) -> Self {
+        let mut hasher = std::collections::hash_map::DefaultHasher::new();
+        use std::hash::Hasher;
+        id.hash(&mut hasher);
+        self.id = Id::from_u64(hasher.finish());
+        self
     }
 
     pub fn scrollable(mut self, enabled: bool) -> Self {
@@ -168,13 +193,85 @@ impl<'u, 'a, 'b> TextAreaBuilder<'u, 'a, 'b> {
         self
     }
 
-    pub fn full_width(mut self) -> Self {
-        self.full_width = true;
+    pub fn fill_x(mut self) -> Self {
+        self.fill_x = true;
         self
     }
 
-    pub fn text_bg_full_width(mut self, enabled: bool) -> Self {
-        self.text_bg_full_width = enabled;
+    pub fn radius(mut self, tl: f32, tr: f32, br: f32, bl: f32) -> Self {
+        self.radius = [tl, tr, br, bl];
+        self
+    }
+
+    pub fn radius_all(mut self, r: f32) -> Self {
+        self.radius = [r; 4];
+        self
+    }
+
+    pub fn radius_top(mut self, r: f32) -> Self {
+        self.radius[0] = r;
+        self.radius[1] = r;
+        self
+    }
+
+    pub fn radius_bottom(mut self, r: f32) -> Self {
+        self.radius[2] = r;
+        self.radius[3] = r;
+        self
+    }
+
+    pub fn radius_top_left(mut self, r: f32) -> Self {
+        self.radius[0] = r;
+        self
+    }
+
+    pub fn radius_top_right(mut self, r: f32) -> Self {
+        self.radius[1] = r;
+        self
+    }
+
+    pub fn radius_bottom_right(mut self, r: f32) -> Self {
+        self.radius[2] = r;
+        self
+    }
+
+    pub fn radius_bottom_left(mut self, r: f32) -> Self {
+        self.radius[3] = r;
+        self
+    }
+
+    pub fn radius_left(mut self, r: f32) -> Self {
+        self.radius[0] = r;
+        self.radius[3] = r;
+        self
+    }
+
+    pub fn radius_right(mut self, r: f32) -> Self {
+        self.radius[1] = r;
+        self.radius[2] = r;
+        self
+    }
+
+    pub fn border(mut self, color: Color, width: f32) -> Self {
+        self.border_color = Some(color);
+        self.border_width = width;
+        self
+    }
+
+    pub fn shadow(mut self, color: Color, ox: f32, oy: f32, blur: f32) -> Self {
+        self.shadow_color = Some(color);
+        self.shadow_offset = [ox, oy];
+        self.shadow_blur = blur;
+        self
+    }
+
+    pub fn opacity(mut self, o: f32) -> Self {
+        self.opacity = o;
+        self
+    }
+
+    pub fn text_bg_fill_x(mut self, enabled: bool) -> Self {
+        self.text_bg_fill_x = enabled;
         self
     }
 
@@ -193,7 +290,7 @@ impl<'u, 'a, 'b> TextAreaBuilder<'u, 'a, 'b> {
         self
     }
 
-    pub fn show(self) {
+    pub fn show(self) -> zenthra_core::Response {
         if let Some(mode) = self.render_mode {
             self.ui.render_mode_stack.push(mode);
         }
@@ -207,7 +304,7 @@ impl<'u, 'a, 'b> TextAreaBuilder<'u, 'a, 'b> {
         };
 
         // --- 2. Initial Measure (to get content height) ---
-        let actual_width = if self.full_width {
+        let actual_width = if self.fill_x {
             (self.ui.max_x - self.x).max(self.width)
         } else {
             self.width
@@ -502,16 +599,20 @@ impl<'u, 'a, 'b> TextAreaBuilder<'u, 'a, 'b> {
                     pos: [self.x, self.y],
                     size: [actual_width, h_box],
                     color: bg.to_array(),
-                    radius: [4.0; 4], // Match typical UI style
-                    border_width: if is_focused { 1.0 } else { 0.0 },
-                    border_color: [1.0, 1.0, 1.0, 0.4],
-                    shadow_color: [0.0, 0.0, 0.0, 0.0],
-                    shadow_offset: [0.0, 0.0],
-                    shadow_blur: 0.0,
+                    radius: self.radius,
+                    border_width: self.border_width.max(if is_focused { 1.0 } else { 0.0 }),
+                    border_color: self.border_color.unwrap_or(Color::rgba(1.0, 1.0, 1.0, 0.4)).to_array(),
+                    shadow_color: self.shadow_color.map(|c| {
+                        let mut a = c.to_array();
+                        a[3] *= self.shadow_opacity;
+                        a
+                    }).unwrap_or([0.0, 0.0, 0.0, 0.0]),
+                    shadow_offset: self.shadow_offset,
+                    shadow_blur: self.shadow_blur,
                     clip_rect: [0.0, 0.0, 9999.0, 9999.0],
                     grayscale: 0.0,
                     brightness: 1.0,
-                    opacity: 1.0,
+                    opacity: self.opacity,
                     ..Default::default()
                 }
             }));
@@ -523,18 +624,18 @@ impl<'u, 'a, 'b> TextAreaBuilder<'u, 'a, 'b> {
             .size(self.font_size)
             .line_height(self.line_height)
             .color(self.color)
-            .full_width_bg(false)
+            .fill_x(false)
             .padding(self.text_padding.top, self.text_padding.right, self.text_padding.bottom, self.text_padding.left)
             .wrap(self.wrap)
             .max_width(actual_width - self.padding.horizontal() - self.text_padding.horizontal())
             .pos(self.x + self.padding.left, pos_y);
 
-        if self.text_bg_full_width {
+        if self.text_bg_fill_x {
             text_builder = text_builder.min_width(actual_width - self.padding.horizontal());
         }
 
         if let Some(tbg) = self.text_bg {
-            text_builder = text_builder.bg(tbg).full_width_bg(false);
+            text_builder = text_builder.bg(tbg).fill_x(false);
         }
 
         if let Some(h) = self.highlight {
@@ -595,6 +696,8 @@ impl<'u, 'a, 'b> TextAreaBuilder<'u, 'a, 'b> {
                 let first_line_y = sb.lines().first().map(|l| l.y).unwrap_or(visual_ascent);
                 let v_shift = visual_ascent - first_line_y;
 
+                let final_border_w = self.border_width;
+                let final_border_c = self.border_color.unwrap_or(Color::rgba(1.0, 1.0, 1.0, 0.4));
                 let mut lx = 0.0;
                 let mut ly = first_line_y;
                 let mut found = false;
@@ -679,6 +782,12 @@ impl<'u, 'a, 'b> TextAreaBuilder<'u, 'a, 'b> {
 
         if self.render_mode.is_some() {
             self.ui.render_mode_stack.pop();
+        }
+
+        zenthra_core::Response {
+            clicked: self.ui.clicked && is_hovered,
+            hovered: is_hovered,
+            pressed: is_hovered && self.ui.mouse_down,
         }
     }
 }

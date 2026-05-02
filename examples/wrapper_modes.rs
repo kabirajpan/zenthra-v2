@@ -23,15 +23,16 @@ fn main() {
     App::new()
         .title("Zenthra – Wrapping Playground")
         .size(800, 600)
-        .with_ui(|ui| {
+        .with_ui(|ui: &mut Ui| {
             // Root application background
             ui.container()
                 .id("root")
-                .fill()
+                .fill_x()
+                .fill_y()
                 .bg(BG)
                 // We use Align::Center to keep our playground box in the exact middle of the screen
                 .align(Align::Center)
-                .show(|ui| {
+                .show(|ui: &mut Ui| {
                     // ============================================
                     // THE PLAYGROUND
                     // Tweak any of these properties to experiment!
@@ -41,10 +42,10 @@ fn main() {
                         .width(400.0)
                         .height(300.0)
                         .scroll_y(true)
-                        .padding(16.0, 16.0, 16.0, 16.0)
+                        .padding_all(16.0)
                         .gap(12.0)
                         .bg(PANEL)
-                        .radius(8.0, 8.0, 8.0, 8.0)
+                        .radius_all(8.0)
                         // 1. Try changing between `.row()` and `.column()`
                         .column()
                         // 2. Try changing the wrap strategy:
@@ -57,15 +58,15 @@ fn main() {
                         // .align_top()
                         // .align_center()
                         // .align_right()
-                        .show(|ui| {
+                        .show(|ui: &mut Ui| {
                             // Let's spawn 15 boxes inside to see how they wrap around the container
                             for i in 1..=15 {
                                 ui.container()
                                     .id(("box", i))
                                     .bg(BOX_COLOR)
-                                    // .radius(6.0, 6.0, 6.0, 6.0)
+                                    // .radius_all(6.0)
                                     .align(Align::Center)
-                                    .show(|ui| {
+                                    .show(|ui: &mut Ui| {
                                         ui.text(&format!("{}", i))
                                             .size(16.0)
                                             .color(Color::WHITE)

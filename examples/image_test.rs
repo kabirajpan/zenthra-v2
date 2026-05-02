@@ -1,7 +1,7 @@
+use zenthra::prelude::*;
 use std::path::PathBuf;
 use std::sync::Arc;
-use zenthra::App;
-use zenthra_core::{Color, ImageSource, ObjectFit};
+use zenthra_core::{ImageSource, ObjectFit};
 
 fn main() {
     // We will use the absolute path to the generated image, but for a real project it should be relative.
@@ -26,13 +26,13 @@ fn main() {
     App::new()
         .title("Zenthra Image Widget Test")
         .size(800, 800)
-        .with_ui(move |ui| {
+        .with_ui(move |ui: &mut Ui| {
             ui.container()
                 .width(800.0)
                 .height(800.0)
                 .bg(Color::rgb(0.1, 0.1, 0.12))
-                .padding(40.0, 40.0, 40.0, 40.0)
-                .show(|ui| {
+                .padding_all(40.0)
+                .show(|ui: &mut Ui| {
                     ui.text("Zenthra Image Demonstration")
                         .size(24.0)
                         .weight(zenthra_widgets::text::FontWeight::Bold)
@@ -47,7 +47,7 @@ fn main() {
                         .item_size(300.0, 300.0)
                         .count(4)
                         .gap(20.0)
-                        .show(|ui, idx| {
+                        .show(|ui: &mut Ui, idx: usize| {
                             let source = ImageSource::Bytes(shared_bytes.clone());
 
                             // Demonstrate different properties
@@ -57,7 +57,7 @@ fn main() {
                                     ui.image(source)
                                         .size(300.0, 300.0)
                                         .fit(ObjectFit::Contain)
-                                        .border_radius(12.0)
+                                        .radius_all(12.0)
                                         .bg(Color::rgb(0.2, 0.2, 0.2))
                                         .show();
                                 }
@@ -66,7 +66,7 @@ fn main() {
                                     ui.image(source)
                                         .size(300.0, 300.0)
                                         .fit(ObjectFit::Cover)
-                                        .border_radius(24.0)
+                                        .radius_all(24.0)
                                         .border(Color::rgb(0.4, 0.6, 1.0), 4.0)
                                         .shadow(Color::rgba(0.0, 0.0, 0.0, 0.8), 0.0, 10.0, 15.0)
                                         .show();
@@ -77,7 +77,7 @@ fn main() {
                                         .image(source)
                                         .size(300.0, 300.0)
                                         .fit(ObjectFit::Fill)
-                                        .border_radius(100.0) // Circle
+                                        .radius_all(150.0) // Circle
                                         .grayscale(1.0) // Default grayscale
                                         .hover_grayscale(0.0) // Color on hover
                                         .hover_opacity(0.8)
@@ -94,8 +94,8 @@ fn main() {
                                     ui.image(source)
                                         .size(300.0, 300.0)
                                         .fit(ObjectFit::Contain)
-                                        .padding(20.0, 20.0, 20.0, 20.0)
-                                        .border_radius(12.0)
+                                        .padding_all(20.0)
+                                        .radius_all(12.0)
                                         .bg(Color::WHITE)
                                         .border(Color::TRANSPARENT, 3.0)
                                         .hover_border(Color::rgb(1.0, 0.4, 0.4))

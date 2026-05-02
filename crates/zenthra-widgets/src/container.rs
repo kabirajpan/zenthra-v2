@@ -58,6 +58,8 @@ pub struct ContainerBuilder<'u, 'a> {
     id: zenthra_core::Id,
     radius: [f32; 4],
     border_alignment: BorderAlignment,
+    is_absolute: bool,
+    is_overlay: bool,
     hover_bg: Option<Color>,
     hover_border_color: Option<Color>,
     hover_border_width: Option<f32>,
@@ -112,6 +114,8 @@ impl<'u, 'a> ContainerBuilder<'u, 'a> {
             id,
             radius: [0.0; 4],
             border_alignment: BorderAlignment::Inside,
+            is_absolute: false,
+            is_overlay: false,
             hover_bg: None,
             hover_border_color: None,
             hover_border_width: None,
@@ -123,6 +127,12 @@ impl<'u, 'a> ContainerBuilder<'u, 'a> {
         }
     }
 
+    pub fn absolute(mut self, x: f32, y: f32) -> Self {
+        self.pos_x = Some(x);
+        self.pos_y = Some(y);
+        self.is_absolute = true;
+        self
+    }
     pub fn pos(mut self, x: f32, y: f32) -> Self {
         self.pos_x = Some(x);
         self.pos_y = Some(y);
@@ -200,6 +210,13 @@ impl<'u, 'a> ContainerBuilder<'u, 'a> {
         self.padding_right = r;
         self
     }
+    pub fn padding_all(mut self, p: f32) -> Self {
+        self.padding_top = p;
+        self.padding_bottom = p;
+        self.padding_left = p;
+        self.padding_right = p;
+        self
+    }
     pub fn padding_x(mut self, p: f32) -> Self {
         self.padding_left = p;
         self.padding_right = p;
@@ -208,13 +225,6 @@ impl<'u, 'a> ContainerBuilder<'u, 'a> {
     pub fn padding_y(mut self, p: f32) -> Self {
         self.padding_top = p;
         self.padding_bottom = p;
-        self
-    }
-    pub fn padding_all(mut self, p: f32) -> Self {
-        self.padding_top = p;
-        self.padding_bottom = p;
-        self.padding_left = p;
-        self.padding_right = p;
         self
     }
     pub fn padding_top(mut self, p: f32) -> Self {
@@ -409,7 +419,12 @@ impl<'u, 'a> ContainerBuilder<'u, 'a> {
         self
     }
 
-    pub fn show<F>(mut self, f: F)
+    pub fn overlay(mut self) -> Self {
+        self.is_overlay = true;
+        self
+    }
+
+    pub fn show<F>(mut self, f: F) -> zenthra_core::Response
     where
         F: FnOnce(&mut Ui),
     {
@@ -658,37 +673,71 @@ impl<'u, 'a> ContainerBuilder<'u, 'a> {
             let visual_ox = ox - (visual_w - w) / 2.0;
             let visual_oy = oy - (visual_h - h) / 2.0;
 
-            self.ui.draws.push(DrawCommand::Rect(RectDraw {
-                instance: RectInstance {
-                    pos: [visual_ox, visual_oy],
-                    size: [visual_w, visual_h],
-                    color: bg.to_array(),
-                    radius: [
-                        self.radius[3], // Bottom-Left -> Top-Left
-                        self.radius[2], // Bottom-Right -> Top-Right
-                        self.radius[1], // Top-Right -> Bottom-Right
-                        self.radius[0], // Top-Left -> Bottom-Left
-                    ],
-                    border_width: bw,
-                    border_color: bc.to_array(),
-                    shadow_color: self.shadow_color.map(|c| {
-                        let mut a = c.to_array();
-                        a[3] *= self.shadow_opacity;
-                        a
-                    }).unwrap_or([0.0, 0.0, 0.0, 0.0]),
-                    shadow_offset: self.shadow_offset,
-                    shadow_blur: self.shadow_blur,
-                    clip_rect: [-100000.0, -100000.0, 2000000.0, 2000000.0],
-                    grayscale: 0.0,
-                    brightness: 1.0,
-                    opacity: self.opacity,
-                    border_alignment: match self.border_alignment {
-                        BorderAlignment::Inside => 0.0,
-                        BorderAlignment::Center => 0.5,
-                        BorderAlignment::Outside => 1.0,
-                    },
-                },
-            }));
+            if self.is_overlay {
+                self.ui.overlays.push(DrawCommand::Rect(RectDraw {
+                    instance: RectInstance {
+                        pos: [visual_ox, visual_oy],
+                        size: [visual_w, visual_h],
+                        color: bg.to_array(),
+                        radius: [
+                            self.radius[3], // Bottom-Left -> Top-Left
+                            self.radius[2], // Bottom-Right -> Top-Right
+                            self.radius[1], // Top-Right -> Bottom-Right
+                            self.radius[0], // Top-Left -> Bottom-Left
+                        ],
+                        border_width: bw,
+                        border_color: bc.to_array(),
+                        shadow_color: self.shadow_color.map(|c| {
+                            let mut a = c.to_array();
+                            a[3] *= self.shadow_opacity;
+                            a
+                        }).unwrap_or([0.0, 0.0, 0.0, 0.0]),
+                        shadow_offset: self.shadow_offset,
+                        shadow_blur: self.shadow_blur,
+                        clip_rect: [-100000.0, -100000.0, 2000000.0, 2000000.0],
+                        grayscale: 0.0,
+                        brightness: 1.0,
+                        opacity: self.opacity,
+                        border_alignment: match self.border_alignment {
+                            BorderAlignment::Inside => 0.0,
+                            BorderAlignment::Center => 0.5,
+                            BorderAlignment::Outside => 1.0,
+                        },
+                    }
+                }));
+            } else {
+                self.ui.draws.push(DrawCommand::Rect(RectDraw {
+                    instance: RectInstance {
+                        pos: [visual_ox, visual_oy],
+                        size: [visual_w, visual_h],
+                        color: bg.to_array(),
+                        radius: [
+                            self.radius[3], // Bottom-Left -> Top-Left
+                            self.radius[2], // Bottom-Right -> Top-Right
+                            self.radius[1], // Top-Right -> Bottom-Right
+                            self.radius[0], // Top-Left -> Bottom-Left
+                        ],
+                        border_width: bw,
+                        border_color: bc.to_array(),
+                        shadow_color: self.shadow_color.map(|c| {
+                            let mut a = c.to_array();
+                            a[3] *= self.shadow_opacity;
+                            a
+                        }).unwrap_or([0.0, 0.0, 0.0, 0.0]),
+                        shadow_offset: self.shadow_offset,
+                        shadow_blur: self.shadow_blur,
+                        clip_rect: [-100000.0, -100000.0, 2000000.0, 2000000.0],
+                        grayscale: 0.0,
+                        brightness: 1.0,
+                        opacity: self.opacity,
+                        border_alignment: match self.border_alignment {
+                            BorderAlignment::Inside => 0.0,
+                            BorderAlignment::Center => 0.5,
+                            BorderAlignment::Outside => 1.0,
+                        },
+                    }
+                }));
+            }
         }
 
         // Final Translation pass (Always run to keep cache in sync)
@@ -731,13 +780,17 @@ impl<'u, 'a> ContainerBuilder<'u, 'a> {
 
         // Flush children draws to parent
         for draw in self.children_draws.drain(..) {
-            self.ui.draws.push(draw);
+            if self.is_overlay {
+                self.ui.overlays.push(draw);
+            } else {
+                self.ui.draws.push(draw);
+            }
         }
         
         // --- Visual Scrollbars & Dragging ---
         if self.scroll_x || self.scroll_y {
-            let bar_thickness = 6.0;
-            let bar_margin = 2.0;
+            let bar_thickness = 4.0;
+            let bar_margin = 0.0;
 
             // Vertical Scrollbar
             if self.scroll_y && max_sy > 0.0 {
@@ -745,8 +798,6 @@ impl<'u, 'a> ContainerBuilder<'u, 'a> {
                 let thumb_h = thumb_h.max(20.0);
                 let scroll_ratio = scroll_y / max_sy;
                 let is_hover = self.ui.mouse_in_rect(actual_ox + w - bar_thickness - bar_margin - 2.0, actual_oy + (h - thumb_h) * scroll_ratio, bar_thickness + 4.0, thumb_h);
-                let thumb_x = actual_ox + w - bar_thickness - bar_margin;
-                let thumb_y = actual_oy + (h - thumb_h) * scroll_ratio;
                 let is_dragging = self.ui.active_drag.as_ref().map(|d| d.id == id && d.start_mouse <= -1000.0).unwrap_or(false); 
 
                 // Handle Drag Y
@@ -771,16 +822,29 @@ impl<'u, 'a> ContainerBuilder<'u, 'a> {
                     }
                 }
 
-                if container_hover || is_dragging {
-                    let color = if is_hover || is_dragging { Color::rgba(1.0, 1.0, 1.0, 0.7) } else { Color::rgba(1.0, 1.0, 1.0, 0.3) };
-                    self.ui.draws.push(crate::ui::DrawCommand::OverlayRect(crate::ui::OverlayRectDraw {
-                        x: thumb_x,
-                        y: thumb_y,
+                {
+                    let color = if is_hover || is_dragging { 
+                        Color::rgba(1.0, 1.0, 1.0, 0.5) 
+                    } else if container_hover {
+                        Color::rgba(1.0, 1.0, 1.0, 0.2)
+                    } else {
+                        Color::rgba(1.0, 1.0, 1.0, 0.1)
+                    };
+                    
+                    // Use layout coordinates (ox, oy) for drawing so they are shifted by parents correctly.
+                    // But interaction uses actual_ox/actual_oy (screen space).
+                    let visual_thumb_x = ox + w - bar_thickness - bar_margin - self.border_width;
+                    let visual_thumb_y = oy + (h - thumb_h) * scroll_ratio;
+
+                    let draw = crate::ui::DrawCommand::OverlayRect(crate::ui::OverlayRectDraw {
+                        x: visual_thumb_x,
+                        y: visual_thumb_y,
                         width: bar_thickness,
                         height: thumb_h,
                         color,
-                        clip: intersect_rects([actual_ox, actual_oy, w, h], [-100000.0, -100000.0, 2000000.0, 2000000.0]), 
-                    }));
+                        clip: [ox, oy, w, h], 
+                    });
+                    if self.is_overlay { self.ui.overlays.push(draw); } else { self.ui.draws.push(draw); }
                 }
             }
 
@@ -790,8 +854,6 @@ impl<'u, 'a> ContainerBuilder<'u, 'a> {
                 let thumb_w = thumb_w.max(20.0);
                 let scroll_ratio = scroll_x / max_sx;
                 let is_hover = self.ui.mouse_in_rect(actual_ox + (w - thumb_w) * scroll_ratio, actual_oy + h - bar_thickness - bar_margin - 2.0, thumb_w, bar_thickness + 4.0);
-                let thumb_x = actual_ox + (w - thumb_w) * scroll_ratio;
-                let thumb_y = actual_oy + h - bar_thickness - bar_margin;
                 let is_dragging = self.ui.active_drag.as_ref().map(|d| d.id == id && d.start_mouse > -1000.0).unwrap_or(false);
 
                 if self.ui.clicked && is_hover {
@@ -815,16 +877,27 @@ impl<'u, 'a> ContainerBuilder<'u, 'a> {
                     }
                 }
 
-                if container_hover || is_dragging {
-                    let color = if is_hover || is_dragging { Color::rgba(1.0, 1.0, 1.0, 0.7) } else { Color::rgba(1.0, 1.0, 1.0, 0.3) };
-                    self.ui.draws.push(crate::ui::DrawCommand::OverlayRect(crate::ui::OverlayRectDraw {
-                        x: thumb_x,
-                        y: thumb_y,
+                {
+                    let color = if is_hover || is_dragging { 
+                        Color::rgba(1.0, 1.0, 1.0, 0.5) 
+                    } else if container_hover {
+                        Color::rgba(1.0, 1.0, 1.0, 0.2)
+                    } else {
+                        Color::rgba(1.0, 1.0, 1.0, 0.1)
+                    };
+                    
+                    let visual_thumb_x = ox + (w - thumb_w) * scroll_ratio;
+                    let visual_thumb_y = oy + h - bar_thickness - bar_margin - self.border_width;
+
+                    let draw = crate::ui::DrawCommand::OverlayRect(crate::ui::OverlayRectDraw {
+                        x: visual_thumb_x,
+                        y: visual_thumb_y,
                         width: thumb_w,
                         height: bar_thickness,
                         color,
-                        clip: [actual_ox, actual_oy, w, h],
-                    }));
+                        clip: [ox, oy, w, h],
+                    });
+                    if self.is_overlay { self.ui.overlays.push(draw); } else { self.ui.draws.push(draw); }
                 }
             }
         }
@@ -832,7 +905,15 @@ impl<'u, 'a> ContainerBuilder<'u, 'a> {
         // Bubble IDs up to parent's scope
         self.ui.id_log.extend(child_ids_only);
         
-        self.ui.advance(w, h, draw_start);
+        if !self.is_absolute {
+            self.ui.advance(w, h, draw_start);
+        }
+
+        zenthra_core::Response {
+            clicked: self.ui.clicked && container_hover,
+            hovered: container_hover,
+            pressed: container_active,
+        }
     }
 
     fn layout_no_wrap(

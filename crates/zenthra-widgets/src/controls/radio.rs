@@ -19,7 +19,7 @@ pub struct RadioBuilder<'u, 'a, 'b, T: PartialEq + Clone> {
     bg: Color,
     ring_color: Color,
     dot_color: Color,
-    stroke_width: f32,
+    border_width: f32,
 
     // Label Style
     label_size: f32,
@@ -56,7 +56,7 @@ impl<'u, 'a, 'b, T: PartialEq + Clone> RadioBuilder<'u, 'a, 'b, T> {
             bg: Color::TRANSPARENT,
             ring_color: Color::rgb(0.4, 0.4, 0.4),
             dot_color: Color::rgb(0.2, 0.5, 1.0),
-            stroke_width: 1.5,
+            border_width: 1.5,
 
             label_size: 14.0,
             label_color: Color::WHITE,
@@ -91,8 +91,8 @@ impl<'u, 'a, 'b, T: PartialEq + Clone> RadioBuilder<'u, 'a, 'b, T> {
         self
     }
 
-    pub fn stroke(mut self, width: f32) -> Self {
-        self.stroke_width = width;
+    pub fn border(mut self, width: f32) -> Self {
+        self.border_width = width;
         self
     }
 
@@ -133,6 +133,14 @@ impl<'u, 'a, 'b, T: PartialEq + Clone> RadioBuilder<'u, 'a, 'b, T> {
 
     pub fn disabled(mut self, disabled: bool) -> Self {
         self.disabled = disabled;
+        self
+    }
+
+    pub fn id(mut self, id: impl std::hash::Hash) -> Self {
+        let mut hasher = std::collections::hash_map::DefaultHasher::new();
+        use std::hash::Hasher;
+        id.hash(&mut hasher);
+        self.id = Id::from_u64(hasher.finish());
         self
     }
 
@@ -227,13 +235,6 @@ impl<'u, 'a, 'b, T: PartialEq + Clone> RadioBuilder<'u, 'a, 'b, T> {
         let mut r_color = ring_color;
         if self.disabled { r_color.a *= 0.5; }
 
-        let mut shadow_color = Color::TRANSPARENT;
-        let mut shadow_blur = 0.0;
-        if self.glow && is_active {
-            shadow_color = self.dot_color;
-            shadow_color.a *= 0.4 * final_sel;
-            shadow_blur = 10.0 * final_sel;
-        }
 
         self.ui.draws.push(DrawCommand::Rect(RectDraw {
             instance: RectInstance {
@@ -241,7 +242,7 @@ impl<'u, 'a, 'b, T: PartialEq + Clone> RadioBuilder<'u, 'a, 'b, T> {
                 size: [base_size, base_size],
                 color: self.bg.to_array(),
                 radius,
-                border_width: self.stroke_width,
+                border_width: self.border_width,
                 border_color: r_color.to_array(),
                 brightness: if is_hovered { 1.2 } else { 1.0 },
                 shadow_color: if self.shadow_enabled {
