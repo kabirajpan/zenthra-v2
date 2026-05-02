@@ -291,8 +291,8 @@ impl<'u, 'a> TextBuilder<'u, 'a> {
         self
     }
     
-    pub fn wrap(mut self, strategy: TextWrap) -> Self {
-        self.options = self.options.wrap(strategy);
+    pub fn wrap(mut self, strategy: impl Into<TextWrap>) -> Self {
+        self.options = self.options.wrap(strategy.into());
         self
     }
 

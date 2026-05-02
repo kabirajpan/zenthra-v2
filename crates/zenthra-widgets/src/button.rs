@@ -43,6 +43,8 @@ pub struct ButtonBuilder<'u, 'a> {
     hover_border_width: Option<f32>,
     active_border_color: Option<Color>,
     active_border_width: Option<f32>,
+    wrap: zenthra_text::prelude::TextWrap,
+    fill_x: bool,
 }
 
 impl<'u, 'a> ButtonBuilder<'u, 'a> {
@@ -76,6 +78,8 @@ impl<'u, 'a> ButtonBuilder<'u, 'a> {
             hover_border_width: None,
             active_border_color: None,
             active_border_width: None,
+            wrap: zenthra_text::prelude::TextWrap::Word,
+            fill_x: false,
         }
     }
 
@@ -268,6 +272,16 @@ impl<'u, 'a> ButtonBuilder<'u, 'a> {
         self
     }
 
+    pub fn wrap(mut self, strategy: impl Into<zenthra_text::prelude::TextWrap>) -> Self {
+        self.wrap = strategy.into();
+        self
+    }
+
+    pub fn fill_x(mut self) -> Self {
+        self.fill_x = true;
+        self
+    }
+
     pub fn show(self) -> zenthra_core::Response {
         if let Some(mode) = self.render_mode {
             self.ui.render_mode_stack.push(mode);
@@ -332,14 +346,20 @@ impl<'u, 'a> ButtonBuilder<'u, 'a> {
             // use zenthra_text::traits::FontProvider;
             let mut adapter =
                 zenthra_text::prelude::CosmicFontProvider::new_with_system(fs.clone());
-            let options = zenthra_text::prelude::TextOptions::new().font_size(self.font_size);
+            let options = zenthra_text::prelude::TextOptions::new()
+                .font_size(self.font_size)
+                .wrap(self.wrap);
             let buffer = adapter.shape(&self.label, &options);
             let (cw, ch) = buffer.content_size();
             text_w = cw;
             text_h = ch;
         }
 
-        let mut final_w = self.width.unwrap_or(text_w + self.padding.horizontal());
+        let mut final_w = if self.fill_x {
+            self.ui.available_width
+        } else {
+            self.width.unwrap_or(text_w + self.padding.horizontal())
+        };
         let mut final_h = self.height.unwrap_or(text_h + self.padding.vertical());
 
         let final_border_w = final_border_w;
@@ -391,6 +411,7 @@ impl<'u, 'a> ButtonBuilder<'u, 'a> {
             options: zenthra_text::prelude::TextOptions::new()
                 .font_size(self.font_size)
                 .color(current_text)
+                .wrap(self.wrap)
                 .at(tx, ty),
             clip: [0.0, 0.0, 9999.0, 9999.0],
         }));

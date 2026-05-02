@@ -264,7 +264,6 @@ impl<'u, 'a, 'b, T: PartialEq + Clone + ToString> DropdownBuilder<'u, 'a, 'b, T>
             if self.ui.clicked && !is_hovered {
                 let menu_hovered = self.ui.mouse_in_rect(menu_ox, menu_oy, self.width, menu_h);
                 if !menu_hovered {
-                    is_open = false;
                     self.ui.interaction_state.insert(open_id, 0.0);
                     self.ui.needs_redraw = true;
                 }
@@ -299,7 +298,6 @@ impl<'u, 'a, 'b, T: PartialEq + Clone + ToString> DropdownBuilder<'u, 'a, 'b, T>
                 
                 if item_hovered && self.ui.clicked {
                     *self.selected = opt.clone();
-                    is_open = false;
                     self.ui.interaction_state.insert(open_id, 0.0);
                     self.ui.needs_redraw = true;
                 }

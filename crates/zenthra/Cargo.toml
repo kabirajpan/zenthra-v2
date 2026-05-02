@@ -107,3 +107,11 @@ path = "../../examples/scroll_test.rs"
 [[example]]
 name = "dropdown_test"
 path = "../../examples/dropdown_test.rs"
+
+[[example]]
+name = "simple_dynamic"
+path = "../../examples/simple_dynamic.rs"
+
+[[example]]
+name = "floating_window"
+path = "../../examples/floating_window.rs"

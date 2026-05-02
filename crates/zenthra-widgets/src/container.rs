@@ -478,15 +478,16 @@ impl<'u, 'a> ContainerBuilder<'u, 'a> {
         } else {
             (prev_max_x - ox - self.padding_left - self.padding_right - 2.0 * self.border_width).max(0.0)
         };
-
         let avail_h = if let Some(h) = self.height {
             h - self.padding_top - self.padding_bottom - 2.0 * self.border_width
         } else {
             (prev_max_y - oy - self.padding_top - self.padding_bottom - 2.0 * self.border_width).max(0.0)
         };
 
-        self.ui.max_x = (ox + self.padding_left + self.border_width + avail_w).min(prev_max_x);
-        self.ui.max_y = (oy + self.padding_top + self.border_width + avail_h).min(prev_max_y);
+        // Important: If we are absolute, our internal boundary is NOT capped by prev_max_x.
+        // This allows us to have a full width even at the edge of the screen.
+        self.ui.max_x = ox + self.padding_left + self.border_width + avail_w;
+        self.ui.max_y = oy + self.padding_top + self.border_width + avail_h;
 
         self.ui.semantic_stack.push(id);
         self.ui.register_semantic(zenthra_core::SemanticNode::new(id, zenthra_core::Role::Container, zenthra_core::Rect::new(ox, oy, 0.0, 0.0)));
@@ -598,7 +599,7 @@ impl<'u, 'a> ContainerBuilder<'u, 'a> {
         let mouse_in_parent = if self.ui.skip_clip_stack.last().cloned().unwrap_or(false) {
             true
         } else {
-            prev_viewport.contains(glam::Vec2::new(self.ui.mouse_x, self.ui.mouse_y))
+            prev_viewport.contains(zenthra_core::Point::new(self.ui.mouse_x, self.ui.mouse_y))
         };
 
         let container_hover = mouse_in_parent && self.ui.mouse_in_rect(actual_ox, actual_oy, w, h);

@@ -696,8 +696,8 @@ impl<'u, 'a, 'b> TextAreaBuilder<'u, 'a, 'b> {
                 let first_line_y = sb.lines().first().map(|l| l.y).unwrap_or(visual_ascent);
                 let v_shift = visual_ascent - first_line_y;
 
-                let final_border_w = self.border_width;
-                let final_border_c = self.border_color.unwrap_or(Color::rgba(1.0, 1.0, 1.0, 0.4));
+                let _final_border_w = self.border_width;
+                let _final_border_c = self.border_color.unwrap_or(Color::rgba(1.0, 1.0, 1.0, 0.4));
                 let mut lx = 0.0;
                 let mut ly = first_line_y;
                 let mut found = false;

@@ -1,5 +1,5 @@
 use zenthra_platform::app::{App as PlatformApp, Frame};
-use zenthra_render::RectPipeline;
+use zenthra_render::{RectInstance, RectPipeline};
 use zenthra_text::prelude::*;
 use zenthra_widgets::ui::DrawCommand;
 use zenthra_widgets::Ui;
@@ -136,112 +136,6 @@ impl App {
                     (ui.draws, ui.overlays)
                 };
 
-                let mut main_rects = Vec::new();
-                let mut main_images = Vec::new();
-                let mut main_overlay_rects = Vec::new();
-
-                // 1. Process Main Pass Commands
-                for cmd in &draws {
-                    match cmd {
-                        DrawCommand::Rect(rd) => {
-                            let mut inst = rd.instance;
-                            inst.pos[0] *= sf; inst.pos[1] *= sf;
-                            inst.size[0] *= sf; inst.size[1] *= sf;
-                            inst.shadow_offset[0] *= sf; inst.shadow_offset[1] *= sf;
-                            inst.shadow_blur *= sf;
-                            inst.clip_rect[0] *= sf; inst.clip_rect[1] *= sf;
-                            inst.clip_rect[2] *= sf; inst.clip_rect[3] *= sf;
-                            main_rects.push(inst);
-                        }
-                        DrawCommand::Image(id_cmd) => {
-                            if !texture_cache.contains_key(&id_cmd.source) {
-                                let bytes = match &id_cmd.source {
-                                    zenthra_core::ImageSource::Path(p) => std::fs::read(p).unwrap_or_default(),
-                                    zenthra_core::ImageSource::Bytes(b) => b.to_vec(),
-                                };
-                                if let Ok((bg, w, h)) = zenthra_render::texture::create_texture_bind_group(&device, queue, &ip.texture_bgl, &bytes) {
-                                    texture_cache.insert(id_cmd.source.clone(), (std::sync::Arc::new(bg), w, h));
-                                    image_sizes.insert(id_cmd.source.clone(), (w, h));
-                                    needs_redraw = true;
-                                }
-                            }
-                            if let Some((bg, _tw, _th)) = texture_cache.get(&id_cmd.source) {
-                                let mut inst = id_cmd.instance;
-                                inst.pos[0] *= sf; inst.pos[1] *= sf;
-                                inst.size[0] *= sf; inst.size[1] *= sf;
-                                inst.clip_rect[0] *= sf; inst.clip_rect[1] *= sf;
-                                inst.clip_rect[2] *= sf; inst.clip_rect[3] *= sf;
-                                main_images.push((bg.clone(), inst));
-                            }
-                        }
-                        DrawCommand::Text(td) => {
-                            let mut opts = td.options.clone();
-                            opts.scale_factor = sf;
-                            opts.clip_rect = Some([td.clip[0] * sf, td.clip[1] * sf, td.clip[2] * sf, td.clip[3] * sf]);
-                            engine.draw(queue, &td.text, td.pos, &opts);
-                        }
-                        DrawCommand::OverlayRect(od) => {
-                            main_overlay_rects.push(zenthra_render::RectInstance {
-                                pos: [od.x * sf, od.y * sf],
-                                size: [od.width * sf, od.height * sf],
-                                color: od.color.to_array(),
-                                clip_rect: [od.clip[0] * sf, od.clip[1] * sf, od.clip[2] * sf, od.clip[3] * sf],
-                                ..Default::default()
-                            });
-                        }
-                        _ => {}
-                    }
-                }
-                
-                // 2. Process Overlay Pass Commands
-                let mut overlay_rects = Vec::new();
-                let mut overlay_text_cmds = Vec::new();
-                for cmd in &overlays {
-                    match cmd {
-                        DrawCommand::Rect(rd) => {
-                            let mut inst = rd.instance;
-                            inst.pos[0] *= sf; inst.pos[1] *= sf;
-                            inst.size[0] *= sf; inst.size[1] *= sf;
-                            inst.shadow_offset[0] *= sf; inst.shadow_offset[1] *= sf;
-                            inst.shadow_blur *= sf;
-                            inst.clip_rect[0] *= sf; inst.clip_rect[1] *= sf;
-                            inst.clip_rect[2] *= sf; inst.clip_rect[3] *= sf;
-                            overlay_rects.push(inst);
-                        }
-                        DrawCommand::OverlayRect(od) => {
-                            overlay_rects.push(zenthra_render::RectInstance {
-                                pos: [od.x * sf, od.y * sf],
-                                size: [od.width * sf, od.height * sf],
-                                color: od.color.to_array(),
-                                clip_rect: [od.clip[0] * sf, od.clip[1] * sf, od.clip[2] * sf, od.clip[3] * sf],
-                                ..Default::default()
-                            });
-                        }
-                        DrawCommand::Text(td) => {
-                            overlay_text_cmds.push(td);
-                        }
-                        _ => {}
-                    }
-                }
-
-                // Prepare Pipeline Buffers
-                rp.prepare(&device, queue, width, height, &main_rects);
-                let mut overlay_p_rp = zenthra_render::RectPipeline::new(&device, config.format);
-                overlay_p_rp.prepare(&device, queue, width, height, &main_overlay_rects);
-                let mut overlay_rp = zenthra_render::RectPipeline::new(&device, config.format);
-                overlay_rp.prepare(&device, queue, width, height, &overlay_rects);
-
-                let mut main_img_bufs = Vec::new();
-                for (bg, inst) in main_images {
-                    use wgpu::util::DeviceExt;
-                    let buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                        label: Some("Image Instance"),
-                        contents: bytemuck::bytes_of(&inst),
-                        usage: wgpu::BufferUsages::VERTEX,
-                    });
-                    main_img_bufs.push((bg, buf));
-                }
-
                 let surface_texture = match frame.window.gpu.surface.get_current_texture() {
                     wgpu::CurrentSurfaceTexture::Success(t) => t,
                     _ => return false,
@@ -249,10 +143,10 @@ impl App {
                 let view = surface_texture.texture.create_view(&wgpu::TextureViewDescriptor::default());
                 let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: Some("Zenthra Frame") });
 
-                // --- PASS 1: MAIN UI ---
+                // --- PASS 1: CLEAR ---
                 {
-                    let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-                        label: Some("Main Pass"),
+                    encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                        label: Some("Clear Pass"),
                         color_attachments: &[Some(wgpu::RenderPassColorAttachment {
                             view: &view,
                             resolve_target: None,
@@ -267,47 +161,190 @@ impl App {
                         occlusion_query_set: None,
                         multiview_mask: None,
                     });
+                }
 
-                    rp.draw(&mut pass);
-                    for (bg, buf) in &main_img_bufs {
-                        ip.draw(&mut pass, bg, buf, 1);
+                // Prepare RectPipeline uniforms once for the frame
+                rp.prepare(&device, queue, width, height, &[]);
+
+                // Prepare RectPipeline uniforms once for the frame
+                rp.prepare(&device, queue, width, height, &[]);
+
+                // Temporary storage for buffers to keep them alive during the pass
+                let mut temp_buffers: Vec<wgpu::Buffer> = Vec::new();
+
+                // Helper to process a command list interleaved
+                let mut process_interleaved = |encoder: &mut wgpu::CommandEncoder, view: &wgpu::TextureView, cmds: &[DrawCommand], temp_bufs: &mut Vec<wgpu::Buffer>| {
+                    let mut current_rects = Vec::new();
+
+                    let flush_batch = |encoder: &mut wgpu::CommandEncoder, view: &wgpu::TextureView, rects: &mut Vec<RectInstance>, temp_bufs: &mut Vec<wgpu::Buffer>| {
+                        if rects.is_empty() { return; }
+                        use wgpu::util::DeviceExt;
+                        let buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                            label: Some("Rect Instance Buffer"),
+                            contents: bytemuck::cast_slice(rects),
+                            usage: wgpu::BufferUsages::VERTEX,
+                        });
+
+                        {
+                            let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                                label: Some("Rect Batch Pass"),
+                                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                                    view,
+                                    resolve_target: None,
+                                    ops: wgpu::Operations {
+                                        load: wgpu::LoadOp::Load,
+                                        store: wgpu::StoreOp::Store,
+                                    },
+                                    depth_slice: None,
+                                })],
+                                depth_stencil_attachment: None,
+                                timestamp_writes: None,
+                                occlusion_query_set: None,
+                                multiview_mask: None,
+                            });
+                            
+                            pass.set_pipeline(&rp.pipeline);
+                            pass.set_bind_group(0, &rp.uniform_bg, &[]);
+                            pass.set_vertex_buffer(0, buf.slice(..));
+                            pass.draw(0..6, 0..rects.len() as u32);
+                        }
+                        
+                        temp_bufs.push(buf);
+                        rects.clear();
+                    };
+
+                    for cmd in cmds {
+                        match cmd {
+                            DrawCommand::Rect(rd) => {
+                                let mut inst = rd.instance;
+                                inst.pos[0] *= sf; inst.pos[1] *= sf;
+                                inst.size[0] *= sf; inst.size[1] *= sf;
+                                inst.shadow_offset[0] *= sf; inst.shadow_offset[1] *= sf;
+                                inst.shadow_blur *= sf;
+                                inst.clip_rect[0] *= sf; inst.clip_rect[1] *= sf;
+                                inst.clip_rect[2] *= sf; inst.clip_rect[3] *= sf;
+                                current_rects.push(inst);
+                            }
+                            DrawCommand::Text(td) => {
+                                flush_batch(encoder, view, &mut current_rects, temp_bufs);
+                                let mut opts = td.options.clone();
+                                opts.scale_factor = sf;
+                                opts.clip_rect = Some([td.clip[0] * sf, td.clip[1] * sf, td.clip[2] * sf, td.clip[3] * sf]);
+                                engine.draw(queue, &td.text, td.pos, &opts);
+                                
+                                let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                                    label: Some("Text Pass"),
+                                    color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                                        view,
+                                        resolve_target: None,
+                                        ops: wgpu::Operations {
+                                            load: wgpu::LoadOp::Load,
+                                            store: wgpu::StoreOp::Store,
+                                        },
+                                        depth_slice: None,
+                                    })],
+                                    depth_stencil_attachment: None,
+                                    timestamp_writes: None,
+                                    occlusion_query_set: None,
+                                    multiview_mask: None,
+                                });
+                                engine.render(&mut pass);
+                            }
+                            DrawCommand::Image(id_cmd) => {
+                                flush_batch(encoder, view, &mut current_rects, temp_bufs);
+                                if !texture_cache.contains_key(&id_cmd.source) {
+                                    let bytes = match &id_cmd.source {
+                                        zenthra_core::ImageSource::Path(p) => std::fs::read(p).unwrap_or_default(),
+                                        zenthra_core::ImageSource::Bytes(b) => b.to_vec(),
+                                    };
+                                    if let Ok((bg, w, h)) = zenthra_render::texture::create_texture_bind_group(&device, queue, &ip.texture_bgl, &bytes) {
+                                        texture_cache.insert(id_cmd.source.clone(), (std::sync::Arc::new(bg), w, h));
+                                        image_sizes.insert(id_cmd.source.clone(), (w, h));
+                                    }
+                                }
+                                if let Some((bg, _tw, _th)) = texture_cache.get(&id_cmd.source) {
+                                    let mut inst = id_cmd.instance;
+                                    inst.pos[0] *= sf; inst.pos[1] *= sf;
+                                    inst.size[0] *= sf; inst.size[1] *= sf;
+                                    inst.clip_rect[0] *= sf; inst.clip_rect[1] *= sf;
+                                    inst.clip_rect[2] *= sf; inst.clip_rect[3] *= sf;
+                                    
+                                    use wgpu::util::DeviceExt;
+                                    let buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                                        label: Some("Image Instance"),
+                                        contents: bytemuck::bytes_of(&inst),
+                                        usage: wgpu::BufferUsages::VERTEX,
+                                    });
+                                    
+                                    {
+                                        let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                                            label: Some("Image Pass"),
+                                            color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                                                view,
+                                                resolve_target: None,
+                                                ops: wgpu::Operations {
+                                                    load: wgpu::LoadOp::Load,
+                                                    store: wgpu::StoreOp::Store,
+                                                },
+                                                depth_slice: None,
+                                            })],
+                                            depth_stencil_attachment: None,
+                                            timestamp_writes: None,
+                                            occlusion_query_set: None,
+                                            multiview_mask: None,
+                                        });
+                                        ip.draw(&mut pass, bg, &buf, 1);
+                                    }
+                                    temp_bufs.push(buf);
+                                }
+                            }
+                            DrawCommand::OverlayRect(od) => {
+                                flush_batch(encoder, view, &mut current_rects, temp_bufs);
+                                use wgpu::util::DeviceExt;
+                                let inst = zenthra_render::RectInstance {
+                                    pos: [od.x * sf, od.y * sf],
+                                    size: [od.width * sf, od.height * sf],
+                                    color: od.color.to_array(),
+                                    clip_rect: [od.clip[0] * sf, od.clip[1] * sf, od.clip[2] * sf, od.clip[3] * sf],
+                                    ..Default::default()
+                                };
+                                let buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                                    label: Some("Overlay Rect Buffer"),
+                                    contents: bytemuck::bytes_of(&inst),
+                                    usage: wgpu::BufferUsages::VERTEX,
+                                });
+                                
+                                {
+                                    let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                                        label: Some("Overlay Rect Pass"),
+                                        color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                                            view,
+                                            resolve_target: None,
+                                            ops: wgpu::Operations {
+                                                load: wgpu::LoadOp::Load,
+                                                store: wgpu::StoreOp::Store,
+                                            },
+                                            depth_slice: None,
+                                        })],
+                                        depth_stencil_attachment: None,
+                                        timestamp_writes: None,
+                                        occlusion_query_set: None,
+                                        multiview_mask: None,
+                                    });
+                                    pass.set_pipeline(&rp.pipeline);
+                                    pass.set_bind_group(0, &rp.uniform_bg, &[]);
+                                    pass.set_vertex_buffer(0, buf.slice(..));
+                                    pass.draw(0..6, 0..1);
+                                }
+                                temp_bufs.push(buf);
+                            }
+                        }
                     }
-                    engine.render(&mut pass);
-                    
-                    // NEW: Draw main overlays (cursor, scrollbars) AFTER text/highlights
-                    overlay_p_rp.draw(&mut pass);
-                }
+                    flush_batch(encoder, view, &mut current_rects, temp_bufs);
+                };
 
-                // --- PREPARE OVERLAY TEXT ---
-                for td in overlay_text_cmds {
-                    let mut opts = td.options.clone();
-                    opts.scale_factor = sf;
-                    opts.clip_rect = Some([td.clip[0] * sf, td.clip[1] * sf, td.clip[2] * sf, td.clip[3] * sf]);
-                    engine.draw(queue, &td.text, td.pos, &opts);
-                }
-
-                // --- PASS 2: OVERLAYS ---
-                {
-                    let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-                        label: Some("Overlay Pass"),
-                        color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                            view: &view,
-                            resolve_target: None,
-                            ops: wgpu::Operations {
-                                load: wgpu::LoadOp::Load, // Keep what we drew in Pass 1
-                                store: wgpu::StoreOp::Store,
-                            },
-                            depth_slice: None,
-                        })],
-                        depth_stencil_attachment: None,
-                        timestamp_writes: None,
-                        occlusion_query_set: None,
-                        multiview_mask: None,
-                    });
-
-                    overlay_rp.draw(&mut pass);
-                    engine.render(&mut pass);
-                }
+                process_interleaved(&mut encoder, &view, &draws, &mut temp_buffers);
+                process_interleaved(&mut encoder, &view, &overlays, &mut temp_buffers);
 
                 queue.submit(std::iter::once(encoder.finish()));
                 surface_texture.present();

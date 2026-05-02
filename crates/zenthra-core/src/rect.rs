@@ -69,7 +69,7 @@ impl Rect {
         Self::new(min.x, min.y, max.x - min.x, max.y - min.y)
     }
 
-    pub fn contains(&self, p: Vec2) -> bool {
+    pub fn contains(&self, p: Point) -> bool {
         p.x >= self.origin.x
             && p.y >= self.origin.y
             && p.x <= self.origin.x + self.size.width

@@ -285,6 +285,12 @@ pub enum TextWrap {
     None,
 }
 
+impl From<bool> for TextWrap {
+    fn from(b: bool) -> Self {
+        if b { TextWrap::Word } else { TextWrap::None }
+    }
+}
+
 /// Horizontal text alignment.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum HorizontalAlignment {

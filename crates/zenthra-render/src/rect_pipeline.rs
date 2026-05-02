@@ -147,11 +147,11 @@ struct ScreenUniforms {
 }
 
 pub struct RectPipeline {
-    pipeline: wgpu::RenderPipeline,
-    uniform_buffer: wgpu::Buffer,
-    uniform_bg: wgpu::BindGroup,
-    instance_buffer: Option<wgpu::Buffer>,
-    instance_count: u32,
+    pub pipeline: wgpu::RenderPipeline,
+    pub uniform_buffer: wgpu::Buffer,
+    pub uniform_bg: wgpu::BindGroup,
+    pub instance_buffer: Option<wgpu::Buffer>,
+    pub instance_count: u32,
 }
 
 impl RectPipeline {
