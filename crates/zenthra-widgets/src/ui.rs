@@ -94,6 +94,7 @@ pub struct Ui<'a> {
     pub image_sizes: &'a std::collections::HashMap<zenthra_core::ImageSource, (u32, u32)>,
     pub available_width: f32,
     pub skip_clip_stack: Vec<bool>,
+    pub current_viewport: Rect,
 }
 
 impl<'a> Ui<'a> {
@@ -164,6 +165,7 @@ impl<'a> Ui<'a> {
             image_sizes,
             available_width: width as f32,
             skip_clip_stack: Vec::new(),
+            current_viewport: Rect::new(0.0, 0.0, width as f32, height as f32),
         }
     }
 

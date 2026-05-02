@@ -428,6 +428,7 @@ impl<'u, 'a> ContainerBuilder<'u, 'a> {
         let prev_base_y = self.ui.base_y;
         let prev_offset_x = self.ui.offset_x;
         let prev_offset_y = self.ui.offset_y;
+        let prev_viewport = self.ui.current_viewport;
         
         // Take and isolate state maps for children
         let prev_child_sizes = std::mem::take(&mut self.ui.child_sizes);
@@ -497,6 +498,16 @@ impl<'u, 'a> ContainerBuilder<'u, 'a> {
         self.ui.cursor_x = self.ui.base_x;
         self.ui.cursor_y = self.ui.base_y;
 
+        // Update viewport for children if clipping is enabled
+        if self.clip {
+            if let Some((rect, _)) = self.ui.get_recorded_layout(id) {
+                let my_screen_rect = [rect.origin.x + prev_global_ox, rect.origin.y + prev_global_oy, rect.size.width, rect.size.height];
+                let parent_rect = [prev_viewport.origin.x, prev_viewport.origin.y, prev_viewport.size.width, prev_viewport.size.height];
+                let intersected = intersect_rects(my_screen_rect, parent_rect);
+                self.ui.current_viewport = zenthra_core::Rect::new(intersected[0], intersected[1], intersected[2], intersected[3]);
+            }
+        }
+
         // -- Run Children --
         f(self.ui);
 
@@ -508,6 +519,7 @@ impl<'u, 'a> ContainerBuilder<'u, 'a> {
         // -- Restore Stacks and Environment --
         self.ui.render_mode_stack.pop();
         self.ui.semantic_stack.pop();
+        self.ui.current_viewport = prev_viewport;
         
         // Capture everything the children created
         let child_ids_only = std::mem::replace(&mut self.ui.id_log, prev_id_log);
@@ -563,24 +575,15 @@ impl<'u, 'a> ContainerBuilder<'u, 'a> {
         let max_sy = (content_h + self.padding_top + self.padding_bottom - h).max(0.0);
 
         let (actual_ox, actual_oy) = if let Some((rect, _)) = self.ui.get_recorded_layout(id) {
-            (rect.origin.x + self.ui.offset_x, rect.origin.y + self.ui.offset_y)
+            (rect.origin.x + prev_global_ox, rect.origin.y + prev_global_oy)
         } else {
-            (ox + self.ui.offset_x, oy + self.ui.offset_y)
+            (ox + prev_global_ox, oy + prev_global_oy)
         };
-
-        // Parent Content Clipping for Hit Detection Accuracy
-        let (max_x, max_y) = self.ui.get_max_bounds();
-        let (base_x, base_y) = (self.ui.base_x, self.ui.base_y);
-        let screen_base_x = base_x + prev_global_ox;
-        let screen_base_y = base_y + prev_global_oy;
-        let screen_max_x = max_x + prev_global_ox;
-        let screen_max_y = max_y + prev_global_oy;
 
         let mouse_in_parent = if self.ui.skip_clip_stack.last().cloned().unwrap_or(false) {
             true
         } else {
-            self.ui.mouse_x >= screen_base_x && self.ui.mouse_x <= screen_max_x &&
-            self.ui.mouse_y >= screen_base_y && self.ui.mouse_y <= screen_max_y
+            prev_viewport.contains(glam::Vec2::new(self.ui.mouse_x, self.ui.mouse_y))
         };
 
         let container_hover = mouse_in_parent && self.ui.mouse_in_rect(actual_ox, actual_oy, w, h);
@@ -741,10 +744,9 @@ impl<'u, 'a> ContainerBuilder<'u, 'a> {
                 let thumb_h = (h / (content_h + self.padding_top + self.padding_bottom)) * h;
                 let thumb_h = thumb_h.max(20.0);
                 let scroll_ratio = scroll_y / max_sy;
-                let thumb_y = oy + (h - thumb_h) * scroll_ratio;
-                let thumb_x = ox + w - bar_thickness - bar_margin;
-
                 let is_hover = self.ui.mouse_in_rect(actual_ox + w - bar_thickness - bar_margin - 2.0, actual_oy + (h - thumb_h) * scroll_ratio, bar_thickness + 4.0, thumb_h);
+                let thumb_x = actual_ox + w - bar_thickness - bar_margin;
+                let thumb_y = actual_oy + (h - thumb_h) * scroll_ratio;
                 let is_dragging = self.ui.active_drag.as_ref().map(|d| d.id == id && d.start_mouse <= -1000.0).unwrap_or(false); 
 
                 // Handle Drag Y
@@ -777,7 +779,7 @@ impl<'u, 'a> ContainerBuilder<'u, 'a> {
                         width: bar_thickness,
                         height: thumb_h,
                         color,
-                        clip: intersect_rects([ox, oy, w, h], [-100000.0, -100000.0, 2000000.0, 2000000.0]), 
+                        clip: intersect_rects([actual_ox, actual_oy, w, h], [-100000.0, -100000.0, 2000000.0, 2000000.0]), 
                     }));
                 }
             }
@@ -787,10 +789,9 @@ impl<'u, 'a> ContainerBuilder<'u, 'a> {
                 let thumb_w = (w / (content_w + self.padding_left + self.padding_right)) * w;
                 let thumb_w = thumb_w.max(20.0);
                 let scroll_ratio = scroll_x / max_sx;
-                let thumb_x = ox + (w - thumb_w) * scroll_ratio;
-                let thumb_y = oy + h - bar_thickness - bar_margin;
-
                 let is_hover = self.ui.mouse_in_rect(actual_ox + (w - thumb_w) * scroll_ratio, actual_oy + h - bar_thickness - bar_margin - 2.0, thumb_w, bar_thickness + 4.0);
+                let thumb_x = actual_ox + (w - thumb_w) * scroll_ratio;
+                let thumb_y = actual_oy + h - bar_thickness - bar_margin;
                 let is_dragging = self.ui.active_drag.as_ref().map(|d| d.id == id && d.start_mouse > -1000.0).unwrap_or(false);
 
                 if self.ui.clicked && is_hover {
@@ -822,7 +823,7 @@ impl<'u, 'a> ContainerBuilder<'u, 'a> {
                         width: thumb_w,
                         height: bar_thickness,
                         color,
-                        clip: [ox, oy, w, h],
+                        clip: [actual_ox, actual_oy, w, h],
                     }));
                 }
             }
