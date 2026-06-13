@@ -35,7 +35,7 @@ impl ZentypeAtlas {
             mip_level_count: 1,
             sample_count: 1,
             dimension: wgpu::TextureDimension::D2,
-            format: wgpu::TextureFormat::R8Unorm,
+            format: wgpu::TextureFormat::Rgba8Unorm,
             usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
             view_formats: &[],
         });
@@ -75,6 +75,7 @@ impl Atlas for ZentypeAtlas {
                 uv_size: [0.0, 0.0],
                 pixel_size: [glyph.width as f32, glyph.height as f32],
                 pixel_offset: [glyph.left as f32, glyph.top as f32],
+                is_color: glyph.is_color,
             },
         };
 
@@ -94,6 +95,20 @@ impl Atlas for ZentypeAtlas {
             uv_size,
             pixel_size: [glyph.width as f32, glyph.height as f32],
             pixel_offset: [glyph.left as f32, glyph.top as f32],
+            is_color: glyph.is_color,
+        };
+
+        let rgba_data = if glyph.is_color {
+            glyph.data.clone()
+        } else {
+            let mut data = Vec::with_capacity(glyph.data.len() * 4);
+            for &alpha in &glyph.data {
+                data.push(255);
+                data.push(255);
+                data.push(255);
+                data.push(alpha);
+            }
+            data
         };
 
         // 6. Queue the pixel data for GPU upload
@@ -102,7 +117,7 @@ impl Atlas for ZentypeAtlas {
             y: allocation.rectangle.min.y as u32,
             width: glyph.width,
             height: glyph.height,
-            data: glyph.data.clone(),
+            data: rgba_data,
         });
 
         // 7. Update cache
@@ -132,7 +147,7 @@ impl Atlas for ZentypeAtlas {
                 &write.data,
                 wgpu::TexelCopyBufferLayout {
                     offset: 0,
-                    bytes_per_row: Some(write.width),
+                    bytes_per_row: Some(write.width * 4),
                     rows_per_image: Some(write.height),
                 },
                 wgpu::Extent3d {

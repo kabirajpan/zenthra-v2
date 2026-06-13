@@ -2,6 +2,7 @@ use std::sync::{Arc, Mutex};
 use crate::renderer::TextRenderer;
 use crate::defaults::cosmic_font::CosmicFontProvider;
 use crate::defaults::swash_raster::SwashRasterizer;
+use crate::traits::FontProvider;
 
 use crate::types::options::TextOptions;
 use crate::types::color::Color;
@@ -21,7 +22,22 @@ impl Zentype {
     pub fn new(device: std::sync::Arc<wgpu::Device>, queue: &wgpu::Queue, config: &wgpu::SurfaceConfiguration) -> Self {
         // Initialize default engines
         let shaper = Box::new(CosmicFontProvider::new());
-        let rasterizer = Box::new(SwashRasterizer::new());
+        
+        // Auto-load Symbols Nerd Font asynchronously if present in assets/fonts/
+        let nerd_font_path = std::path::Path::new("assets/fonts/SymbolsNerdFont-Regular.ttf");
+        if nerd_font_path.exists() {
+            let font_system = shaper.font_system();
+            let path = nerd_font_path.to_path_buf();
+            std::thread::spawn(move || {
+                match font_system.lock().unwrap().db_mut().load_font_file(&path) {
+                    Ok(_) => println!("Successfully auto-loaded Nerd Font from {:?}", path),
+                    Err(e) => eprintln!("Failed to auto-load Nerd Font: {:?}", e),
+                }
+            });
+        }
+
+        let font_system = shaper.font_system();
+        let rasterizer = Box::new(SwashRasterizer::new(font_system));
         let atlas = crate::primitives::atlas::GlyphAtlas::new(&device, 2048);
         
         // Build the managed renderer

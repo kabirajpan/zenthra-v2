@@ -394,7 +394,13 @@ impl<'u, 'a> ImageBuilder<'u, 'a> {
                 (Some(w), Some(h)) => (w, h),
                 (Some(w), None) => (w, w / ratio),
                 (None, Some(h)) => (h * ratio, h),
-                (None, None) => (orig_w, orig_h),
+                (None, None) => {
+                    if orig_w > self.ui.available_width && self.ui.available_width > 0.0 {
+                        (self.ui.available_width, self.ui.available_width / ratio)
+                    } else {
+                        (orig_w, orig_h)
+                    }
+                }
             }
         };
 
@@ -406,16 +412,7 @@ impl<'u, 'a> ImageBuilder<'u, 'a> {
         let local_x = start_x + self.margin.left;
         let local_y = start_y + self.margin.top;
 
-        let is_hovered = if let Some((rect, _)) = self.ui.get_recorded_layout(self.id) {
-            self.ui.mouse_in_rect(
-                rect.origin.x + self.ui.offset_x,
-                rect.origin.y + self.ui.offset_y,
-                rect.size.width,
-                rect.size.height,
-            )
-        } else {
-            self.ui.mouse_in_rect(local_x + self.ui.offset_x, local_y + self.ui.offset_y, w, h)
-        };
+        let is_hovered = self.ui.is_hovered(self.id, local_x + self.ui.offset_x, local_y + self.ui.offset_y, w, h);
 
         let is_pressed = is_hovered && self.ui.mouse_down;
         let clicked = self.ui.clicked && is_hovered;
@@ -447,6 +444,66 @@ impl<'u, 'a> ImageBuilder<'u, 'a> {
             c.to_array()
         };
 
+        let uv_rect = if w <= 0.0 || h <= 0.0 || orig_w <= 0.0 || orig_h <= 0.0 {
+            [0.0, 0.0, 1.0, 1.0]
+        } else {
+            let r_t = orig_w / orig_h;
+            let r_w = w / h;
+            match self.fit {
+                ObjectFit::Fill => [0.0, 0.0, 1.0, 1.0],
+                ObjectFit::Cover => {
+                    if r_t > r_w {
+                        let u_size = r_w / r_t;
+                        let u_start = (1.0 - u_size) / 2.0;
+                        [u_start, 0.0, u_size, 1.0]
+                    } else {
+                        let v_size = r_t / r_w;
+                        let v_start = (1.0 - v_size) / 2.0;
+                        [0.0, v_start, 1.0, v_size]
+                    }
+                }
+                ObjectFit::Contain => {
+                    if r_t > r_w {
+                        let v_size = r_t / r_w;
+                        let v_start = -0.5 * (v_size - 1.0);
+                        [0.0, v_start, 1.0, v_size]
+                    } else {
+                        let u_size = r_w / r_t;
+                        let u_start = -0.5 * (u_size - 1.0);
+                        [u_start, 0.0, u_size, 1.0]
+                    }
+                }
+                ObjectFit::None => {
+                    let u_size = w / orig_w;
+                    let u_start = -0.5 * (u_size - 1.0);
+                    let v_size = h / orig_h;
+                    let v_start = -0.5 * (v_size - 1.0);
+                    [u_start, v_start, u_size, v_size]
+                }
+                ObjectFit::ScaleDown => {
+                    if orig_w > w || orig_h > h {
+                        // Behave like Contain
+                        if r_t > r_w {
+                            let v_size = r_t / r_w;
+                            let v_start = -0.5 * (v_size - 1.0);
+                            [0.0, v_start, 1.0, v_size]
+                        } else {
+                            let u_size = r_w / r_t;
+                            let u_start = -0.5 * (u_size - 1.0);
+                            [u_start, 0.0, u_size, 1.0]
+                        }
+                    } else {
+                        // Behave like None
+                        let u_size = w / orig_w;
+                        let u_start = -0.5 * (u_size - 1.0);
+                        let v_size = h / orig_h;
+                        let v_start = -0.5 * (v_size - 1.0);
+                        [u_start, v_start, u_size, v_size]
+                    }
+                }
+            }
+        };
+
         self.ui.draws.push(DrawCommand::Image(ImageDraw {
             source: self.source.clone(),
             fit: self.fit,
@@ -465,7 +522,7 @@ impl<'u, 'a> ImageBuilder<'u, 'a> {
                 grayscale: current_grayscale,
                 brightness: 1.0,
                 opacity: current_opacity,
-                uv_rect: [0.0, 0.0, 1.0, 1.0], // App texture manager will compute this based on ObjectFit
+                uv_rect,
                 bg_color: self.bg.to_array(),
                 rotation: self.rotation,
                 flip: [if self.flip_h { -1.0 } else { 1.0 }, if self.flip_v { -1.0 } else { 1.0 }],

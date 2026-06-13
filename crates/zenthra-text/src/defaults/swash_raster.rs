@@ -7,47 +7,47 @@ use cosmic_text::{SwashCache, FontSystem};
 /// 
 /// This default implementation leverages `cosmic-text`'s SwashCache, 
 /// but wraps it to satisfy the Zentype Rasterizer trait.
+use std::sync::{Arc, Mutex};
+
+/// A Rasterizer implementation that uses the `swash` engine.
+/// 
+/// This default implementation leverages `cosmic-text`'s SwashCache, 
+/// but wraps it to satisfy the Zentype Rasterizer trait.
 pub struct SwashRasterizer {
     cache: SwashCache,
-    // Note: We maintain a local FontSystem here to allow the Rasterizer to be 
-    // standalone for simple cases. In high-performance rendering (Phase 6+), 
-    // this will likely be shared.
-    font_system: FontSystem,
+    font_system: Arc<Mutex<FontSystem>>,
 }
 
 impl SwashRasterizer {
-    /// Creates a new SwashRasterizer.
-    pub fn new() -> Self {
+    /// Creates a new SwashRasterizer with a shared FontSystem.
+    pub fn new(font_system: Arc<Mutex<FontSystem>>) -> Self {
         Self {
             cache: SwashCache::new(),
-            font_system: FontSystem::new(),
+            font_system,
         }
     }
 
     /// Access the internal font system (to synchronize fonts).
-    pub fn font_system_mut(&mut self) -> &mut FontSystem {
-        &mut self.font_system
-    }
-}
-
-impl Default for SwashRasterizer {
-    fn default() -> Self {
-        Self::new()
+    pub fn font_system(&self) -> Arc<Mutex<FontSystem>> {
+        self.font_system.clone()
     }
 }
 
 impl Rasterizer for SwashRasterizer {
     fn rasterize(&mut self, glyph: &ShapedGlyph) -> Option<RasterizedGlyph> {
+        let mut fs = self.font_system.lock().unwrap();
         // Use the cache to get the pixel data
-        let image = self.cache.get_image(&mut self.font_system, glyph.key).as_ref()?;
+        let image = self.cache.get_image(&mut fs, glyph.key).as_ref()?;
         
+        let is_color = matches!(image.content, cosmic_text::SwashContent::Color);
+
         Some(RasterizedGlyph {
             width: image.placement.width,
             height: image.placement.height,
             left: image.placement.left,
             top: image.placement.top,
             data: image.data.clone(),
+            is_color,
         })
-
     }
 }

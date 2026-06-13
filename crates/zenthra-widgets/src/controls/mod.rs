@@ -7,8 +7,10 @@ pub mod text_input;
 pub mod toggle;
 pub mod radio;
 pub mod dropdown;
+pub mod menu;
 
 pub use checkbox::*;
 pub use toggle::*;
 pub use radio::*;
 pub use dropdown::*;
+pub use menu::*;

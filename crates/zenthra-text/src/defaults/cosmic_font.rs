@@ -6,6 +6,30 @@ use crate::traits::{FontProvider, FontMetrics};
 use crate::types::options::TextOptions;
 use crate::types::shaped_glyph::ShapedGlyph;
 
+struct ZenthraFallback;
+
+impl cosmic_text::Fallback for ZenthraFallback {
+    fn common_fallback(&self) -> &[&'static str] {
+        &[
+            "Symbols Nerd Font",
+            "Noto Color Emoji",
+            "Apple Color Emoji",
+            "Segoe UI Emoji",
+            "DejaVu Sans",
+            "Liberation Sans",
+            "Arial",
+        ]
+    }
+
+    fn forbidden_fallback(&self) -> &[&'static str] {
+        &[]
+    }
+
+    fn script_fallback(&self, _script: unicode_script::Script, _locale: &str) -> &[&'static str] {
+        &[]
+    }
+}
+
 pub struct CosmicFontProvider {
     pub font_system: Arc<Mutex<FontSystem>>,
     pub buffer: Buffer,
@@ -13,7 +37,13 @@ pub struct CosmicFontProvider {
 
 impl CosmicFontProvider {
     pub fn new() -> Self {
-        let font_system = Arc::new(Mutex::new(FontSystem::new()));
+        let temp = FontSystem::new();
+        let (locale, db) = temp.into_locale_and_db();
+        let font_system = Arc::new(Mutex::new(FontSystem::new_with_locale_and_db_and_fallback(
+            locale,
+            db,
+            ZenthraFallback,
+        )));
         let buffer = Buffer::new(&mut font_system.lock().unwrap(), Metrics::new(16.0, 20.0));
         Self { font_system, buffer }
     }

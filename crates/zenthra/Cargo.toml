@@ -4,6 +4,18 @@ version.workspace = true
 edition.workspace = true
 license.workspace = true
 
+[package.metadata.android]
+package = "com.zenthra.app"
+label = "Zenthra"
+build_targets = ["aarch64-linux-android"]
+
+[package.metadata.android.sdk]
+min_sdk_version = 21
+target_sdk_version = 33
+
+[package.metadata.android.application]
+debuggable = true
+
 [dependencies]
 zenthra-core      = { workspace = true }
 zenthra-render    = { workspace = true }
@@ -115,3 +127,31 @@ path = "../../examples/simple_dynamic.rs"
 [[example]]
 name = "floating_window"
 path = "../../examples/floating_window.rs"
+
+[[example]]
+name = "window_test"
+path = "../../examples/window_test.rs"
+
+[[example]]
+name = "menu_test"
+path = "../../examples/menu_test.rs"
+
+[[example]]
+name = "card_test"
+path = "../../examples/card_test.rs"
+
+[[example]]
+name = "stack_test"
+path = "../../examples/stack_test.rs"
+
+[[example]]
+name = "panel_test"
+path = "../../examples/panel_test.rs"
+
+[[example]]
+name = "sidebar_test"
+path = "../../examples/sidebar_test.rs"
+
+[[example]]
+name = "color_test"
+path = "../../examples/color_test.rs"

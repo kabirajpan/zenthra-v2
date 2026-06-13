@@ -1,0 +1,21 @@
+[package]
+name = "window_test_mobile"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+zenthra = { path = "../../crates/zenthra" }
+winit = "0.30"
+android-activity = { version = "0.6", features = ["native-activity"] }
+
+[package.metadata.android]
+package = "com.zenthra.windowtest"
+label = "Zenthra Test"
+build_targets = ["aarch64-linux-android"]
+
+[package.metadata.android.sdk]
+min_sdk_version = 21
+target_sdk_version = 33

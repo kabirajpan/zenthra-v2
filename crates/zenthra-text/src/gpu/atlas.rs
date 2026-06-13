@@ -24,7 +24,7 @@ impl GlyphAtlas {
             mip_level_count: 1,
             sample_count: 1,
             dimension: wgpu::TextureDimension::D2,
-            format: wgpu::TextureFormat::R8Unorm,
+            format: wgpu::TextureFormat::Rgba8Unorm,
             usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
             view_formats: &[],
         });
@@ -64,6 +64,7 @@ impl GlyphAtlas {
                 uv_size: [0.0, 0.0],
                 pixel_size: [0.0, 0.0],
                 pixel_offset: [0.0, 0.0],
+                is_color: false,
              };
         }
 
@@ -81,6 +82,19 @@ impl GlyphAtlas {
         let x = rect.min.x as u32 + pad as u32;
         let y = rect.min.y as u32 + pad as u32;
 
+        let rgba_data = if glyph.is_color {
+            glyph.data.clone()
+        } else {
+            let mut data = Vec::with_capacity(glyph.data.len() * 4);
+            for &alpha in &glyph.data {
+                data.push(255);
+                data.push(255);
+                data.push(255);
+                data.push(alpha);
+            }
+            data
+        };
+
         queue.write_texture(
             wgpu::TexelCopyTextureInfo {
                 texture: &self.texture,
@@ -88,10 +102,10 @@ impl GlyphAtlas {
                 origin: wgpu::Origin3d { x, y, z: 0 },
                 aspect: wgpu::TextureAspect::All,
             },
-            &glyph.data,
+            &rgba_data,
             wgpu::TexelCopyBufferLayout {
                 offset: 0,
-                bytes_per_row: Some(width),
+                bytes_per_row: Some(width * 4),
                 rows_per_image: Some(height),
             },
             wgpu::Extent3d {
@@ -112,6 +126,7 @@ impl GlyphAtlas {
             ],
             pixel_size: [width as f32, height as f32],
             pixel_offset: [glyph.left as f32, glyph.top as f32],
+            is_color: glyph.is_color,
         };
 
         

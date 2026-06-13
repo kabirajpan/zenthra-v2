@@ -191,7 +191,7 @@ impl<'u, 'a, 'b, T: PartialEq + Clone + ToString> DropdownBuilder<'u, 'a, 'b, T>
             (x + self.ui.offset_x, y + self.ui.offset_y, self.width, self.height)
         };
 
-        let is_hovered = self.ui.mouse_in_rect(actual_ox, actual_oy, actual_w, actual_h);
+        let is_hovered = self.ui.is_hovered(self.id, actual_ox, actual_oy, actual_w, actual_h);
         
         if self.ui.clicked && is_hovered {
             is_open = !is_open;
@@ -234,7 +234,11 @@ impl<'u, 'a, 'b, T: PartialEq + Clone + ToString> DropdownBuilder<'u, 'a, 'b, T>
         }));
 
         // Chevron
-        let chevron = if is_open { "▴" } else { "▾" };
+        let chevron = if is_open {
+            crate::icons::NF_FA_CHEVRON_UP
+        } else {
+            crate::icons::NF_FA_CHEVRON_DOWN
+        };
         self.ui.draws.push(DrawCommand::Text(TextDraw {
             text: chevron.to_string(),
             pos: [x + self.width - 20.0, y + (self.height - 14.0) / 2.0],

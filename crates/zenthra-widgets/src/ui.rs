@@ -67,6 +67,7 @@ pub struct Ui<'a> {
     pub line_height: f32,
     pub child_sizes: Vec<(f32, f32)>,
     pub child_draw_ranges: Vec<(usize, usize)>,
+    pub child_origins: Vec<(f32, f32)>,
     pub id_log: Vec<Id>,
     pub id_ranges: Vec<(usize, usize)>,
     pub last_w: f32,
@@ -91,10 +92,16 @@ pub struct Ui<'a> {
     pub needs_redraw: bool,
     pub layout_cache: &'a std::collections::HashMap<Id, (Rect, u64)>,
     pub next_layout_cache: &'a mut std::collections::HashMap<Id, (Rect, u64)>,
+    pub screen_layout_cache: &'a std::collections::HashMap<Id, Rect>,
+    pub next_screen_layout_cache: &'a mut std::collections::HashMap<Id, Rect>,
     pub image_sizes: &'a std::collections::HashMap<zenthra_core::ImageSource, (u32, u32)>,
     pub available_width: f32,
     pub skip_clip_stack: Vec<bool>,
     pub current_viewport: Rect,
+    pub window_overlays: Vec<(Id, Vec<DrawCommand>)>,
+    pub current_window_id: Option<Id>,
+    pub widget_window_map: &'a std::collections::HashMap<Id, Id>,
+    pub next_widget_window_map: &'a mut std::collections::HashMap<Id, Id>,
 }
 
 impl<'a> Ui<'a> {
@@ -115,6 +122,10 @@ impl<'a> Ui<'a> {
         elapsed_time: f32,
         layout_cache: &'a std::collections::HashMap<Id, (Rect, u64)>,
         next_layout_cache: &'a mut std::collections::HashMap<Id, (Rect, u64)>,
+        screen_layout_cache: &'a std::collections::HashMap<Id, Rect>,
+        next_screen_layout_cache: &'a mut std::collections::HashMap<Id, Rect>,
+        widget_window_map: &'a std::collections::HashMap<Id, Id>,
+        next_widget_window_map: &'a mut std::collections::HashMap<Id, Id>,
         image_sizes: &'a std::collections::HashMap<zenthra_core::ImageSource, (u32, u32)>,
     ) -> Self {
         let mouse_x = mouse_pos.0;
@@ -141,6 +152,7 @@ impl<'a> Ui<'a> {
             line_height: 0.0,
             child_sizes: Vec::new(),
             child_draw_ranges: Vec::new(),
+            child_origins: Vec::new(),
             id_log: Vec::new(),
             id_ranges: Vec::new(),
             last_w: 0.0,
@@ -162,10 +174,16 @@ impl<'a> Ui<'a> {
             needs_redraw: false,
             layout_cache,
             next_layout_cache,
+            screen_layout_cache,
+            next_screen_layout_cache,
             image_sizes,
             available_width: width as f32,
             skip_clip_stack: Vec::new(),
             current_viewport: Rect::new(0.0, 0.0, width as f32, height as f32),
+            window_overlays: Vec::new(),
+            current_window_id: None,
+            widget_window_map,
+            next_widget_window_map,
         }
     }
 
@@ -194,7 +212,58 @@ impl<'a> Ui<'a> {
         }
 
         self.next_layout_cache.insert(id, (rect, id_count));
+        let screen_rect = Rect::new(rect.origin.x + self.offset_x, rect.origin.y + self.offset_y, rect.size.width, rect.size.height);
+        self.next_screen_layout_cache.insert(id, screen_rect);
+        if let Some(win_id) = self.current_window_id {
+            self.next_widget_window_map.insert(id, win_id);
+        }
         self.id_log.push(id);
+    }
+
+    pub fn is_occluded(&self, id: Id, x: f32, y: f32) -> bool {
+        let our_win_id = self.widget_window_map.get(&id).copied().unwrap_or(id);
+        let our_z = self.interaction_state
+            .get(&Id::from_u64((our_win_id.raw() << 8) | 4))
+            .copied()
+            .unwrap_or(0.0);
+
+        // Check active modal blocking
+        for (&other_id, _) in self.screen_layout_cache {
+            let other_win_id = self.widget_window_map.get(&other_id).copied().unwrap_or(other_id);
+            let modal_key = Id::from_u64((other_win_id.raw() << 8) | 5);
+            let is_modal = self.interaction_state
+                .get(&modal_key)
+                .map(|&v| v > 0.5)
+                .unwrap_or(false);
+
+            if is_modal && other_win_id != our_win_id {
+                return true;
+            }
+        }
+
+        // Check z-order occlusion
+        for (&other_id, other_rect) in self.screen_layout_cache {
+            let other_win_id = self.widget_window_map.get(&other_id).copied().unwrap_or(other_id);
+            let other_z_key = Id::from_u64((other_win_id.raw() << 8) | 4);
+            if let Some(&other_z) = self.interaction_state.get(&other_z_key) {
+                if other_win_id != our_win_id && other_z > our_z {
+                    if x >= other_rect.origin.x && x <= other_rect.origin.x + other_rect.size.width &&
+                       y >= other_rect.origin.y && y <= other_rect.origin.y + other_rect.size.height {
+                        return true;
+                    }
+                }
+            }
+        }
+        false
+    }
+
+    pub fn is_hovered(&self, id: Id, fallback_x: f32, fallback_y: f32, fallback_w: f32, fallback_h: f32) -> bool {
+        let is_in = if let Some((rect, _)) = self.get_recorded_layout(id) {
+            self.mouse_in_rect(rect.origin.x + self.offset_x, rect.origin.y + self.offset_y, rect.size.width, rect.size.height)
+        } else {
+            self.mouse_in_rect(fallback_x, fallback_y, fallback_w, fallback_h)
+        };
+        is_in && !self.is_occluded(id, self.mouse_x, self.mouse_y)
     }
 
     pub fn get_recorded_layout(&self, id: Id) -> Option<(Rect, u64)> {
@@ -241,6 +310,7 @@ impl<'a> Ui<'a> {
         let (w, h) = match self.direction {
             Direction::Column => (0.0, size),
             Direction::Row => (size, 0.0),
+            Direction::Stack => (0.0, 0.0),
         };
         let draw_start = self.draws.len();
         self.advance(w, h, draw_start);
@@ -252,6 +322,7 @@ impl<'a> Ui<'a> {
         match self.direction {
             Direction::Column => self.cursor_y += h,
             Direction::Row => self.cursor_x += h,
+            Direction::Stack => {}
         }
     }
 
@@ -295,6 +366,26 @@ impl<'a> Ui<'a> {
 
     pub fn text_area<'b>(&mut self, buffer: &'b mut String, id: impl std::hash::Hash) -> crate::text_area::TextAreaBuilder<'_, 'a, 'b> {
         crate::text_area::TextAreaBuilder::new(self, buffer).id(id)
+    }
+
+    pub fn window<'b>(&mut self, title: &str, is_open: &'b mut bool, pos: &'b mut [f32; 2]) -> crate::window::FloatingWindowBuilder<'_, 'a, 'b> {
+        crate::window::FloatingWindowBuilder::new(self, title, is_open, pos)
+    }
+
+    pub fn menu_bar(&mut self) -> crate::controls::menu::MenuBarBuilder<'_, 'a> {
+        crate::controls::menu::MenuBarBuilder::new(self)
+    }
+
+    pub fn menu(&mut self, label: &str) -> crate::controls::menu::MenuBuilder<'_, 'a> {
+        crate::controls::menu::MenuBuilder::new(self, label)
+    }
+
+    pub fn sub_menu(&mut self, label: &str) -> crate::controls::menu::SubMenuBuilder<'_, 'a> {
+        crate::controls::menu::SubMenuBuilder::new(self, label)
+    }
+
+    pub fn menu_item(&mut self, label: &str) -> crate::controls::menu::MenuItemBuilder<'_, 'a> {
+        crate::controls::menu::MenuItemBuilder::new(self, label)
     }
 
     /// Registers a widget in the semantic tree.
@@ -345,6 +436,7 @@ impl<'a> Ui<'a> {
         let draw_end = self.draws.len();
         self.child_draw_ranges.push((draw_start, draw_end));
         self.child_sizes.push((w, h));
+        self.child_origins.push((self.cursor_x, self.cursor_y));
         
         let id_start = self.id_ranges.last().map(|(_, end)| *end).unwrap_or(0);
         let id_end = self.id_log.len();
@@ -363,6 +455,10 @@ impl<'a> Ui<'a> {
                 self.cursor_x += w;
                 self.cursor_y = self.base_y;
                 self.line_height = self.line_height.max(h);
+            }
+            Direction::Stack => {
+                self.cursor_x = self.base_x;
+                self.cursor_y = self.base_y;
             }
         }
     }
@@ -385,6 +481,72 @@ impl<'a> Ui<'a> {
 
     pub fn h4(&mut self, content: &str) -> TextBuilder<'_, 'a> {
         self.text(content).size(20.0).bold()
+    }
+
+    pub fn card(&mut self) -> crate::containers::card::CardBuilder<'_, 'a> {
+        crate::containers::card::CardBuilder::new(self)
+    }
+
+    pub fn panel<'b>(&mut self) -> crate::containers::panel::PanelBuilder<'_, 'a, 'b> {
+        crate::containers::panel::PanelBuilder::new(self)
+    }
+
+    pub fn card_header<F>(&mut self, title: &str, subtitle: &str, actions: F)
+    where F: FnOnce(&mut Ui) {
+        self.container()
+            .full_width()
+            .row()
+            .halign(zenthra_core::Align::SpaceBetween)
+            .valign(zenthra_core::Align::Center)
+            .padding_bottom(8.0)
+            .show(|ui| {
+                ui.container()
+                    .column()
+                    .show(|ui| {
+                        ui.text(title)
+                            .size(16.0)
+                            .weight(crate::text::FontWeight::Bold)
+                            .color(Color::WHITE)
+                            .show();
+                        if !subtitle.is_empty() {
+                            ui.spacing(2.0);
+                            ui.text(subtitle)
+                                .size(12.0)
+                                .color(Color::rgb(0.6, 0.6, 0.6))
+                                .show();
+                        }
+                    });
+
+                ui.container()
+                    .row()
+                    .valign(zenthra_core::Align::Center)
+                    .show(actions);
+            });
+
+        self.card_divider();
+    }
+
+    pub fn card_footer<F>(&mut self, f: F)
+    where F: FnOnce(&mut Ui) {
+        self.card_divider();
+        self.container()
+            .full_width()
+            .row()
+            .show(f);
+    }
+
+    pub fn card_divider(&mut self) {
+        self.spacing(8.0);
+        self.container()
+            .full_width()
+            .height(1.0)
+            .bg(Color::rgb(0.2, 0.2, 0.25))
+            .show(|_| {});
+        self.spacing(8.0);
+    }
+
+    pub fn stack(&mut self) -> crate::layout::StackBuilder<'_, 'a> {
+        crate::layout::StackBuilder::new(self)
     }
 }
 

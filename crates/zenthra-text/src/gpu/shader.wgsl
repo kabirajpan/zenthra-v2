@@ -68,9 +68,11 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
         return in.bg_color;
     }
 
-    let alpha = textureSample(t_diffuse, s_diffuse, in.uv).r;
-    let color = mix(in.bg_color, in.color, alpha);
-    let final_alpha = max(in.bg_color.a, in.color.a * alpha);
+    let tex_color = textureSample(t_diffuse, s_diffuse, in.uv);
     
-    return vec4<f32>(color.rgb, final_alpha);
+    if (in.bg_color.a > 0.5) {
+        return tex_color;
+    } else {
+        return vec4<f32>(in.color.rgb, in.color.a * tex_color.a);
+    }
 }

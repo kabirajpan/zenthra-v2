@@ -6,6 +6,7 @@ use zenthra_render::RectInstance;
 pub enum Direction {
     Row,
     Column,
+    Stack,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -26,6 +27,7 @@ pub struct ContainerBuilder<'u, 'a> {
     children_draws: Vec<DrawCommand>,
     child_sizes: Vec<(f32, f32)>,
     child_ranges: Vec<(usize, usize)>,
+    child_origins: Vec<(f32, f32)>,
     start_x: f32,
     start_y: f32,
     pos_x: Option<f32>,
@@ -82,6 +84,7 @@ impl<'u, 'a> ContainerBuilder<'u, 'a> {
             children_draws: Vec::new(),
             child_sizes: Vec::new(),
             child_ranges: Vec::new(),
+            child_origins: Vec::new(),
             start_x: 0.0,
             start_y: 0.0,
             pos_x: None,
@@ -448,6 +451,7 @@ impl<'u, 'a> ContainerBuilder<'u, 'a> {
         // Take and isolate state maps for children
         let prev_child_sizes = std::mem::take(&mut self.ui.child_sizes);
         let prev_child_ranges = std::mem::take(&mut self.ui.child_draw_ranges);
+        let prev_child_origins = std::mem::take(&mut self.ui.child_origins);
         let prev_id_ranges = std::mem::take(&mut self.ui.id_ranges);
         let prev_id_log = std::mem::take(&mut self.ui.id_log);
         
@@ -543,6 +547,7 @@ impl<'u, 'a> ContainerBuilder<'u, 'a> {
         self.children_draws = std::mem::replace(&mut self.ui.draws, parent_draws);
         self.child_sizes = std::mem::replace(&mut self.ui.child_sizes, prev_child_sizes);
         self.child_ranges = std::mem::replace(&mut self.ui.child_draw_ranges, prev_child_ranges);
+        self.child_origins = std::mem::replace(&mut self.ui.child_origins, prev_child_origins);
         
         let _id_log_end_idx = child_ids_only.len();
 
@@ -746,11 +751,12 @@ impl<'u, 'a> ContainerBuilder<'u, 'a> {
             if i >= target_positions.len() { break; }
             let (tx, ty) = target_positions[i];
             
-            let (origin_x, origin_y) = self
-                .children_draws
-                .get(*start)
-                .map(|d| draw_origin(d))
-                .unwrap_or((ox + self.padding_left + self.border_width, oy + self.padding_top + self.border_width));
+            let (origin_x, origin_y) = self.child_origins.get(i).copied().unwrap_or_else(|| {
+                self.children_draws
+                    .get(*start)
+                    .map(|d| draw_origin(d))
+                    .unwrap_or((ox + self.padding_left + self.border_width, oy + self.padding_top + self.border_width))
+            });
 
             let dx = tx - origin_x;
             let dy = ty - origin_y;
@@ -935,10 +941,15 @@ impl<'u, 'a> ContainerBuilder<'u, 'a> {
                 let h = self.child_sizes.iter().map(|(_, h)| *h).fold(0.0f32, f32::max);
                 (w, h)
             }
-             Direction::Column => {
+            Direction::Column => {
                 let w = self.child_sizes.iter().map(|(w, _)| *w).fold(0.0f32, f32::max);
                 let h = self.child_sizes.iter().map(|(_, h)| h).sum::<f32>()
                     + self.gap * (n.saturating_sub(1)) as f32;
+                (w, h)
+            }
+            Direction::Stack => {
+                let w = self.child_sizes.iter().map(|(w, _)| *w).fold(0.0f32, f32::max);
+                let h = self.child_sizes.iter().map(|(_, h)| *h).fold(0.0f32, f32::max);
                 (w, h)
             }
         };
@@ -1004,6 +1015,21 @@ impl<'u, 'a> ContainerBuilder<'u, 'a> {
                     };
                     targets[i] = (cx, cy);
                     cy += ch + gap;
+                }
+            }
+            Direction::Stack => {
+                for (i, (cw, ch)) in self.child_sizes.iter().enumerate() {
+                    let cx = ox + self.padding_left + self.border_width + match self.halign {
+                        Align::Center => (real_w - cw).max(0.0) / 2.0,
+                        Align::Right => real_w - cw,
+                        _ => 0.0,
+                    };
+                    let cy = oy + self.padding_top + self.border_width + match self.valign {
+                        Align::Center => (real_h - ch).max(0.0) / 2.0,
+                        Align::Bottom => real_h - ch,
+                        _ => 0.0,
+                    };
+                    targets[i] = (cx, cy);
                 }
             }
         }
@@ -1209,6 +1235,24 @@ impl<'u, 'a> ContainerBuilder<'u, 'a> {
                     if cross_reversed { cx -= self.gap; } else { cx += col_w + self.gap; }
                 }
                 (total_w, max_col_h)
+            }
+            Direction::Stack => {
+                let w = self.child_sizes.iter().map(|(w, _)| *w).fold(0.0f32, f32::max);
+                let h = self.child_sizes.iter().map(|(_, h)| *h).fold(0.0f32, f32::max);
+                for (i, (cw, ch)) in self.child_sizes.iter().enumerate() {
+                    let cx = ox + self.padding_left + self.border_width + match self.halign {
+                        Align::Center => (inner_w - cw).max(0.0) / 2.0,
+                        Align::Right => inner_w - cw,
+                        _ => 0.0,
+                    };
+                    let cy = oy + self.padding_top + self.border_width + match self.valign {
+                        Align::Center => (inner_h - ch).max(0.0) / 2.0,
+                        Align::Bottom => inner_h - ch,
+                        _ => 0.0,
+                    };
+                    targets[i] = (cx, cy);
+                }
+                (w, h)
             }
         }
     }

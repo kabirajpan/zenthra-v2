@@ -66,9 +66,11 @@ fn fs_main(@builtin(position) sc_pos: vec4<f32>, in: VertexOutput) -> @location(
         return in.bg_color;
     }
 
-    let alpha       = textureSample(atlas_texture, atlas_sampler, in.uv).r;
-    let color       = mix(in.bg_color, in.color, alpha);
-    let final_alpha = max(in.bg_color.a, in.color.a * alpha);
+    let tex_color = textureSample(atlas_texture, atlas_sampler, in.uv);
     
-    return vec4(color.rgb, final_alpha);
+    if (in.bg_color.a > 0.5) {
+        return tex_color;
+    } else {
+        return vec4(in.color.rgb, in.color.a * tex_color.a);
+    }
 }

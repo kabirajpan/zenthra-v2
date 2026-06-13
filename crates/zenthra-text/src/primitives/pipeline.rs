@@ -92,7 +92,7 @@ impl ZentypePipeline {
                     uv_pos: entry.uv_pos,
                     uv_size: entry.uv_size,
                     color: color.to_array(),
-                    bg_color: [0.0, 0.0, 0.0, 0.0],
+                    bg_color: [0.0, 0.0, 0.0, if entry.is_color { 1.0 } else { 0.0 }],
                     clip_rect: clip,
                 });
             }

@@ -15,6 +15,8 @@ pub struct AtlasEntry {
     pub pixel_size: [f32; 2],
     /// Physical pixel offset [left, top] relative to the logical origin.
     pub pixel_offset: [f32; 2],
+    /// Whether this is a color glyph.
+    pub is_color: bool,
 }
 
 
@@ -31,6 +33,8 @@ pub struct RasterizedGlyph {
     pub top: i32,
     /// Grayscale or RGBA pixel data.
     pub data: Vec<u8>,
+    /// Whether this is a color glyph.
+    pub is_color: bool,
 }
 
 

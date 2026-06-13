@@ -1,0 +1,543 @@
+// crates/zenthra-widgets/src/controls/menu.rs
+
+use crate::ui::{DrawCommand, RectDraw, TextDraw, Ui};
+use zenthra_core::{Color, Id, Rect, Response};
+use zenthra_render::RectInstance;
+
+pub struct MenuBarBuilder<'u, 'a> {
+    ui: &'u mut Ui<'a>,
+    bg: Option<Color>,
+}
+
+impl<'u, 'a> MenuBarBuilder<'u, 'a> {
+    pub fn new(ui: &'u mut Ui<'a>) -> Self {
+        Self { ui, bg: None }
+    }
+
+    pub fn bg(mut self, color: Color) -> Self {
+        self.bg = Some(color);
+        self
+    }
+
+    pub fn show<F>(self, f: F)
+    where F: FnOnce(&mut Ui) {
+        let active_menu_key = Id::from_u64(999999900);
+        let active_submenu_key = Id::from_u64(999999901);
+        let hover_flag_key = Id::from_u64(999999902);
+
+        // Reset hover flag for this frame
+        self.ui.interaction_state.insert(hover_flag_key, 0.0);
+
+        // Render the horizontal menu bar container
+        let menu_bar_bg = self.bg.unwrap_or_else(|| {
+            let is_light_theme = self.ui.interaction_state.get(&zenthra_core::Id::from_u64(999999999)).copied().unwrap_or(0.0) > 0.5;
+            if is_light_theme {
+                Color::rgb(0.90, 0.90, 0.92)
+            } else {
+                Color::rgb(2.0 / 255.0, 2.0 / 255.0, 2.0 / 255.0) // 2 – menu bar
+            }
+        });
+
+        self.ui.container()
+            .full_width()
+            .height(30.0)
+            .bg(menu_bar_bg)
+            .row()
+            .padding_left(8.0)
+            .padding_right(8.0)
+            .show(|ui| {
+                f(ui);
+            });
+
+        // Click outside (light dismiss) handling
+        let clicked = self.ui.clicked;
+        let active_menu_id = self.ui.interaction_state.get(&active_menu_key).copied().map(|v| v as u64).unwrap_or(0);
+        let hover_flag = self.ui.interaction_state.get(&hover_flag_key).copied().unwrap_or(0.0) > 0.5;
+
+        if active_menu_id != 0 && clicked && !hover_flag {
+            self.ui.interaction_state.insert(active_menu_key, 0.0);
+            self.ui.interaction_state.insert(active_submenu_key, 0.0);
+            self.ui.needs_redraw = true;
+        }
+    }
+}
+
+pub struct MenuBuilder<'u, 'a> {
+    ui: &'u mut Ui<'a>,
+    label: String,
+    id: Id,
+}
+
+impl<'u, 'a> MenuBuilder<'u, 'a> {
+    pub fn new(ui: &'u mut Ui<'a>, label: &str) -> Self {
+        let id = ui.id();
+        Self {
+            ui,
+            label: label.to_string(),
+            id,
+        }
+    }
+
+    pub fn show<F>(self, f: F)
+    where F: FnOnce(&mut Ui) {
+        let active_menu_key = Id::from_u64(999999900);
+        let active_submenu_key = Id::from_u64(999999901);
+        let hover_flag_key = Id::from_u64(999999902);
+
+        let active_menu_id = self.ui.interaction_state.get(&active_menu_key).copied().map(|v| v as u64).unwrap_or(0);
+        let is_currently_active = active_menu_id == self.id.raw();
+
+        let (x, y) = (self.ui.cursor_x, self.ui.cursor_y);
+        let w = 60.0;
+        let h = 26.0;
+
+        let (actual_ox, actual_oy, actual_w, actual_h) = if let Some((rect, _)) = self.ui.get_recorded_layout(self.id) {
+            (
+                rect.origin.x + self.ui.offset_x,
+                rect.origin.y + self.ui.offset_y,
+                rect.size.width.max(w),
+                rect.size.height.max(h)
+            )
+        } else {
+            (x + self.ui.offset_x, y + self.ui.offset_y, w, h)
+        };
+
+        let is_hovered = self.ui.is_hovered(self.id, actual_ox, actual_oy, actual_w, actual_h);
+
+        if is_hovered {
+            self.ui.interaction_state.insert(hover_flag_key, 1.0);
+        }
+
+        // Auto-expand on hover if menu bar is active
+        if is_hovered && active_menu_id != 0 && !is_currently_active {
+            self.ui.interaction_state.insert(active_menu_key, self.id.raw() as f32);
+            self.ui.interaction_state.remove(&active_submenu_key);
+            self.ui.needs_redraw = true;
+        }
+
+        // Toggle on click
+        if self.ui.clicked && is_hovered {
+            if is_currently_active {
+                self.ui.interaction_state.insert(active_menu_key, 0.0);
+            } else {
+                self.ui.interaction_state.insert(active_menu_key, self.id.raw() as f32);
+            }
+            self.ui.interaction_state.remove(&active_submenu_key);
+            self.ui.needs_redraw = true;
+        }
+
+        let is_light_theme = self.ui.interaction_state.get(&Id::from_u64(999999999)).copied().unwrap_or(0.0) > 0.5;
+
+        let bg_color = if is_light_theme {
+            if is_currently_active {
+                Color::rgb(0.80, 0.80, 0.85)
+            } else if is_hovered {
+                Color::rgb(0.88, 0.88, 0.90)
+            } else {
+                Color::TRANSPARENT
+            }
+        } else {
+            if is_currently_active || is_hovered {
+                Color::rgb(3.0 / 255.0, 3.0 / 255.0, 3.0 / 255.0) // 3 – hover/active
+            } else {
+                Color::TRANSPARENT
+            }
+        };
+
+        let text_color = if is_light_theme {
+            Color::rgb(0.1, 0.1, 0.15)
+        } else {
+            if is_currently_active || is_hovered {
+                Color::rgb(255.0 / 255.0, 214.0 / 255.0, 0.0 / 255.0) // #FFD600 vivid yellow (accent)
+            } else {
+                Color::rgb(224.0 / 255.0, 224.0 / 255.0, 224.0 / 255.0) // #e0e0e0 (text_primary)
+            }
+        };
+
+        let start_draw = self.ui.draws.len();
+        self.ui.draws.push(DrawCommand::Rect(RectDraw {
+            instance: RectInstance {
+                pos: [x, y + 2.0],
+                size: [w, h],
+                color: bg_color.to_array(),
+                radius: [3.0; 4],
+                ..Default::default()
+            }
+        }));
+
+        self.ui.draws.push(DrawCommand::Text(TextDraw {
+            text: self.label.clone(),
+            pos: [x + (w - self.label.len() as f32 * 7.0) / 2.0, y + 6.0],
+            options: zenthra_text::prelude::TextOptions::new().font_size(13.0).color(text_color),
+            clip: [x, y, w, h + 4.0],
+        }));
+
+        self.ui.record_layout(self.id, Rect::new(x, y, w, h + 4.0));
+        self.ui.advance(w, h + 4.0, start_draw);
+
+        if is_currently_active {
+            let popup_id = Id::from_u64((self.id.raw() << 8) | 10);
+
+            // Check if popup is hovered
+            if let Some(rect) = self.ui.screen_layout_cache.get(&popup_id) {
+                if self.ui.mouse_in_rect(rect.origin.x, rect.origin.y, rect.size.width, rect.size.height) {
+                    self.ui.interaction_state.insert(hover_flag_key, 1.0);
+                }
+            }
+
+            // Isolate layout state variables
+            let prev_child_ranges = std::mem::take(&mut self.ui.child_draw_ranges);
+            let prev_id_ranges = std::mem::take(&mut self.ui.id_ranges);
+            let prev_id_log = std::mem::take(&mut self.ui.id_log);
+            let prev_child_sizes = std::mem::take(&mut self.ui.child_sizes);
+            let prev_child_origins = std::mem::take(&mut self.ui.child_origins);
+
+            let popup_bg = if is_light_theme {
+                Color::WHITE
+            } else {
+                Color::rgb(1.0 / 255.0, 1.0 / 255.0, 1.0 / 255.0) // 1 – popup bg
+            };
+
+            let popup_border = if is_light_theme {
+                Color::rgb(0.8, 0.8, 0.85)
+            } else {
+                Color::rgb(3.0 / 255.0, 3.0 / 255.0, 3.0 / 255.0) // 3 – popup border
+            };
+
+            self.ui.container()
+                .id(popup_id)
+                .absolute(x, y + h + 2.0)
+                .overlay()
+                .width(270.0)
+                .bg(popup_bg)
+                .border(popup_border, 1.0)
+                .radius_all(4.0)
+                .padding(4.0, 4.0, 4.0, 4.0)
+                .column()
+                .show(|ui| {
+                    f(ui);
+                });
+
+            // Discard child variables and restore parent's
+            let _ = std::mem::take(&mut self.ui.child_draw_ranges);
+            let _ = std::mem::take(&mut self.ui.id_ranges);
+            let _ = std::mem::take(&mut self.ui.id_log);
+            let _ = std::mem::take(&mut self.ui.child_sizes);
+            let _ = std::mem::take(&mut self.ui.child_origins);
+
+            self.ui.child_draw_ranges = prev_child_ranges;
+            self.ui.id_ranges = prev_id_ranges;
+            self.ui.id_log = prev_id_log;
+            self.ui.child_sizes = prev_child_sizes;
+            self.ui.child_origins = prev_child_origins;
+        }
+    }
+}
+
+pub struct SubMenuBuilder<'u, 'a> {
+    ui: &'u mut Ui<'a>,
+    label: String,
+    id: Id,
+}
+
+impl<'u, 'a> SubMenuBuilder<'u, 'a> {
+    pub fn new(ui: &'u mut Ui<'a>, label: &str) -> Self {
+        let id = ui.id();
+        Self {
+            ui,
+            label: label.to_string(),
+            id,
+        }
+    }
+
+    pub fn show<F>(self, f: F)
+    where F: FnOnce(&mut Ui) {
+        let active_submenu_key = Id::from_u64(999999901);
+        let hover_flag_key = Id::from_u64(999999902);
+
+        let active_submenu_id = self.ui.interaction_state.get(&active_submenu_key).copied().map(|v| v as u64).unwrap_or(0);
+        let is_currently_active = active_submenu_id == self.id.raw();
+
+        let (x, y) = (self.ui.cursor_x, self.ui.cursor_y);
+        let w = 262.0;
+        let h = 26.0;
+
+        let (actual_ox, actual_oy, actual_w, actual_h) = if let Some((rect, _)) = self.ui.get_recorded_layout(self.id) {
+            (
+                rect.origin.x + self.ui.offset_x,
+                rect.origin.y + self.ui.offset_y,
+                rect.size.width.max(w),
+                rect.size.height.max(h)
+            )
+        } else {
+            (x + self.ui.offset_x, y + self.ui.offset_y, w, h)
+        };
+
+        let is_hovered = self.ui.is_hovered(self.id, actual_ox, actual_oy, actual_w, actual_h);
+
+        if is_hovered {
+            self.ui.interaction_state.insert(hover_flag_key, 1.0);
+        }
+
+        // Open sub-menu on hover
+        if is_hovered && !is_currently_active {
+            self.ui.interaction_state.insert(active_submenu_key, self.id.raw() as f32);
+            self.ui.needs_redraw = true;
+        }
+
+        let is_light_theme = self.ui.interaction_state.get(&Id::from_u64(999999999)).copied().unwrap_or(0.0) > 0.5;
+
+        let bg_color = if is_light_theme {
+            if is_currently_active || is_hovered {
+                Color::rgb(0.90, 0.90, 0.95)
+            } else {
+                Color::TRANSPARENT
+            }
+        } else {
+            if is_currently_active || is_hovered {
+                Color::rgb(3.0 / 255.0, 3.0 / 255.0, 3.0 / 255.0) // 3 – hover/active
+            } else {
+                Color::TRANSPARENT
+            }
+        };
+
+        let text_color = if is_light_theme {
+            Color::rgb(0.1, 0.1, 0.15)
+        } else {
+            if is_currently_active || is_hovered {
+                Color::rgb(255.0 / 255.0, 214.0 / 255.0, 0.0 / 255.0) // #FFD600 vivid yellow (accent)
+            } else {
+                Color::rgb(224.0 / 255.0, 224.0 / 255.0, 224.0 / 255.0) // #e0e0e0 (text_primary)
+            }
+        };
+
+        let chevron_color = if is_light_theme {
+            Color::rgb(0.5, 0.5, 0.5)
+        } else {
+            if is_currently_active || is_hovered {
+                Color::rgb(255.0 / 255.0, 214.0 / 255.0, 0.0 / 255.0) // #FFD600 vivid yellow (accent)
+            } else {
+                Color::rgb(102.0 / 255.0, 102.0 / 255.0, 102.0 / 255.0) // #666666 (text_muted)
+            }
+        };
+
+        let start_draw = self.ui.draws.len();
+
+        self.ui.draws.push(DrawCommand::Rect(RectDraw {
+            instance: RectInstance {
+                pos: [x, y],
+                size: [w, h],
+                color: bg_color.to_array(),
+                radius: [3.0; 4],
+                ..Default::default()
+            }
+        }));
+
+        self.ui.draws.push(DrawCommand::Text(TextDraw {
+            text: self.label.clone(),
+            pos: [x + 8.0, y + 6.0],
+            options: zenthra_text::prelude::TextOptions::new().font_size(13.0).color(text_color),
+            clip: [x, y, w, h],
+        }));
+
+        // Right arrow indicator
+        self.ui.draws.push(DrawCommand::Text(TextDraw {
+            text: crate::icons::NF_FA_CHEVRON_RIGHT.to_string(),
+            pos: [x + w - 15.0, y + 6.0],
+            options: zenthra_text::prelude::TextOptions::new().font_size(12.0).color(chevron_color),
+            clip: [x, y, w, h],
+        }));
+
+        self.ui.record_layout(self.id, Rect::new(x, y, w, h));
+        self.ui.advance(w, h, start_draw);
+
+        if is_currently_active {
+            let sub_popup_id = Id::from_u64((self.id.raw() << 8) | 11);
+
+            // Check if sub-popup is hovered
+            if let Some(rect) = self.ui.screen_layout_cache.get(&sub_popup_id) {
+                if self.ui.mouse_in_rect(rect.origin.x, rect.origin.y, rect.size.width, rect.size.height) {
+                    self.ui.interaction_state.insert(hover_flag_key, 1.0);
+                }
+            }
+
+            // Isolate layout state variables
+            let prev_child_ranges = std::mem::take(&mut self.ui.child_draw_ranges);
+            let prev_id_ranges = std::mem::take(&mut self.ui.id_ranges);
+            let prev_id_log = std::mem::take(&mut self.ui.id_log);
+            let prev_child_sizes = std::mem::take(&mut self.ui.child_sizes);
+            let prev_child_origins = std::mem::take(&mut self.ui.child_origins);
+
+            let popup_bg = if is_light_theme {
+                Color::WHITE
+            } else {
+                Color::rgb(1.0 / 255.0, 1.0 / 255.0, 1.0 / 255.0) // 1 – popup bg
+            };
+
+            let popup_border = if is_light_theme {
+                Color::rgb(0.8, 0.8, 0.85)
+            } else {
+                Color::rgb(3.0 / 255.0, 3.0 / 255.0, 3.0 / 255.0) // 3 – popup border
+            };
+
+            self.ui.container()
+                .id(sub_popup_id)
+                .absolute(x + w + 4.0, y)
+                .overlay()
+                .width(270.0)
+                .bg(popup_bg)
+                .border(popup_border, 1.0)
+                .radius_all(4.0)
+                .padding(4.0, 4.0, 4.0, 4.0)
+                .column()
+                .show(|ui| {
+                    f(ui);
+                });
+
+            // Discard child variables and restore parent's
+            let _ = std::mem::take(&mut self.ui.child_draw_ranges);
+            let _ = std::mem::take(&mut self.ui.id_ranges);
+            let _ = std::mem::take(&mut self.ui.id_log);
+            let _ = std::mem::take(&mut self.ui.child_sizes);
+            let _ = std::mem::take(&mut self.ui.child_origins);
+
+            self.ui.child_draw_ranges = prev_child_ranges;
+            self.ui.id_ranges = prev_id_ranges;
+            self.ui.id_log = prev_id_log;
+            self.ui.child_sizes = prev_child_sizes;
+            self.ui.child_origins = prev_child_origins;
+        }
+    }
+}
+
+pub struct MenuItemBuilder<'u, 'a> {
+    ui: &'u mut Ui<'a>,
+    label: String,
+    shortcut: Option<String>,
+    id: Id,
+}
+
+impl<'u, 'a> MenuItemBuilder<'u, 'a> {
+    pub fn new(ui: &'u mut Ui<'a>, label: &str) -> Self {
+        let id = ui.id();
+        Self {
+            ui,
+            label: label.to_string(),
+            shortcut: None,
+            id,
+        }
+    }
+
+    pub fn shortcut(mut self, shortcut: &str) -> Self {
+        self.shortcut = Some(shortcut.to_string());
+        self
+    }
+
+    pub fn show(self) -> Response {
+        let hover_flag_key = Id::from_u64(999999902);
+
+        let (x, y) = (self.ui.cursor_x, self.ui.cursor_y);
+        let w = 262.0;
+        let h = 26.0;
+
+        let (actual_ox, actual_oy, actual_w, actual_h) = if let Some((rect, _)) = self.ui.get_recorded_layout(self.id) {
+            (
+                rect.origin.x + self.ui.offset_x,
+                rect.origin.y + self.ui.offset_y,
+                rect.size.width.max(w),
+                rect.size.height.max(h)
+            )
+        } else {
+            (x + self.ui.offset_x, y + self.ui.offset_y, w, h)
+        };
+
+        let is_hovered = self.ui.is_hovered(self.id, actual_ox, actual_oy, actual_w, actual_h);
+
+        if is_hovered {
+            self.ui.interaction_state.insert(hover_flag_key, 1.0);
+        }
+
+        let is_light_theme = self.ui.interaction_state.get(&Id::from_u64(999999999)).copied().unwrap_or(0.0) > 0.5;
+
+        let bg_color = if is_light_theme {
+            if is_hovered {
+                Color::rgb(0.9, 0.9, 0.95)
+            } else {
+                Color::TRANSPARENT
+            }
+        } else {
+            if is_hovered {
+                Color::rgb(3.0 / 255.0, 3.0 / 255.0, 3.0 / 255.0) // 3 – hover
+            } else {
+                Color::TRANSPARENT
+            }
+        };
+
+        let text_color = if is_light_theme {
+            Color::rgb(0.1, 0.1, 0.15)
+        } else {
+            if is_hovered {
+                Color::rgb(255.0 / 255.0, 214.0 / 255.0, 0.0 / 255.0) // #FFD600 vivid yellow (accent)
+            } else {
+                Color::rgb(224.0 / 255.0, 224.0 / 255.0, 224.0 / 255.0) // #e0e0e0 (text_primary)
+            }
+        };
+
+        let shortcut_color = if is_light_theme {
+            Color::rgb(0.5, 0.5, 0.5)
+        } else {
+            if is_hovered {
+                Color::rgb(255.0 / 255.0, 214.0 / 255.0, 0.0 / 255.0) // #FFD600 vivid yellow (accent)
+            } else {
+                Color::rgb(102.0 / 255.0, 102.0 / 255.0, 102.0 / 255.0) // #666666 (text_muted)
+            }
+        };
+
+        let start_draw = self.ui.draws.len();
+
+        self.ui.draws.push(DrawCommand::Rect(RectDraw {
+            instance: RectInstance {
+                pos: [x, y],
+                size: [w, h],
+                color: bg_color.to_array(),
+                radius: [3.0; 4],
+                ..Default::default()
+            }
+        }));
+
+        self.ui.draws.push(DrawCommand::Text(TextDraw {
+            text: self.label.clone(),
+            pos: [x + 8.0, y + 6.0],
+            options: zenthra_text::prelude::TextOptions::new().font_size(13.0).color(text_color),
+            clip: [x, y, w, h],
+        }));
+
+        if let Some(sh) = self.shortcut {
+            self.ui.draws.push(DrawCommand::Text(TextDraw {
+                text: sh,
+                pos: [x + w - 80.0, y + 6.0],
+                options: zenthra_text::prelude::TextOptions::new().font_size(12.0).color(shortcut_color),
+                clip: [x, y, w, h],
+            }));
+        }
+
+        self.ui.record_layout(self.id, Rect::new(x, y, w, h));
+        self.ui.advance(w, h, start_draw);
+
+        let clicked = self.ui.clicked && is_hovered;
+        if clicked {
+            // Close all menus upon item selection
+            let active_menu_key = Id::from_u64(999999900);
+            let active_submenu_key = Id::from_u64(999999901);
+            self.ui.interaction_state.insert(active_menu_key, 0.0);
+            self.ui.interaction_state.insert(active_submenu_key, 0.0);
+            self.ui.needs_redraw = true;
+        }
+
+        Response {
+            clicked,
+            hovered: is_hovered,
+            pressed: is_hovered && self.ui.mouse_down,
+        }
+    }
+}

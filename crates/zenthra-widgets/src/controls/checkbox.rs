@@ -251,7 +251,7 @@ impl<'u, 'a, 'b> CheckboxBuilder<'u, 'a, 'b> {
             (x + self.ui.offset_x, y + self.ui.offset_y, total_w, total_h)
         };
 
-        let is_hovered = self.ui.mouse_in_rect(actual_ox, actual_oy, actual_w, actual_h);
+        let is_hovered = self.ui.is_hovered(self.id, actual_ox, actual_oy, actual_w, actual_h);
         let is_pressed = is_hovered && self.ui.mouse_down;
         let mut clicked = false;
 

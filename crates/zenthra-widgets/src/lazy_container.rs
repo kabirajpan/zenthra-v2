@@ -135,6 +135,7 @@ impl<'u, 'a> LazyContainerBuilder<'u, 'a> {
             }
             (Direction::Row, _) => self.count.max(1), // single horizontal row
             (Direction::Column, _) => 1,               // single vertical column
+            (Direction::Stack, _) => 1,
         };
 
         let row_count = (self.count as f32 / items_per_row as f32).ceil() as usize;
@@ -193,6 +194,7 @@ impl<'u, 'a> LazyContainerBuilder<'u, 'a> {
         let prev_offset_y   = ui.offset_y;
         let prev_child_sizes   = std::mem::take(&mut ui.child_sizes);
         let prev_child_ranges  = std::mem::take(&mut ui.child_draw_ranges);
+        let prev_child_origins = std::mem::take(&mut ui.child_origins);
         let prev_id_ranges     = std::mem::take(&mut ui.id_ranges);
         let prev_id_log        = std::mem::take(&mut ui.id_log);
         // Swap out the parent draw list; we'll collect children separately
@@ -256,6 +258,7 @@ impl<'u, 'a> LazyContainerBuilder<'u, 'a> {
         ui.cursor_y        = oy;
         ui.child_sizes     = prev_child_sizes;
         ui.child_draw_ranges = prev_child_ranges;
+        ui.child_origins   = prev_child_origins;
         ui.id_ranges       = prev_id_ranges;
         ui.id_log          = prev_id_log;
 

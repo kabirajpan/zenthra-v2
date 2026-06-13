@@ -6,13 +6,20 @@ use zenthra_widgets::Ui;
 
 pub struct App {
     platform: PlatformApp,
+    fonts: Vec<String>,
 }
 
 impl App {
     pub fn new() -> Self {
         Self {
             platform: PlatformApp::new(),
+            fonts: Vec::new(),
         }
+    }
+
+    pub fn load_font_path(mut self, path: &str) -> Self {
+        self.fonts.push(path.to_string());
+        self
     }
 
     pub fn title(mut self, t: &str) -> Self {
@@ -51,8 +58,17 @@ impl App {
             zenthra_core::Id,
             (zenthra_core::Rect, u64),
         > = std::collections::HashMap::new();
+        let mut screen_layout_cache: std::collections::HashMap<
+            zenthra_core::Id,
+            zenthra_core::Rect,
+        > = std::collections::HashMap::new();
+        let mut widget_window_map: std::collections::HashMap<
+            zenthra_core::Id,
+            zenthra_core::Id,
+        > = std::collections::HashMap::new();
         let start_time = std::time::Instant::now();
 
+        let fonts = std::mem::take(&mut self.fonts);
         self.platform = self.platform.with_ui(move |frame: &mut Frame| {
             let elapsed = start_time.elapsed().as_secs_f32();
             let device = frame.window.gpu.device.clone();
@@ -62,9 +78,19 @@ impl App {
             let height = frame.window.height();
             let sf = frame.scale_factor() as f32;
             let mut next_layout_cache = std::collections::HashMap::new();
+            let mut next_screen_layout_cache = std::collections::HashMap::new();
+            let mut next_widget_window_map = std::collections::HashMap::new();
 
             // Initialize or update the Zentype engine
-            let engine = zentype.get_or_insert_with(|| Zentype::new(device.clone(), queue, config));
+            let engine = zentype.get_or_insert_with(|| {
+                let engine = Zentype::new(device.clone(), queue, config);
+                for font_path in &fonts {
+                    if let Err(e) = engine.font_system().lock().unwrap().db_mut().load_font_file(font_path) {
+                        eprintln!("Failed to load custom font {}: {:?}", font_path, e);
+                    }
+                }
+                engine
+            });
 
             let mut needs_redraw = false;
 
@@ -124,10 +150,24 @@ impl App {
                         elapsed,
                         &layout_cache,
                         &mut next_layout_cache,
+                        &screen_layout_cache,
+                        &mut next_screen_layout_cache,
+                        &widget_window_map,
+                        &mut next_widget_window_map,
                         &image_sizes,
                     );
 
                     f(&mut ui);
+
+                    // Sort window overlays by z-index and append them to ui.overlays
+                    ui.window_overlays.sort_by(|(id_a, _), (id_b, _)| {
+                        let z_a = ui.interaction_state.get(&zenthra_core::Id::from_u64((id_a.raw() << 8) | 4)).copied().unwrap_or(0.0);
+                        let z_b = ui.interaction_state.get(&zenthra_core::Id::from_u64((id_b.raw() << 8) | 4)).copied().unwrap_or(0.0);
+                        z_a.partial_cmp(&z_b).unwrap_or(std::cmp::Ordering::Equal)
+                    });
+                    for (_, cmds) in ui.window_overlays {
+                        ui.overlays.extend(cmds);
+                    }
 
                     focused_id = ui.focused_id;
                     active_drag = ui.active_drag;
@@ -144,6 +184,13 @@ impl App {
                 let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: Some("Zenthra Frame") });
 
                 // --- PASS 1: CLEAR ---
+                let is_light_theme = interaction_state.get(&zenthra_core::Id::from_u64(999999999)).copied().unwrap_or(0.0) > 0.5;
+                let clear_color = if is_light_theme {
+                    wgpu::Color { r: 0.95, g: 0.95, b: 0.96, a: 1.0 }
+                } else {
+                    wgpu::Color { r: 0.0, g: 0.0, b: 0.0, a: 1.0 }
+                };
+
                 {
                     encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                         label: Some("Clear Pass"),
@@ -151,7 +198,7 @@ impl App {
                             view: &view,
                             resolve_target: None,
                             ops: wgpu::Operations {
-                                load: wgpu::LoadOp::Clear(wgpu::Color { r: 0.05, g: 0.05, b: 0.07, a: 1.0 }),
+                                load: wgpu::LoadOp::Clear(clear_color),
                                 store: wgpu::StoreOp::Store,
                             },
                             depth_slice: None,
@@ -352,6 +399,8 @@ impl App {
 
             // Swap layout caches for next frame
             layout_cache = next_layout_cache;
+            screen_layout_cache = next_screen_layout_cache;
+            widget_window_map = next_widget_window_map;
             needs_redraw
         });
         self
@@ -359,5 +408,9 @@ impl App {
 
     pub fn run(self) {
         self.platform.run();
+    }
+
+    pub fn run_with_event_loop(self, event_loop: winit::event_loop::EventLoop<()>) {
+        self.platform.run_with_event_loop(event_loop);
     }
 }

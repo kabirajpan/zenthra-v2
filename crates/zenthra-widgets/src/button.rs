@@ -45,6 +45,8 @@ pub struct ButtonBuilder<'u, 'a> {
     active_border_width: Option<f32>,
     wrap: zenthra_text::prelude::TextWrap,
     fill_x: bool,
+    align: zenthra_core::Align,
+    font_family: Option<String>,
 }
 
 impl<'u, 'a> ButtonBuilder<'u, 'a> {
@@ -80,6 +82,8 @@ impl<'u, 'a> ButtonBuilder<'u, 'a> {
             active_border_width: None,
             wrap: zenthra_text::prelude::TextWrap::Word,
             fill_x: false,
+            align: zenthra_core::Align::Center,
+            font_family: None,
         }
     }
 
@@ -282,6 +286,16 @@ impl<'u, 'a> ButtonBuilder<'u, 'a> {
         self
     }
 
+    pub fn align(mut self, strategy: zenthra_core::Align) -> Self {
+        self.align = strategy;
+        self
+    }
+
+    pub fn font_family(mut self, family: impl Into<String>) -> Self {
+        self.font_family = Some(family.into());
+        self
+    }
+
     pub fn show(self) -> zenthra_core::Response {
         if let Some(mode) = self.render_mode {
             self.ui.render_mode_stack.push(mode);
@@ -293,21 +307,13 @@ impl<'u, 'a> ButtonBuilder<'u, 'a> {
         let ox = x + self.ui.offset_x;
         let oy = y + self.ui.offset_y;
 
-        let is_hovered = if let Some((rect, _)) = self.ui.get_recorded_layout(self.id) {
-            self.ui.mouse_in_rect(
-                rect.origin.x + self.ui.offset_x,
-                rect.origin.y + self.ui.offset_y,
-                rect.size.width,
-                rect.size.height,
-            )
-        } else {
-            self.ui.mouse_in_rect(
-                ox,
-                oy,
-                self.width.unwrap_or(100.0),
-                self.height.unwrap_or(40.0),
-            )
-        };
+        let is_hovered = self.ui.is_hovered(
+            self.id,
+            ox,
+            oy,
+            self.width.unwrap_or(100.0),
+            self.height.unwrap_or(40.0),
+        );
 
         let is_pressed = is_hovered && self.ui.mouse_down;
 
@@ -346,9 +352,12 @@ impl<'u, 'a> ButtonBuilder<'u, 'a> {
             // use zenthra_text::traits::FontProvider;
             let mut adapter =
                 zenthra_text::prelude::CosmicFontProvider::new_with_system(fs.clone());
-            let options = zenthra_text::prelude::TextOptions::new()
+            let mut options = zenthra_text::prelude::TextOptions::new()
                 .font_size(self.font_size)
                 .wrap(self.wrap);
+            if let Some(ref family) = self.font_family {
+                options = options.font_family(family.clone());
+            }
             let buffer = adapter.shape(&self.label, &options);
             let (cw, ch) = buffer.content_size();
             text_w = cw;
@@ -401,18 +410,27 @@ impl<'u, 'a> ButtonBuilder<'u, 'a> {
             },
         }));
 
-        // 2. Draw Text (Centered)
-        let tx = x + (final_w - text_w) / 2.0;
+        // 2. Draw Text (aligned accordingly)
+        let tx = match self.align {
+            zenthra_core::Align::Left => x + self.padding.left,
+            zenthra_core::Align::Right => x + final_w - text_w - self.padding.right,
+            _ => x + (final_w - text_w) / 2.0,
+        };
         let ty = y + (final_h - text_h) / 2.0;
+
+        let mut text_opts = zenthra_text::prelude::TextOptions::new()
+            .font_size(self.font_size)
+            .color(current_text)
+            .wrap(self.wrap)
+            .at(tx, ty);
+        if let Some(ref family) = self.font_family {
+            text_opts = text_opts.font_family(family.clone());
+        }
 
         self.ui.draws.push(DrawCommand::Text(TextDraw {
             text: self.label.clone(),
             pos: [tx, ty],
-            options: zenthra_text::prelude::TextOptions::new()
-                .font_size(self.font_size)
-                .color(current_text)
-                .wrap(self.wrap)
-                .at(tx, ty),
+            options: text_opts,
             clip: [0.0, 0.0, 9999.0, 9999.0],
         }));
 

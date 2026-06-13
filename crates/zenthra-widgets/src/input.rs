@@ -313,7 +313,7 @@ impl<'u, 'a, 'b> InputBuilder<'u, 'a, 'b> {
         } else {
             (self.x + self.ui.offset_x, self.y + self.ui.offset_y)
         };
-        let is_hovered = self.ui.mouse_in_rect(actual_x, actual_y, w_box, h_box);
+        let is_hovered = self.ui.is_hovered(self.id, actual_x, actual_y, w_box, h_box);
         let mut needs_auto_scroll = false;
         let mut changed = false;
 

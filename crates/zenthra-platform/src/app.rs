@@ -62,6 +62,10 @@ impl App {
 
     pub fn run(self) {
         let event_loop = EventLoop::new().unwrap();
+        self.run_with_event_loop(event_loop);
+    }
+
+    pub fn run_with_event_loop(self, event_loop: EventLoop<()>) {
         let mut runner = AppRunner {
             title: self.title,
             width: self.width,
@@ -147,7 +151,37 @@ impl ApplicationHandler for AppRunner {
                 self.pending_events.push(PlatformEvent::MouseWheel { delta_x: x, delta_y: y });
                 if let Some(w) = &mut self.window { w.request_redraw(); }
             }
-            WindowEvent::Touch(_touch) => { }
+            WindowEvent::Touch(touch) => { 
+                self.pending_events.push(PlatformEvent::Touch {
+                    id: touch.id,
+                    phase: touch.phase,
+                    x: touch.location.x,
+                    y: touch.location.y,
+                });
+
+                // Map first touch to mouse for basic interaction support
+                if touch.id == 0 {
+                    match touch.phase {
+                        winit::event::TouchPhase::Started => {
+                            self.pending_events.push(PlatformEvent::MouseMoved { x: touch.location.x, y: touch.location.y });
+                            self.pending_events.push(PlatformEvent::MouseButton { 
+                                button: winit::event::MouseButton::Left, 
+                                state: winit::event::ElementState::Pressed 
+                            });
+                        }
+                        winit::event::TouchPhase::Moved => {
+                            self.pending_events.push(PlatformEvent::MouseMoved { x: touch.location.x, y: touch.location.y });
+                        }
+                        winit::event::TouchPhase::Ended | winit::event::TouchPhase::Cancelled => {
+                            self.pending_events.push(PlatformEvent::MouseButton { 
+                                button: winit::event::MouseButton::Left, 
+                                state: winit::event::ElementState::Released 
+                            });
+                        }
+                    }
+                }
+                if let Some(w) = &mut self.window { w.request_redraw(); }
+            }
             WindowEvent::KeyboardInput { event, .. } => {
                 if event.state == winit::event::ElementState::Pressed {
                     if let winit::keyboard::PhysicalKey::Code(key) = event.physical_key {

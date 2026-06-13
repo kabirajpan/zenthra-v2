@@ -351,7 +351,7 @@ impl<'u, 'a, 'b> TextAreaBuilder<'u, 'a, 'b> {
         } else {
             (self.x + self.ui.offset_x, self.y + self.ui.offset_y)
         };
-        let is_hovered = self.ui.mouse_in_rect(actual_x, actual_y, actual_width, h_box);
+        let is_hovered = self.ui.is_hovered(self.id, actual_x, actual_y, actual_width, h_box);
 
         if is_focused || is_hovered {
             let events = std::mem::take(&mut self.ui.input_events);

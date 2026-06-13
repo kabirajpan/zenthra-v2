@@ -9,6 +9,9 @@ pub mod progress_bar;
 pub mod ui;
 pub mod image;
 pub mod controls;
+pub mod window;
+pub mod containers;
+pub mod layout;
 
 pub use button::ButtonBuilder;
 pub use container::ContainerBuilder;
@@ -17,4 +20,8 @@ pub use slider::SliderBuilder;
 pub use text::TextBuilder;
 pub use text_area::TextAreaBuilder;
 pub use ui::Ui;
+pub use window::FloatingWindowBuilder;
 pub use controls::*;
+pub use containers::{CardBuilder, PanelBuilder};
+pub use layout::StackBuilder;
+pub mod icons;

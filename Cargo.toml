@@ -11,6 +11,8 @@ members = [
     "crates/zenthra-input",
     "crates/zenthra-platform",
     "crates/zenthra-theme",
+    "examples/window_test_mobile",
+    "apps/image_viewer",
 ]
 resolver = "2"
 
@@ -47,3 +49,14 @@ pollster     = "0.3"
 log          = "0.4"
 env_logger   = "0.11"
 image        = "0.24"
+
+# ── Compilation Profile Optimization ──────────────────────────
+[profile.dev]
+opt-level = 0
+debug = 1            # Line tables only: dramatically reduces debug info size and speeds up linker
+incremental = true   # Ensures incremental compilation is enabled
+
+# Compile dependencies with high optimization so they run at release-mode speeds,
+# while keeping our workspace crates compiling instantly.
+[profile.dev.package."*"]
+opt-level = 3
