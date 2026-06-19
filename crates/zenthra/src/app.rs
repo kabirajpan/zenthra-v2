@@ -30,6 +30,10 @@ impl App {
         self.platform = self.platform.size(w, h);
         self
     }
+    pub fn decorations(mut self, dec: bool) -> Self {
+        self.platform = self.platform.decorations(dec);
+        self
+    }
 
     pub fn with_ui<F>(mut self, mut f: F) -> Self
     where
@@ -43,6 +47,14 @@ impl App {
         > = std::collections::HashMap::new();
         let mut image_sizes: std::collections::HashMap<zenthra_core::ImageSource, (u32, u32)> =
             std::collections::HashMap::new();
+        let mut texture_lru: std::collections::VecDeque<zenthra_core::ImageSource> =
+            std::collections::VecDeque::new();
+        let mut loading_textures: std::collections::HashSet<zenthra_core::ImageSource> =
+            std::collections::HashSet::new();
+        let (tx, rx) = std::sync::mpsc::channel::<(
+            zenthra_core::ImageSource,
+            Result<(wgpu::BindGroup, u32, u32), String>,
+        )>();
         let mut zentype: Option<Zentype> = None;
         let mut focused_id: Option<zenthra_core::Id> = None;
         let mut state: std::collections::HashMap<zenthra_core::Id, (f32, f32)> =
@@ -93,6 +105,48 @@ impl App {
             });
 
             let mut needs_redraw = false;
+
+            // Process async loaded textures
+            while let Ok((source, result)) = rx.try_recv() {
+                loading_textures.remove(&source);
+                match result {
+                    Ok((bg, w, h)) => {
+                        let is_thumbnail = matches!(source, zenthra_core::ImageSource::Thumbnail(_));
+                        if is_thumbnail {
+                            let thumb_count = texture_cache.keys().filter(|k| matches!(k, zenthra_core::ImageSource::Thumbnail(_))).count();
+                            if thumb_count >= 1000 {
+                                if let Some(idx) = texture_lru.iter().position(|k| matches!(k, zenthra_core::ImageSource::Thumbnail(_))) {
+                                    if let Some(lru_key) = texture_lru.remove(idx) {
+                                        texture_cache.remove(&lru_key);
+                                        image_sizes.remove(&lru_key);
+                                    }
+                                }
+                            }
+                        } else {
+                            let full_count = texture_cache.keys().filter(|k| !matches!(k, zenthra_core::ImageSource::Thumbnail(_))).count();
+                            if full_count >= 8 {
+                                if let Some(idx) = texture_lru.iter().position(|k| !matches!(k, zenthra_core::ImageSource::Thumbnail(_))) {
+                                    if let Some(lru_key) = texture_lru.remove(idx) {
+                                        texture_cache.remove(&lru_key);
+                                        image_sizes.remove(&lru_key);
+                                    }
+                                }
+                            }
+                        }
+                        texture_cache.insert(source.clone(), (std::sync::Arc::new(bg), w, h));
+                        image_sizes.insert(source.clone(), (w, h));
+                        
+                        if let Some(pos) = texture_lru.iter().position(|x| *x == source) {
+                            texture_lru.remove(pos);
+                        }
+                        texture_lru.push_back(source);
+                        needs_redraw = true;
+                    }
+                    Err(e) => {
+                        eprintln!("Background texture load failed: {}", e);
+                    }
+                }
+            }
 
             // Update persistent mouse pos from current frame events
             let mut ui_clicked = false;
@@ -172,6 +226,8 @@ impl App {
                     focused_id = ui.focused_id;
                     active_drag = ui.active_drag;
                     needs_redraw |= ui.needs_redraw;
+                    frame.request_redraw_at = ui.requested_redraw_at;
+                    frame.window_actions = ui.window_actions.clone();
                     
                     (ui.draws, ui.overlays)
                 };
@@ -225,6 +281,16 @@ impl App {
 
                     let flush_batch = |encoder: &mut wgpu::CommandEncoder, view: &wgpu::TextureView, rects: &mut Vec<RectInstance>, temp_bufs: &mut Vec<wgpu::Buffer>| {
                         if rects.is_empty() { return; }
+                        {
+                            use std::fs::OpenOptions;
+                            use std::io::Write;
+                            if let Ok(mut file) = OpenOptions::new().create(true).append(true).open("window_debug.log") {
+                                let _ = writeln!(file, "GPU FLUSH BATCH: count={}", rects.len());
+                                for (i, r) in rects.iter().enumerate() {
+                                    let _ = writeln!(file, "  [{}] pos={:?}, size={:?}, color={:?}, clip={:?}, opacity={}", i, r.pos, r.size, r.color, r.clip_rect, r.opacity);
+                                }
+                            }
+                        }
                         use wgpu::util::DeviceExt;
                         let buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
                             label: Some("Rect Instance Buffer"),
@@ -300,14 +366,55 @@ impl App {
                             DrawCommand::Image(id_cmd) => {
                                 flush_batch(encoder, view, &mut current_rects, temp_bufs);
                                 if !texture_cache.contains_key(&id_cmd.source) {
-                                    let bytes = match &id_cmd.source {
-                                        zenthra_core::ImageSource::Path(p) => std::fs::read(p).unwrap_or_default(),
-                                        zenthra_core::ImageSource::Bytes(b) => b.to_vec(),
-                                    };
-                                    if let Ok((bg, w, h)) = zenthra_render::texture::create_texture_bind_group(&device, queue, &ip.texture_bgl, &bytes) {
-                                        texture_cache.insert(id_cmd.source.clone(), (std::sync::Arc::new(bg), w, h));
-                                        image_sizes.insert(id_cmd.source.clone(), (w, h));
+                                    if !loading_textures.contains(&id_cmd.source) {
+                                        loading_textures.insert(id_cmd.source.clone());
+                                        let tx = tx.clone();
+                                        let device = device.clone();
+                                        let queue = frame.window.gpu.queue.clone();
+                                        let bgl = ip.texture_bgl.clone();
+                                        let source = id_cmd.source.clone();
+                                        let winit_window = frame.window.winit_window.clone();
+
+                                        std::thread::spawn(move || {
+                                            let result = match &source {
+                                                zenthra_core::ImageSource::Path(p) => {
+                                                    match std::fs::read(p) {
+                                                        Ok(bytes) => {
+                                                            match zenthra_render::texture::create_texture_bind_group(&device, &queue, &bgl, &bytes) {
+                                                                Ok((bg, w, h)) => Ok((bg, w, h)),
+                                                                Err(e) => Err(format!("Failed to create texture: {:?}", e)),
+                                                            }
+                                                        }
+                                                        Err(e) => Err(format!("Failed to read file: {:?}", e)),
+                                                    }
+                                                }
+                                                zenthra_core::ImageSource::Thumbnail(p) => {
+                                                    match std::fs::read(p) {
+                                                        Ok(bytes) => {
+                                                            match zenthra_render::texture::create_texture_bind_group_thumbnail(&device, &queue, &bgl, &bytes, 200) {
+                                                                Ok((bg, w, h)) => Ok((bg, w, h)),
+                                                                Err(e) => Err(format!("Failed to create thumbnail: {:?}", e)),
+                                                            }
+                                                        }
+                                                        Err(e) => Err(format!("Failed to read file: {:?}", e)),
+                                                    }
+                                                }
+                                                zenthra_core::ImageSource::Bytes(b) => {
+                                                    match zenthra_render::texture::create_texture_bind_group(&device, &queue, &bgl, b) {
+                                                        Ok((bg, w, h)) => Ok((bg, w, h)),
+                                                        Err(e) => Err(format!("Failed to create texture: {:?}", e)),
+                                                    }
+                                                }
+                                            };
+                                            let _ = tx.send((source, result));
+                                            winit_window.request_redraw();
+                                        });
                                     }
+                                } else {
+                                    if let Some(pos) = texture_lru.iter().position(|x| *x == id_cmd.source) {
+                                        texture_lru.remove(pos);
+                                    }
+                                    texture_lru.push_back(id_cmd.source.clone());
                                 }
                                 if let Some((bg, _tw, _th)) = texture_cache.get(&id_cmd.source) {
                                     let mut inst = id_cmd.instance;
@@ -390,11 +497,44 @@ impl App {
                     flush_batch(encoder, view, &mut current_rects, temp_bufs);
                 };
 
-                process_interleaved(&mut encoder, &view, &draws, &mut temp_buffers);
-                process_interleaved(&mut encoder, &view, &overlays, &mut temp_buffers);
+                {
+                    use std::fs::OpenOptions;
+                    use std::io::Write;
+                    if let Ok(mut file) = OpenOptions::new().create(true).append(true).open("window_debug.log") {
+                        let _ = writeln!(file, "FRAME: draws.len()={}, overlays.len()={}, sf={}, width={}, height={}", draws.len(), overlays.len(), sf, width, height);
+                    }
+                }
+                let mut all_draws = draws;
+                all_draws.extend(overlays);
+                process_interleaved(&mut encoder, &view, &all_draws, &mut temp_buffers);
 
                 queue.submit(std::iter::once(encoder.finish()));
                 surface_texture.present();
+            }
+
+            // Compare layout caches to see if layout changed
+            let mut layout_changed = false;
+            if layout_cache.len() != next_layout_cache.len() {
+                layout_changed = true;
+            } else {
+                for (id, (rect, _)) in &next_layout_cache {
+                    if let Some((old_rect, _)) = layout_cache.get(id) {
+                        if (old_rect.origin.x - rect.origin.x).abs() > 0.1 ||
+                           (old_rect.origin.y - rect.origin.y).abs() > 0.1 ||
+                           (old_rect.size.width - rect.size.width).abs() > 0.1 ||
+                           (old_rect.size.height - rect.size.height).abs() > 0.1 {
+                            layout_changed = true;
+                            break;
+                        }
+                    } else {
+                        layout_changed = true;
+                        break;
+                    }
+                }
+            }
+
+            if layout_changed {
+                needs_redraw = true;
             }
 
             // Swap layout caches for next frame

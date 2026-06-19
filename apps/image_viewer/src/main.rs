@@ -11,16 +11,32 @@ fn main() {
 
     // Initialize the modular state
     let mut state = ViewerState::new();
+    if let Ok(entries) = std::fs::read_dir("/home/kabir/Downloads/pvt") {
+        let mut paths: Vec<_> = entries.filter_map(Result::ok).map(|e| e.path()).collect();
+        paths.sort();
+        for path in paths {
+            if path.is_file() {
+                let ext = path.extension().and_then(|e| e.to_str()).unwrap_or("").to_lowercase();
+                if ext == "jpg" || ext == "jpeg" || ext == "png" || ext == "webp" {
+                    state.images.push(path);
+                }
+            }
+        }
+    }
 
     App::new()
         .title("Zenthra — Image Viewer")
         .size(1200, 660)
+        .decorations(false)
         .with_ui(move |ui| {
             // Update slideshow progression
             if state.update_slideshow() {
                 ui.request_redraw();
-            } else if state.slideshow_active {
-                ui.request_redraw();
+            }
+            if state.slideshow_active && !state.images.is_empty() {
+                let elapsed = state.last_slide_time.elapsed();
+                let duration = std::time::Duration::from_secs_f32(3.0).saturating_sub(elapsed);
+                ui.request_redraw_after(duration);
             }
 
             // Expose the active theme flag to interaction_state so widgets can read it
@@ -34,6 +50,9 @@ fn main() {
                 .fill()
                 .bg(colors.bg_base) // Theme-specific window background
                 .show(|ui| {
+                    // Draw Custom Title Bar
+                    ui_components::draw_title_bar(ui, &mut state);
+
                     // Draw top menu bar
                     ui_components::draw_menu_bar(ui, &mut state);
 

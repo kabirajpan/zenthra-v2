@@ -102,6 +102,9 @@ pub struct Ui<'a> {
     pub current_window_id: Option<Id>,
     pub widget_window_map: &'a std::collections::HashMap<Id, Id>,
     pub next_widget_window_map: &'a mut std::collections::HashMap<Id, Id>,
+    pub requested_redraw_at: Option<std::time::Instant>,
+    pub event_listeners: std::collections::HashMap<Id, Vec<EventHandler<'a>>>,
+    pub window_actions: Vec<zenthra_platform::app::WindowAction>,
 }
 
 impl<'a> Ui<'a> {
@@ -184,7 +187,88 @@ impl<'a> Ui<'a> {
             current_window_id: None,
             widget_window_map,
             next_widget_window_map,
+            requested_redraw_at: None,
+            event_listeners: std::collections::HashMap::new(),
+            window_actions: Vec::new(),
         }
+    }
+
+    pub fn request_redraw_at(&mut self, instant: std::time::Instant) {
+        if let Some(current) = self.requested_redraw_at {
+            if instant < current {
+                self.requested_redraw_at = Some(instant);
+            }
+        } else {
+            self.requested_redraw_at = Some(instant);
+        }
+    }
+
+    pub fn add_listener<F>(&mut self, id: Id, phase: EventPhase, callback: F)
+    where
+        F: FnMut(&mut EventContext, &WidgetEvent) + 'a,
+    {
+        self.event_listeners.entry(id).or_default().push(EventHandler {
+            phase,
+            callback: Box::new(callback),
+        });
+    }
+
+    pub fn dispatch_event(&mut self, target_id: Id, event: WidgetEvent) {
+        let ancestors = self.semantic_stack.clone();
+
+        let mut ctx = EventContext {
+            target: target_id,
+            current_target: target_id,
+            propagation_stopped: false,
+        };
+
+        // 1. Capture Phase
+        for ancestor_id in &ancestors {
+            ctx.current_target = *ancestor_id;
+            if let Some(handlers) = self.event_listeners.get_mut(ancestor_id) {
+                for handler in handlers {
+                    if handler.phase == EventPhase::Capture {
+                        (handler.callback)(&mut ctx, &event);
+                        if ctx.propagation_stopped {
+                            return;
+                        }
+                    }
+                }
+            }
+        }
+
+        // 2. Target Phase
+        ctx.current_target = target_id;
+        if let Some(handlers) = self.event_listeners.get_mut(&target_id) {
+            for handler in handlers {
+                if handler.phase == EventPhase::Target || handler.phase == EventPhase::Bubble {
+                    (handler.callback)(&mut ctx, &event);
+                    if ctx.propagation_stopped {
+                        return;
+                    }
+                }
+            }
+        }
+
+        // 3. Bubble Phase
+        for ancestor_id in ancestors.iter().rev() {
+            ctx.current_target = *ancestor_id;
+            if let Some(handlers) = self.event_listeners.get_mut(ancestor_id) {
+                for handler in handlers {
+                    if handler.phase == EventPhase::Bubble {
+                        (handler.callback)(&mut ctx, &event);
+                        if ctx.propagation_stopped {
+                            return;
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    pub fn request_redraw_after(&mut self, duration: std::time::Duration) {
+        let target = std::time::Instant::now() + duration;
+        self.request_redraw_at(target);
     }
 
     pub fn id(&mut self) -> Id {
@@ -194,22 +278,6 @@ impl<'a> Ui<'a> {
 
     pub fn record_layout(&mut self, id: Id, rect: Rect) {
         let id_count = self.id_counter.saturating_sub(id.raw());
-        
-        let mut should_redraw = false;
-        if let Some((old_rect, _)) = self.layout_cache.get(&id) {
-            if (old_rect.origin.x - rect.origin.x).abs() > 0.1 ||
-               (old_rect.origin.y - rect.origin.y).abs() > 0.1 ||
-               (old_rect.size.width - rect.size.width).abs() > 0.1 ||
-               (old_rect.size.height - rect.size.height).abs() > 0.1 {
-                should_redraw = true;
-            }
-        } else {
-            should_redraw = true;
-        }
-
-        if should_redraw {
-            self.needs_redraw = true;
-        }
 
         self.next_layout_cache.insert(id, (rect, id_count));
         let screen_rect = Rect::new(rect.origin.x + self.offset_x, rect.origin.y + self.offset_y, rect.size.width, rect.size.height);
@@ -263,7 +331,28 @@ impl<'a> Ui<'a> {
         } else {
             self.mouse_in_rect(fallback_x, fallback_y, fallback_w, fallback_h)
         };
-        is_in && !self.is_occluded(id, self.mouse_x, self.mouse_y)
+        let mouse_in_viewport = self.current_viewport.contains(zenthra_core::Point::new(self.mouse_x, self.mouse_y));
+        is_in && mouse_in_viewport && !self.is_occluded(id, self.mouse_x, self.mouse_y)
+    }
+
+    pub fn overlay<F>(&mut self, f: F)
+    where
+        F: FnOnce(&mut Ui),
+    {
+        // Swap draws and overlays so that any pushes to self.draws go to self.overlays
+        std::mem::swap(&mut self.draws, &mut self.overlays);
+
+        self.skip_clip_stack.push(true);
+        let prev_viewport = self.current_viewport;
+        self.current_viewport = Rect::new(-100000.0, -100000.0, 2000000.0, 2000000.0);
+
+        f(self);
+
+        self.current_viewport = prev_viewport;
+        self.skip_clip_stack.pop();
+
+        // Swap back to restore self.draws and commit new draws to self.overlays
+        std::mem::swap(&mut self.draws, &mut self.overlays);
     }
 
     pub fn get_recorded_layout(&self, id: Id) -> Option<(Rect, u64)> {
@@ -553,4 +642,214 @@ impl<'a> Ui<'a> {
 /// A helper to get the default Zentype shaper for the current font system.
 pub fn get_shaper(font_system: &Arc<Mutex<FontSystem>>) -> CosmicFontProvider {
     CosmicFontProvider::new_with_system(font_system.clone())
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum WidgetEvent {
+    Click,
+    Hover(bool),
+    Scroll(f32, f32),
+    Change(EventValue),
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum EventValue {
+    Bool(bool),
+    Float(f32),
+    String(String),
+}
+
+#[derive(Debug, Clone)]
+pub struct EventContext {
+    pub target: Id,
+    pub current_target: Id,
+    pub propagation_stopped: bool,
+}
+
+impl EventContext {
+    pub fn stop_propagation(&mut self) {
+        self.propagation_stopped = true;
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum EventPhase {
+    Capture,
+    Target,
+    Bubble,
+}
+
+pub struct EventHandler<'a> {
+    pub phase: EventPhase,
+    pub callback: Box<dyn FnMut(&mut EventContext, &WidgetEvent) + 'a>,
+}
+
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::collections::HashMap;
+
+    #[test]
+    fn test_hover_viewport_bounds() {
+        let mut scroll_state = HashMap::new();
+        let mut cursor_state = HashMap::new();
+        let mut interaction_state = HashMap::new();
+        let layout_cache = HashMap::new();
+        let mut next_layout_cache = HashMap::new();
+        let screen_layout_cache = HashMap::new();
+        let mut next_screen_layout_cache = HashMap::new();
+        let widget_window_map = HashMap::new();
+        let mut next_widget_window_map = HashMap::new();
+        let image_sizes = HashMap::new();
+
+        // 1. Create a UI with mouse position at (50.0, 50.0)
+        let mut ui = Ui::new(
+            100, 100, 1.0, None, Vec::new(), None,
+            (50.0, 50.0), false,
+            &mut scroll_state,
+            &mut cursor_state,
+            &mut interaction_state,
+            None, false, 0.0,
+            &layout_cache,
+            &mut next_layout_cache,
+            &screen_layout_cache,
+            &mut next_screen_layout_cache,
+            &widget_window_map,
+            &mut next_widget_window_map,
+            &image_sizes,
+        );
+
+        let test_id = Id::from_u64(12345);
+
+        // Standard bounds: (40.0, 40.0, 20.0, 20.0). Mouse at (50.0, 50.0) is inside.
+        // Initially, current_viewport is (0.0, 0.0, 100.0, 100.0) which covers the mouse.
+        assert!(ui.is_hovered(test_id, 40.0, 40.0, 20.0, 20.0));
+
+        // 2. Set current_viewport to not cover the mouse (e.g. scrolled out of view)
+        ui.current_viewport = Rect::new(0.0, 0.0, 30.0, 30.0);
+        // The mouse (50, 50) is now outside the visible viewport.
+        // Even though the fallback bounds (40, 40, 20, 20) technically contain the mouse,
+        // the viewport check should restrict the hover.
+        assert!(!ui.is_hovered(test_id, 40.0, 40.0, 20.0, 20.0));
+    }
+
+    #[test]
+    fn test_event_propagation() {
+        let mut scroll_state = HashMap::new();
+        let mut cursor_state = HashMap::new();
+        let mut interaction_state = HashMap::new();
+        let layout_cache = HashMap::new();
+        let mut next_layout_cache = HashMap::new();
+        let screen_layout_cache = HashMap::new();
+        let mut next_screen_layout_cache = HashMap::new();
+        let widget_window_map = HashMap::new();
+        let mut next_widget_window_map = HashMap::new();
+        let image_sizes = HashMap::new();
+
+        let mut ui = Ui::new(
+            100, 100, 1.0, None, Vec::new(), None,
+            (50.0, 50.0), false,
+            &mut scroll_state,
+            &mut cursor_state,
+            &mut interaction_state,
+            None, false, 0.0,
+            &layout_cache,
+            &mut next_layout_cache,
+            &screen_layout_cache,
+            &mut next_screen_layout_cache,
+            &widget_window_map,
+            &mut next_widget_window_map,
+            &image_sizes,
+        );
+
+        let parent_id = Id::from_u64(1);
+        let middle_id = Id::from_u64(2);
+        let child_id = Id::from_u64(3);
+
+        // Simulate hierarchy
+        ui.semantic_stack = vec![parent_id, middle_id];
+
+        use std::cell::RefCell;
+        use std::rc::Rc;
+        let trace = Rc::new(RefCell::new(Vec::new()));
+
+        {
+            let trace_capture = trace.clone();
+            ui.add_listener(parent_id, EventPhase::Capture, move |_, _| {
+                trace_capture.borrow_mut().push("parent_capture".to_string());
+            });
+        }
+        {
+            let trace_bubble = trace.clone();
+            ui.add_listener(parent_id, EventPhase::Bubble, move |_, _| {
+                trace_bubble.borrow_mut().push("parent_bubble".to_string());
+            });
+        }
+        {
+            let trace_capture = trace.clone();
+            ui.add_listener(middle_id, EventPhase::Capture, move |_, _| {
+                trace_capture.borrow_mut().push("middle_capture".to_string());
+            });
+        }
+        {
+            let trace_bubble = trace.clone();
+            ui.add_listener(middle_id, EventPhase::Bubble, move |_, _| {
+                trace_bubble.borrow_mut().push("middle_bubble".to_string());
+            });
+        }
+        {
+            let trace_target = trace.clone();
+            ui.add_listener(child_id, EventPhase::Target, move |_, _| {
+                trace_target.borrow_mut().push("child_target".to_string());
+            });
+        }
+
+        ui.dispatch_event(child_id, WidgetEvent::Click);
+
+        assert_eq!(
+            *trace.borrow(),
+            vec![
+                "parent_capture".to_string(),
+                "middle_capture".to_string(),
+                "child_target".to_string(),
+                "middle_bubble".to_string(),
+                "parent_bubble".to_string(),
+            ]
+        );
+
+        // Test stopping propagation in middle_capture phase
+        trace.borrow_mut().clear();
+        ui.event_listeners.clear();
+
+        {
+            let trace_capture = trace.clone();
+            ui.add_listener(parent_id, EventPhase::Capture, move |_, _| {
+                trace_capture.borrow_mut().push("parent_capture".to_string());
+            });
+        }
+        {
+            let trace_capture = trace.clone();
+            ui.add_listener(middle_id, EventPhase::Capture, move |ctx, _| {
+                trace_capture.borrow_mut().push("middle_capture".to_string());
+                ctx.stop_propagation();
+            });
+        }
+        {
+            let trace_target = trace.clone();
+            ui.add_listener(child_id, EventPhase::Target, move |_, _| {
+                trace_target.borrow_mut().push("child_target".to_string());
+            });
+        }
+
+        ui.dispatch_event(child_id, WidgetEvent::Click);
+
+        assert_eq!(
+            *trace.borrow(),
+            vec![
+                "parent_capture".to_string(),
+                "middle_capture".to_string(),
+            ]
+        );
+    }
 }

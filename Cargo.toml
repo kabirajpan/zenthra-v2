@@ -20,19 +20,22 @@ resolver = "2"
 version    = "0.1.0"
 edition    = "2021"
 license    = "MIT"
+repository = "https://github.com/kabirajpan/zenthra"
+homepage   = "https://github.com/kabirajpan/zenthra"
+readme     = "README.md"
 
 [workspace.dependencies]
 # ── Internal ─────────────────────────────────────────────
-zenthra-core      = { path = "crates/zenthra-core" }
-zenthra-render    = { path = "crates/zenthra-render" }
-zenthra-layout    = { path = "crates/zenthra-layout" }
-zenthra-widgets   = { path = "crates/zenthra-widgets" }
-zenthra-state     = { path = "crates/zenthra-state" }
-zenthra-animation = { path = "crates/zenthra-animation" }
-zenthra-text      = { path = "crates/zenthra-text" }
-zenthra-input     = { path = "crates/zenthra-input" }
-zenthra-platform  = { path = "crates/zenthra-platform" }
-zenthra-theme     = { path = "crates/zenthra-theme" }
+zenthra-core      = { path = "crates/zenthra-core", version = "0.1.0" }
+zenthra-render    = { path = "crates/zenthra-render", version = "0.1.0" }
+zenthra-layout    = { path = "crates/zenthra-layout", version = "0.1.0" }
+zenthra-widgets   = { path = "crates/zenthra-widgets", version = "0.1.0" }
+zenthra-state     = { path = "crates/zenthra-state", version = "0.1.0" }
+zenthra-animation = { path = "crates/zenthra-animation", version = "0.1.0" }
+zenthra-text      = { path = "crates/zenthra-text", version = "0.1.0" }
+zenthra-input     = { path = "crates/zenthra-input", version = "0.1.0" }
+zenthra-platform  = { path = "crates/zenthra-platform", version = "0.1.0" }
+zenthra-theme     = { path = "crates/zenthra-theme", version = "0.1.0" }
 
 
 

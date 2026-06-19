@@ -88,7 +88,16 @@ impl<'u, 'a> MenuBuilder<'u, 'a> {
         let is_currently_active = active_menu_id == self.id.raw();
 
         let (x, y) = (self.ui.cursor_x, self.ui.cursor_y);
-        let w = 60.0;
+        let mut text_w = self.label.len() as f32 * 7.0;
+        if let Some(fs) = self.ui.font_system.as_ref() {
+            let mut adapter = zenthra_text::prelude::CosmicFontProvider::new_with_system(fs.clone());
+            let options = zenthra_text::prelude::TextOptions::new().font_size(13.0);
+            adapter.set_layout_size(1000.0, 100.0);
+            let buffer = adapter.shape(&self.label, &options);
+            text_w = buffer.size().0;
+        }
+        let padding_x = 10.0;
+        let w = text_w + padding_x * 2.0;
         let h = 26.0;
 
         let (actual_ox, actual_oy, actual_w, actual_h) = if let Some((rect, _)) = self.ui.get_recorded_layout(self.id) {
@@ -167,7 +176,7 @@ impl<'u, 'a> MenuBuilder<'u, 'a> {
 
         self.ui.draws.push(DrawCommand::Text(TextDraw {
             text: self.label.clone(),
-            pos: [x + (w - self.label.len() as f32 * 7.0) / 2.0, y + 6.0],
+            pos: [x + (w - text_w) / 2.0, y + 6.0],
             options: zenthra_text::prelude::TextOptions::new().font_size(13.0).color(text_color),
             clip: [x, y, w, h + 4.0],
         }));

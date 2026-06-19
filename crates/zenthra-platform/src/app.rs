@@ -7,9 +7,19 @@ use winit::{
     window::WindowId,
 };
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum WindowAction {
+    Drag,
+    Minimize,
+    Maximize,
+    Close,
+}
+
 pub struct Frame<'a> {
     pub window: &'a mut Window,
     pub events: &'a [PlatformEvent],
+    pub request_redraw_at: Option<std::time::Instant>,
+    pub window_actions: Vec<WindowAction>,
 }
 
 impl<'a> Frame<'a> {
@@ -28,6 +38,7 @@ pub struct App {
     title: String,
     width: u32,
     height: u32,
+    decorations: bool,
     draw_fn: Option<Box<dyn FnMut(&mut Frame) -> bool + 'static>>,
 }
 
@@ -37,6 +48,7 @@ impl App {
             title: "Zenthra".to_string(),
             width: 800,
             height: 600,
+            decorations: true,
             draw_fn: None,
         }
     }
@@ -49,6 +61,11 @@ impl App {
     pub fn size(mut self, w: u32, h: u32) -> Self {
         self.width = w;
         self.height = h;
+        self
+    }
+
+    pub fn decorations(mut self, dec: bool) -> Self {
+        self.decorations = dec;
         self
     }
 
@@ -70,9 +87,11 @@ impl App {
             title: self.title,
             width: self.width,
             height: self.height,
+            decorations: self.decorations,
             draw_fn: self.draw_fn,
             window: None,
             pending_events: Vec::new(),
+            next_wakeup: None,
         };
         event_loop.run_app(&mut runner).unwrap();
     }
@@ -82,24 +101,52 @@ struct AppRunner {
     title: String,
     width: u32,
     height: u32,
+    decorations: bool,
     draw_fn: Option<Box<dyn FnMut(&mut Frame) -> bool + 'static>>,
     window: Option<Window>,
     pending_events: Vec<PlatformEvent>,
+    next_wakeup: Option<std::time::Instant>,
 }
 
 impl AppRunner {
-    fn render(&mut self) {
+    fn render(&mut self, event_loop: &ActiveEventLoop) {
         let Some(window) = &mut self.window else { return };
 
         let mut needs_redraw = false;
+        let mut request_redraw_at = None;
+        let mut actions = Vec::new();
         if let Some(draw_fn) = &mut self.draw_fn {
             let mut frame = Frame { 
                 window,
                 events: &self.pending_events,
+                request_redraw_at: None,
+                window_actions: Vec::new(),
             };
             needs_redraw = draw_fn(&mut frame);
+            request_redraw_at = frame.request_redraw_at;
+            actions = frame.window_actions;
         }
         self.pending_events.clear();
+        
+        self.next_wakeup = request_redraw_at;
+        
+        for action in actions {
+            match action {
+                WindowAction::Drag => {
+                    let _ = window.winit_window.drag_window();
+                }
+                WindowAction::Minimize => {
+                    window.winit_window.set_minimized(true);
+                }
+                WindowAction::Maximize => {
+                    let is_max = window.winit_window.is_maximized();
+                    window.winit_window.set_maximized(!is_max);
+                }
+                WindowAction::Close => {
+                    event_loop.exit();
+                }
+            }
+        }
         
         if needs_redraw {
             window.request_redraw();
@@ -115,6 +162,7 @@ impl ApplicationHandler for AppRunner {
                 &self.title,
                 self.width,
                 self.height,
+                self.decorations,
             ));
             window.request_redraw();
             self.window = Some(window);
@@ -199,9 +247,17 @@ impl ApplicationHandler for AppRunner {
                 if let Some(w) = &mut self.window { w.request_redraw(); }
             }
             WindowEvent::RedrawRequested => {
-                self.render();
+                self.render(event_loop);
             }
             _ => {}
+        }
+    }
+
+    fn about_to_wait(&mut self, event_loop: &ActiveEventLoop) {
+        if let Some(wakeup) = self.next_wakeup {
+            event_loop.set_control_flow(winit::event_loop::ControlFlow::WaitUntil(wakeup));
+        } else {
+            event_loop.set_control_flow(winit::event_loop::ControlFlow::Wait);
         }
     }
 }

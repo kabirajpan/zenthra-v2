@@ -3,6 +3,10 @@ name    = "zenthra-state"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
+description = "State management utilities and hooks for the Zenthra UI framework"
+repository.workspace = true
+homepage.workspace = true
+readme.workspace = true
 
 [dependencies]
 zenthra-core = { workspace = true }

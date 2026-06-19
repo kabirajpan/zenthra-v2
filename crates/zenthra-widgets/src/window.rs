@@ -1,6 +1,6 @@
 // crates/zenthra-widgets/src/window.rs
 
-use crate::ui::{Ui};
+use crate::ui::{Ui, DrawCommand};
 use zenthra_core::{Color, Id, Response, Align};
 
 pub struct FloatingWindowBuilder<'u, 'a, 'b> {
@@ -84,21 +84,53 @@ impl<'u, 'a, 'b> FloatingWindowBuilder<'u, 'a, 'b> {
         self
     }
 
+    pub fn bg(mut self, bg: Color) -> Self {
+        self.bg = bg;
+        self
+    }
+
+    pub fn border(mut self, border_color: Color, border_width: f32) -> Self {
+        self.border_color = border_color;
+        self.border_width = border_width;
+        self
+    }
+
+    pub fn radius_all(mut self, radius: f32) -> Self {
+        self.radius = radius;
+        self
+    }
+
+    pub fn header_bg(mut self, bg: Color) -> Self {
+        self.header_bg = bg;
+        self
+    }
+
+    pub fn header_text_color(mut self, color: Color) -> Self {
+        self.header_text_color = color;
+        self
+    }
+
+    pub fn header_height(mut self, height: f32) -> Self {
+        self.header_height = height;
+        self
+    }
+
     pub fn show<F>(self, content: F) -> Response 
     where F: FnOnce(&mut Ui)
     {
         let id = self.id;
+        let z_key = Id::from_u64((id.raw() << 8) | 4);
+        let modal_key = Id::from_u64((id.raw() << 8) | 5);
+        let opened_key = Id::from_u64((id.raw() << 8) | 6);
+
         if !*self.is_open {
-            let z_key = Id::from_u64((id.raw() << 8) | 4);
-            let modal_key = Id::from_u64((id.raw() << 8) | 5);
             self.ui.interaction_state.remove(&z_key);
             self.ui.interaction_state.remove(&modal_key);
+            self.ui.interaction_state.remove(&opened_key);
             return Response { clicked: false, hovered: false, pressed: false };
         }
 
         let drag_id = Id::from_u64((id.raw() << 8) | 1);
-        let z_key = Id::from_u64((id.raw() << 8) | 4);
-        let modal_key = Id::from_u64((id.raw() << 8) | 5);
 
         // If the window was just opened, promote it to the top z-index
         if !self.ui.interaction_state.contains_key(&z_key) {
@@ -122,11 +154,34 @@ impl<'u, 'a, 'b> FloatingWindowBuilder<'u, 'a, 'b> {
         // Is hovered check (uses occlusion detection internally)
         let is_hovered = self.ui.is_hovered(id, win_x, win_y, self.width, self.height);
 
+        // Check if the window was already open in the previous frame
+        let was_already_open = self.ui.interaction_state.insert(opened_key, 1.0).is_some();
+
+        {
+            use std::fs::OpenOptions;
+            use std::io::Write;
+            if let Ok(mut file) = OpenOptions::new().create(true).append(true).open("window_debug.log") {
+                let _ = writeln!(
+                    file,
+                    "WINDOW ID: {:?} | is_open: {} | clicked: {} | is_hovered: {} | was_already_open: {}",
+                    id, *self.is_open, self.ui.clicked, is_hovered, was_already_open
+                );
+            }
+        }
+
         // Light dismiss logic
-        if self.light_dismiss && self.ui.clicked && !is_hovered {
+        if self.light_dismiss && self.ui.clicked && !is_hovered && was_already_open {
             *self.is_open = false;
+            {
+                use std::fs::OpenOptions;
+                use std::io::Write;
+                if let Ok(mut file) = OpenOptions::new().create(true).append(true).open("window_debug.log") {
+                    let _ = writeln!(file, "   --> LIGHT DISMISS TRIGGERED! Setting is_open to false.");
+                }
+            }
             self.ui.interaction_state.remove(&z_key);
             self.ui.interaction_state.remove(&modal_key);
+            self.ui.interaction_state.remove(&opened_key);
             self.ui.needs_redraw = true;
             return Response { clicked: true, hovered: false, pressed: false };
         }
@@ -144,115 +199,168 @@ impl<'u, 'a, 'b> FloatingWindowBuilder<'u, 'a, 'b> {
         // Capture start length of overlays
         let start_len = self.ui.overlays.len();
 
-        // Draw modal backdrop if modal
-        if self.modal {
-            self.ui.overlays.push(crate::ui::DrawCommand::Rect(crate::ui::RectDraw {
-                instance: zenthra_render::RectInstance {
-                    pos: [0.0, 0.0],
-                    size: [self.ui.width, self.ui.height],
-                    color: Color::rgba(0.0, 0.0, 0.0, 0.4).to_array(),
-                    radius: [0.0; 4],
-                    border_width: 0.0,
-                    border_color: Color::TRANSPARENT.to_array(),
-                    shadow_color: Color::TRANSPARENT.to_array(),
-                    shadow_offset: [0.0, 0.0],
-                    shadow_blur: 0.0,
-                    clip_rect: [0.0, 0.0, 9999.0, 9999.0],
-                    ..Default::default()
-                }
-            }));
-        }
+        let is_open = self.is_open;
+        let pos = self.pos;
+        let ui = self.ui;
+        
+        let title = self.title;
+        let modal = self.modal;
+        let closable = self.closable;
+        let width = self.width;
+        let height = self.height;
+        let bg = self.bg;
+        let border_color = self.border_color;
+        let border_width = self.border_width;
+        let radius = self.radius;
+        let shadow_color = self.shadow_color;
+        let shadow_offset = self.shadow_offset;
+        let shadow_blur = self.shadow_blur;
+        let shadow_opacity = self.shadow_opacity;
+        let header_height = self.header_height;
+        let header_bg = self.header_bg;
+        let header_text_color = self.header_text_color;
 
         // Set current window ID context
-        let prev_win_id = self.ui.current_window_id;
-        self.ui.current_window_id = Some(id);
+        let prev_win_id = ui.current_window_id;
+        ui.current_window_id = Some(id);
 
-        self.ui.container()
-            .absolute(win_x, win_y)
-            .width(self.width)
-            .height(self.height)
-            .bg(self.bg)
-            .border(self.border_color, self.border_width)
-            .radius_all(self.radius)
-            .shadow(self.shadow_color, self.shadow_offset[0], self.shadow_offset[1], self.shadow_blur)
-            .shadow_opacity(self.shadow_opacity)
-            .clip(true)
-            .overlay()
-            .show(|ui| {
-                // --- Header ---
-                let header_res = ui.container()
-                    .full_width()
-                    .height(self.header_height)
-                    .bg(self.header_bg)
-                    .padding_x(15.0)
-                    .row()
-                    .halign(Align::Center)
-                    .valign(Align::Center)
-                    .show(|ui| {
-                        ui.text(&self.title)
-                            .color(self.header_text_color)
-                            .bold()
-                            .show();
-                        
-                        if self.closable {
-                            ui.spacing(ui.available_width - 20.0); // Push to right
-                            if ui.button("×")
-                                .bg(Color::TRANSPARENT)
-                                .text_color(self.header_text_color)
-                                .padding(0.0, 0.0, 0.0, 0.0)
-                                .size(20.0)
-                                .show()
-                                .clicked 
-                            {
-                                *self.is_open = false;
-                                ui.request_redraw();
+        ui.overlay(|ui| {
+            // Draw modal backdrop if modal
+            if modal {
+                ui.draws.push(crate::ui::DrawCommand::Rect(crate::ui::RectDraw {
+                    instance: zenthra_render::RectInstance {
+                        pos: [0.0, 0.0],
+                        size: [ui.width, ui.height],
+                        color: Color::rgba(0.0, 0.0, 0.0, 0.4).to_array(),
+                        radius: [0.0; 4],
+                        border_width: 0.0,
+                        border_color: Color::TRANSPARENT.to_array(),
+                        shadow_color: Color::TRANSPARENT.to_array(),
+                        shadow_offset: [0.0, 0.0],
+                        shadow_blur: 0.0,
+                        clip_rect: [0.0, 0.0, 9999.0, 9999.0],
+                        ..Default::default()
+                    }
+                }));
+            }
+
+            ui.container()
+                .absolute(win_x, win_y)
+                .width(width)
+                .height(height)
+                .bg(bg)
+                .border(border_color, border_width)
+                .radius_all(radius)
+                .shadow(shadow_color, shadow_offset[0], shadow_offset[1], shadow_blur)
+                .shadow_opacity(shadow_opacity)
+                .clip(true)
+                .show(|ui| {
+                    // --- Header ---
+                    let header_res = ui.container()
+                        .full_width()
+                        .height(header_height)
+                        .bg(header_bg)
+                        .padding_x(15.0)
+                        .row()
+                        .halign(Align::SpaceBetween)
+                        .valign(Align::Center)
+                        .show(|ui| {
+                            // Left spacer to balance close button width for centering
+                            ui.spacing(20.0);
+
+                            ui.text(&title)
+                                .color(header_text_color)
+                                .bold()
+                                .show();
+                            
+                            if closable {
+                                if ui.button("×")
+                                    .bg(Color::TRANSPARENT)
+                                    .text_color(header_text_color)
+                                    .padding(0.0, 0.0, 0.0, 0.0)
+                                    .size(20.0)
+                                    .show()
+                                    .clicked 
+                                {
+                                    *is_open = false;
+                                    ui.request_redraw();
+                                }
+                            } else {
+                                ui.spacing(20.0);
                             }
+                        });
+
+                    // --- Dragging Logic ---
+                    if header_res.pressed && ui.clicked {
+                        if !is_dragging {
+                            is_dragging = true;
+                            ui.interaction_state.insert(drag_id, 1.0);
+                            // Store drag offset in interaction state
+                            let ox_id = Id::from_u64((id.raw() << 8) | 2);
+                            let oy_id = Id::from_u64((id.raw() << 8) | 3);
+                            ui.interaction_state.insert(ox_id, ui.mouse_x - win_x);
+                            ui.interaction_state.insert(oy_id, ui.mouse_y - win_y);
                         }
-                    });
-
-                // --- Dragging Logic ---
-                if header_res.pressed && ui.clicked {
-                    if !is_dragging {
-                        is_dragging = true;
-                        ui.interaction_state.insert(drag_id, 1.0);
-                        // Store drag offset in interaction state
-                        let ox_id = Id::from_u64((id.raw() << 8) | 2);
-                        let oy_id = Id::from_u64((id.raw() << 8) | 3);
-                        ui.interaction_state.insert(ox_id, ui.mouse_x - win_x);
-                        ui.interaction_state.insert(oy_id, ui.mouse_y - win_y);
                     }
-                }
 
-                if is_dragging {
-                    if ui.mouse_down {
-                        let ox_id = Id::from_u64((id.raw() << 8) | 2);
-                        let oy_id = Id::from_u64((id.raw() << 8) | 3);
-                        let ox = ui.interaction_state.get(&ox_id).cloned().unwrap_or(0.0);
-                        let oy = ui.interaction_state.get(&oy_id).cloned().unwrap_or(0.0);
-                        
-                        self.pos[0] = ui.mouse_x - ox;
-                        self.pos[1] = ui.mouse_y - oy;
-                        ui.request_redraw();
-                    } else {
-                        is_dragging = false;
-                        ui.interaction_state.insert(drag_id, 0.0);
+                    if is_dragging {
+                        if ui.mouse_down {
+                            let ox_id = Id::from_u64((id.raw() << 8) | 2);
+                            let oy_id = Id::from_u64((id.raw() << 8) | 3);
+                            let ox = ui.interaction_state.get(&ox_id).cloned().unwrap_or(0.0);
+                            let oy = ui.interaction_state.get(&oy_id).cloned().unwrap_or(0.0);
+                            
+                            pos[0] = ui.mouse_x - ox;
+                            pos[1] = ui.mouse_y - oy;
+                            ui.request_redraw();
+                        } else {
+                            is_dragging = false;
+                            ui.interaction_state.insert(drag_id, 0.0);
+                        }
                     }
-                }
 
-                // --- Content ---
-                ui.container()
-                    .full_width()
-                    .fill_y()
-                    .padding_all(15.0)
-                    .show(content);
-            });
+                    // --- Content ---
+                    ui.container()
+                        .full_width()
+                        .fill_y()
+                        .padding_all(15.0)
+                        .show(content);
+                });
+        });
 
         // Restore window context
-        self.ui.current_window_id = prev_win_id;
+        ui.current_window_id = prev_win_id;
 
         // Drain window's draw commands from ui.overlays and save in window_overlays
-        let window_cmds = self.ui.overlays.drain(start_len..).collect::<Vec<_>>();
-        self.ui.window_overlays.push((id, window_cmds));
+        let window_cmds = ui.overlays.drain(start_len..).collect::<Vec<_>>();
+        {
+            use std::fs::OpenOptions;
+            use std::io::Write;
+            if let Ok(mut file) = OpenOptions::new().create(true).append(true).open("window_debug.log") {
+                let _ = writeln!(
+                    file,
+                    "WINDOW {} DRAWS: count={}",
+                    title, window_cmds.len()
+                );
+                for (i, cmd) in window_cmds.iter().enumerate() {
+                    match cmd {
+                        DrawCommand::Rect(r) => {
+                            let _ = writeln!(file, "  [{}] Rect: pos={:?}, size={:?}, color={:?}, clip_rect={:?}", i, r.instance.pos, r.instance.size, r.instance.color, r.instance.clip_rect);
+                        }
+                        DrawCommand::Text(t) => {
+                            let _ = writeln!(file, "  [{}] Text: text='{}', pos={:?}, clip={:?}", i, t.text, t.pos, t.clip);
+                        }
+                        DrawCommand::OverlayRect(o) => {
+                            let _ = writeln!(file, "  [{}] OverlayRect: pos={:?}, size={:?}, clip={:?}", i, [o.x, o.y], [o.width, o.height], o.clip);
+                        }
+                        DrawCommand::Image(img) => {
+                            let _ = writeln!(file, "  [{}] Image: pos={:?}, size={:?}, clip_rect={:?}", i, img.instance.pos, img.instance.size, img.instance.clip_rect);
+                        }
+                    }
+                }
+            }
+        }
+        ui.window_overlays.push((id, window_cmds));
 
         Response {
             clicked: false,

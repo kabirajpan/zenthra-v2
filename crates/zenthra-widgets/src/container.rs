@@ -57,7 +57,7 @@ pub struct ContainerBuilder<'u, 'a> {
     scroll_x: bool,
     scroll_y: bool,
     clip: bool,
-    id: zenthra_core::Id,
+    pub id: zenthra_core::Id,
     radius: [f32; 4],
     border_alignment: BorderAlignment,
     is_absolute: bool,
@@ -424,6 +424,50 @@ impl<'u, 'a> ContainerBuilder<'u, 'a> {
 
     pub fn overlay(mut self) -> Self {
         self.is_overlay = true;
+        self
+    }
+
+    pub fn on_click<F>(self, mut f: F) -> Self
+    where
+        F: FnMut() + 'a,
+    {
+        self.ui.add_listener(self.id, crate::ui::EventPhase::Bubble, move |_, event| {
+            if let crate::ui::WidgetEvent::Click = event {
+                f();
+            }
+        });
+        self
+    }
+
+    pub fn on_hover<F>(self, mut f: F) -> Self
+    where
+        F: FnMut(bool) + 'a,
+    {
+        self.ui.add_listener(self.id, crate::ui::EventPhase::Bubble, move |_, event| {
+            if let crate::ui::WidgetEvent::Hover(hovered) = event {
+                f(*hovered);
+            }
+        });
+        self
+    }
+
+    pub fn on_scroll<F>(self, mut f: F) -> Self
+    where
+        F: FnMut(f32, f32) + 'a,
+    {
+        self.ui.add_listener(self.id, crate::ui::EventPhase::Bubble, move |_, event| {
+            if let crate::ui::WidgetEvent::Scroll(dx, dy) = event {
+                f(*dx, *dy);
+            }
+        });
+        self
+    }
+
+    pub fn on_event<F>(self, phase: crate::ui::EventPhase, f: F) -> Self
+    where
+        F: FnMut(&mut crate::ui::EventContext, &crate::ui::WidgetEvent) + 'a,
+    {
+        self.ui.add_listener(self.id, phase, f);
         self
     }
 
@@ -915,6 +959,23 @@ impl<'u, 'a> ContainerBuilder<'u, 'a> {
         if !self.is_absolute {
             self.ui.advance(w, h, draw_start);
         }
+
+        // Dispatch events
+        self.ui.dispatch_event(id, crate::ui::WidgetEvent::Hover(container_hover));
+
+        if self.ui.clicked && container_hover {
+            self.ui.dispatch_event(id, crate::ui::WidgetEvent::Click);
+        }
+
+        let events = std::mem::take(&mut self.ui.input_events);
+        for event in &events {
+            if let zenthra_platform::event::PlatformEvent::MouseWheel { delta_x, delta_y } = event {
+                if container_hover {
+                    self.ui.dispatch_event(id, crate::ui::WidgetEvent::Scroll(*delta_x, *delta_y));
+                }
+            }
+        }
+        self.ui.input_events = events;
 
         zenthra_core::Response {
             clicked: self.ui.clicked && container_hover,

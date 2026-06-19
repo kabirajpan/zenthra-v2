@@ -644,7 +644,7 @@ impl<'u, 'a, 'b> TextAreaBuilder<'u, 'a, 'b> {
 
         if self.overflow_hidden {
             // Reverted to full-box clipping so content can merge with edges during scroll
-            text_builder = text_builder.clip_rect(actual_x, actual_y, actual_width, h_box);
+            text_builder = text_builder.clip_rect(self.x, self.y, actual_width, h_box);
         }
         
         // Final draw
@@ -673,7 +673,7 @@ impl<'u, 'a, 'b> TextAreaBuilder<'u, 'a, 'b> {
                     width: scroll_bar_w,
                     height: thumb_h,
                     color: Color::rgba(1.0, 1.0, 1.0, 0.4),
-                    clip: [actual_x, actual_y, actual_width, h_box], 
+                    clip: [self.x, self.y, actual_width, h_box], 
                 }));
             }
         }
@@ -770,7 +770,7 @@ impl<'u, 'a, 'b> TextAreaBuilder<'u, 'a, 'b> {
                         width: 2.0,
                         height: cursor_height,
                         color: Color::WHITE,
-                        clip: [actual_x, actual_y, actual_width, h_box],
+                        clip: [self.x, self.y, actual_width, h_box],
                     }));
                 }
             }

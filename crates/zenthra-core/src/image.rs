@@ -4,6 +4,7 @@ use std::path::PathBuf;
 pub enum ImageSource {
     Path(PathBuf),
     Bytes(std::sync::Arc<[u8]>),
+    Thumbnail(PathBuf),
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]

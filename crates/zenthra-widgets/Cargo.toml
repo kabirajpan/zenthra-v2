@@ -3,6 +3,10 @@ name    = "zenthra-widgets"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
+description = "Immediate-mode UI widgets (buttons, text fields, lists) for the Zenthra UI framework"
+repository.workspace = true
+homepage.workspace = true
+readme.workspace = true
 
 [dependencies]
 zenthra-core   = { workspace = true }

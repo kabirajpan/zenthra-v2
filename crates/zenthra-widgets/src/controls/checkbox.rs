@@ -221,6 +221,50 @@ impl<'u, 'a, 'b> CheckboxBuilder<'u, 'a, 'b> {
         self
     }
 
+    pub fn on_click<F>(self, mut f: F) -> Self
+    where
+        F: FnMut() + 'a,
+    {
+        self.ui.add_listener(self.id, crate::ui::EventPhase::Bubble, move |_, event| {
+            if let crate::ui::WidgetEvent::Click = event {
+                f();
+            }
+        });
+        self
+    }
+
+    pub fn on_change<F>(self, mut f: F) -> Self
+    where
+        F: FnMut(bool) + 'a,
+    {
+        self.ui.add_listener(self.id, crate::ui::EventPhase::Bubble, move |_, event| {
+            if let crate::ui::WidgetEvent::Change(crate::ui::EventValue::Bool(val)) = event {
+                f(*val);
+            }
+        });
+        self
+    }
+
+    pub fn on_hover<F>(self, mut f: F) -> Self
+    where
+        F: FnMut(bool) + 'a,
+    {
+        self.ui.add_listener(self.id, crate::ui::EventPhase::Bubble, move |_, event| {
+            if let crate::ui::WidgetEvent::Hover(hovered) = event {
+                f(*hovered);
+            }
+        });
+        self
+    }
+
+    pub fn on_event<F>(self, phase: crate::ui::EventPhase, f: F) -> Self
+    where
+        F: FnMut(&mut crate::ui::EventContext, &crate::ui::WidgetEvent) + 'a,
+    {
+        self.ui.add_listener(self.id, phase, f);
+        self
+    }
+
     pub fn show(self) -> Response {
         let (x, y) = (self.ui.cursor_x, self.ui.cursor_y);
 
@@ -255,10 +299,14 @@ impl<'u, 'a, 'b> CheckboxBuilder<'u, 'a, 'b> {
         let is_pressed = is_hovered && self.ui.mouse_down;
         let mut clicked = false;
 
+        self.ui.dispatch_event(self.id, crate::ui::WidgetEvent::Hover(is_hovered));
+
         if self.ui.clicked && is_hovered {
             *self.value = !*self.value;
             self.ui.needs_redraw = true;
             clicked = true;
+            self.ui.dispatch_event(self.id, crate::ui::WidgetEvent::Click);
+            self.ui.dispatch_event(self.id, crate::ui::WidgetEvent::Change(crate::ui::EventValue::Bool(*self.value)));
         }
 
         // 3. Animation (Generic & Selection)

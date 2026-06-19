@@ -3,6 +3,10 @@ name    = "zenthra"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
+description = "A high-performance, immediate-mode UI framework written in Rust"
+repository.workspace = true
+homepage.workspace = true
+readme.workspace = true
 
 [package.metadata.android]
 package = "com.zenthra.app"
@@ -155,3 +159,7 @@ path = "../../examples/sidebar_test.rs"
 [[example]]
 name = "color_test"
 path = "../../examples/color_test.rs"
+
+[[example]]
+name = "declarative_event_test"
+path = "../../examples/declarative_event_test.rs"

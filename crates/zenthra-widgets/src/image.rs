@@ -449,7 +449,7 @@ impl<'u, 'a> ImageBuilder<'u, 'a> {
         } else {
             let r_t = orig_w / orig_h;
             let r_w = w / h;
-            match self.fit {
+            let base_uv = match self.fit {
                 ObjectFit::Fill => [0.0, 0.0, 1.0, 1.0],
                 ObjectFit::Cover => {
                     if r_t > r_w {
@@ -501,7 +501,21 @@ impl<'u, 'a> ImageBuilder<'u, 'a> {
                         [u_start, v_start, u_size, v_size]
                     }
                 }
-            }
+            };
+
+            let scale_x = self.internal_scale[0].max(0.001);
+            let scale_y = self.internal_scale[1].max(0.001);
+
+            let new_u_size = base_uv[2] / scale_x;
+            let new_v_size = base_uv[3] / scale_y;
+
+            let new_u_start = base_uv[0] + (base_uv[2] - new_u_size) / 2.0;
+            let new_v_start = base_uv[1] + (base_uv[3] - new_v_size) / 2.0;
+
+            let final_u_start = new_u_start - (self.internal_offset[0] / w) * new_u_size;
+            let final_v_start = new_v_start - (self.internal_offset[1] / h) * new_v_size;
+
+            [final_u_start, final_v_start, new_u_size, new_v_size]
         };
 
         self.ui.draws.push(DrawCommand::Image(ImageDraw {

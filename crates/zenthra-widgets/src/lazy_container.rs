@@ -201,10 +201,6 @@ impl<'u, 'a> LazyContainerBuilder<'u, 'a> {
         let parent_draws = std::mem::take(&mut ui.draws);
 
         // ── 6. Render visible items at absolute (scroll-adjusted) positions ───
-        // Apply scroll offset to ui's logical offset so visibility checks work
-        ui.offset_y -= scroll_y;
-        ui.offset_x -= scroll_x;
-
         for i in start_idx..end_idx {
             let row = i / items_per_row;
             let col = i % items_per_row;
@@ -236,10 +232,6 @@ impl<'u, 'a> LazyContainerBuilder<'u, 'a> {
             ui.child_draw_ranges.clear();
             ui.id_ranges.clear();
         }
-
-        // Restore scroll offset
-        ui.offset_y += scroll_y;
-        ui.offset_x += scroll_x;
 
         // Collect item draws, restore parent draw list
         let item_draws = std::mem::replace(&mut ui.draws, parent_draws);

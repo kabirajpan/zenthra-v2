@@ -274,6 +274,38 @@ impl<'u, 'a, 'b> SliderBuilder<'u, 'a, 'b> {
         self
     }
 
+    pub fn on_change<F>(self, mut f: F) -> Self
+    where
+        F: FnMut(f32) + 'a,
+    {
+        self.ui.add_listener(self.id, crate::ui::EventPhase::Bubble, move |_, event| {
+            if let crate::ui::WidgetEvent::Change(crate::ui::EventValue::Float(val)) = event {
+                f(*val);
+            }
+        });
+        self
+    }
+
+    pub fn on_hover<F>(self, mut f: F) -> Self
+    where
+        F: FnMut(bool) + 'a,
+    {
+        self.ui.add_listener(self.id, crate::ui::EventPhase::Bubble, move |_, event| {
+            if let crate::ui::WidgetEvent::Hover(hovered) = event {
+                f(*hovered);
+            }
+        });
+        self
+    }
+
+    pub fn on_event<F>(self, phase: crate::ui::EventPhase, f: F) -> Self
+    where
+        F: FnMut(&mut crate::ui::EventContext, &crate::ui::WidgetEvent) + 'a,
+    {
+        self.ui.add_listener(self.id, phase, f);
+        self
+    }
+
     pub fn show(self) -> Response {
         let x = self.ui.cursor_x;
         let y = self.ui.cursor_y;
@@ -299,6 +331,8 @@ impl<'u, 'a, 'b> SliderBuilder<'u, 'a, 'b> {
         let is_hovered = self.ui.is_hovered(self.id, actual_ox, actual_oy, actual_w, actual_h);
         let mut clicked = false;
 
+        self.ui.dispatch_event(self.id, crate::ui::WidgetEvent::Hover(is_hovered));
+
         // --- Interaction Logic ---
         let track_w_hit = actual_w - self.padding.horizontal();
         let track_x_start_hit = actual_ox + self.padding.left;
@@ -318,6 +352,7 @@ impl<'u, 'a, 'b> SliderBuilder<'u, 'a, 'b> {
                 if (*self.value - new_val).abs() > 0.0001 {
                     *self.value = new_val;
                     self.ui.needs_redraw = true;
+                    self.ui.dispatch_event(self.id, crate::ui::WidgetEvent::Change(crate::ui::EventValue::Float(new_val)));
                 }
             }
 
@@ -328,6 +363,7 @@ impl<'u, 'a, 'b> SliderBuilder<'u, 'a, 'b> {
                     start_mouse: self.ui.mouse_x,
                     start_scroll: 0.0, 
                 });
+                self.ui.dispatch_event(self.id, crate::ui::WidgetEvent::Click);
             }
         }
         

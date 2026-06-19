@@ -273,6 +273,38 @@ impl<'u, 'a, 'b> InputBuilder<'u, 'a, 'b> {
         self
     }
 
+    pub fn on_change<F>(self, mut f: F) -> Self
+    where
+        F: FnMut(String) + 'a,
+    {
+        self.ui.add_listener(self.id, crate::ui::EventPhase::Bubble, move |_, event| {
+            if let crate::ui::WidgetEvent::Change(crate::ui::EventValue::String(val)) = event {
+                f(val.clone());
+            }
+        });
+        self
+    }
+
+    pub fn on_hover<F>(self, mut f: F) -> Self
+    where
+        F: FnMut(bool) + 'a,
+    {
+        self.ui.add_listener(self.id, crate::ui::EventPhase::Bubble, move |_, event| {
+            if let crate::ui::WidgetEvent::Hover(hovered) = event {
+                f(*hovered);
+            }
+        });
+        self
+    }
+
+    pub fn on_event<F>(self, phase: crate::ui::EventPhase, f: F) -> Self
+    where
+        F: FnMut(&mut crate::ui::EventContext, &crate::ui::WidgetEvent) + 'a,
+    {
+        self.ui.add_listener(self.id, phase, f);
+        self
+    }
+
     pub fn show(self) -> zenthra_core::Response {
         if let Some(mode) = self.render_mode {
             self.ui.render_mode_stack.push(mode);
@@ -314,6 +346,7 @@ impl<'u, 'a, 'b> InputBuilder<'u, 'a, 'b> {
             (self.x + self.ui.offset_x, self.y + self.ui.offset_y)
         };
         let is_hovered = self.ui.is_hovered(self.id, actual_x, actual_y, w_box, h_box);
+        self.ui.dispatch_event(self.id, crate::ui::WidgetEvent::Hover(is_hovered));
         let mut needs_auto_scroll = false;
         let mut changed = false;
 
@@ -384,10 +417,15 @@ impl<'u, 'a, 'b> InputBuilder<'u, 'a, 'b> {
             if self.ui.clicked && is_hovered {
                 self.ui.focused_id = Some(self.id);
                 needs_auto_scroll = true;
+                self.ui.dispatch_event(self.id, crate::ui::WidgetEvent::Click);
             }
             
             self.ui.input_events = events;
             self.ui.cursor_state.insert(self.id, cursor_index);
+
+            if changed {
+                self.ui.dispatch_event(self.id, crate::ui::WidgetEvent::Change(crate::ui::EventValue::String(self.buffer.clone())));
+            }
         }
 
         // --- 3. Re-Measure if content changed ---
@@ -516,7 +554,7 @@ impl<'u, 'a, 'b> InputBuilder<'u, 'a, 'b> {
             .wrap(zenthra_text::prelude::TextWrap::None)
             .max_width(1000000.0) 
             .pos(self.x + self.padding.left - scroll_x, self.y + self.padding.top)
-            .clip_rect(actual_x, actual_y, w_box, h_box);
+            .clip_rect(self.x, self.y, w_box, h_box);
 
         if self.text_bg_fill_x {
             text_builder = text_builder.min_width(w_view);
@@ -575,7 +613,7 @@ impl<'u, 'a, 'b> InputBuilder<'u, 'a, 'b> {
                         width: 2.0,
                         height: cursor_height,
                         color: Color::WHITE,
-                        clip: [actual_x, actual_y, w_box, h_box],
+                        clip: [self.x, self.y, w_box, h_box],
                     }));
                 }
             }
@@ -591,7 +629,7 @@ impl<'u, 'a, 'b> InputBuilder<'u, 'a, 'b> {
                 width: thumb_w,
                 height: scroll_bar_h,
                 color: if is_dragging { Color::rgba(1.0, 1.0, 1.0, 0.8) } else { Color::rgba(1.0, 1.0, 1.0, 0.4) },
-                clip: [actual_x, actual_y, w_box, h_box],
+                clip: [self.x, self.y, w_box, h_box],
             }));
         }
 

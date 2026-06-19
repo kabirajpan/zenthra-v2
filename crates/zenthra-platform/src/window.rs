@@ -13,10 +13,12 @@ impl Window {
         title: &str,
         width: u32,
         height: u32,
+        decorations: bool,
     ) -> Self {
         let attrs = winit::window::Window::default_attributes()
             .with_title(title)
-            .with_inner_size(winit::dpi::LogicalSize::new(width, height));
+            .with_inner_size(winit::dpi::LogicalSize::new(width, height))
+            .with_decorations(decorations);
 
         let winit_window = Arc::new(event_loop.create_window(attrs).unwrap());
         let gpu = GpuContext::new(winit_window.clone()).await;

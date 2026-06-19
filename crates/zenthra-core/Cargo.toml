@@ -3,6 +3,10 @@ name    = "zenthra-core"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
+description = "Core types, layouts, and data structures for the Zenthra UI framework"
+repository.workspace = true
+homepage.workspace = true
+readme.workspace = true
 
 [dependencies]
 glam     = { workspace = true }
