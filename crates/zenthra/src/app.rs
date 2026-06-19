@@ -7,6 +7,7 @@ use zenthra_widgets::Ui;
 pub struct App {
     platform: PlatformApp,
     fonts: Vec<String>,
+    font_data: Vec<Vec<u8>>,
 }
 
 impl App {
@@ -14,11 +15,17 @@ impl App {
         Self {
             platform: PlatformApp::new(),
             fonts: Vec::new(),
+            font_data: Vec::new(),
         }
     }
 
     pub fn load_font_path(mut self, path: &str) -> Self {
         self.fonts.push(path.to_string());
+        self
+    }
+
+    pub fn load_font_data(mut self, data: Vec<u8>) -> Self {
+        self.font_data.push(data);
         self
     }
 
@@ -81,6 +88,7 @@ impl App {
         let start_time = std::time::Instant::now();
 
         let fonts = std::mem::take(&mut self.fonts);
+        let font_data_list = std::mem::take(&mut self.font_data);
         self.platform = self.platform.with_ui(move |frame: &mut Frame| {
             let elapsed = start_time.elapsed().as_secs_f32();
             let device = frame.window.gpu.device.clone();
@@ -100,6 +108,9 @@ impl App {
                     if let Err(e) = engine.font_system().lock().unwrap().db_mut().load_font_file(font_path) {
                         eprintln!("Failed to load custom font {}: {:?}", font_path, e);
                     }
+                }
+                for data in &font_data_list {
+                    engine.font_system().lock().unwrap().db_mut().load_font_data(data.clone());
                 }
                 engine
             });
