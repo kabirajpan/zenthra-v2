@@ -109,7 +109,7 @@ impl<'u, 'a> LazyContainerBuilder<'u, 'a> {
         let ox = ui.cursor_x;
         let oy = ui.cursor_y;
         let viewport_w = ui.available_width;
-        let viewport_h = ui.height - oy;
+        let viewport_h = (ui.current_viewport.origin.y + ui.current_viewport.size.height - oy).max(0.0);
 
         // ── 2. Grid math ──────────────────────────────────────────────────────
         let usable_w = viewport_w - self.padding * 2.0;
