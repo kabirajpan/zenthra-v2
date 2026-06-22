@@ -7,6 +7,7 @@ pub enum PlatformEvent {
     MouseButton { button: MouseButton, state: ElementState },
     MouseWheel { delta_x: f32, delta_y: f32 },
     KeyDown { key: KeyCode },
+    KeyUp { key: KeyCode },
     CharTyped(char),
     Touch { id: u64, phase: TouchPhase, x: f64, y: f64 },
 }

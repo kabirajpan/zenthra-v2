@@ -165,6 +165,7 @@ impl<'u, 'a> LazyContainerBuilder<'u, 'a> {
             }
         }
 
+
         let max_sy = (total_scroll_h - viewport_h).max(0.0);
         scroll_y = scroll_y.clamp(0.0, max_sy);
         scroll_x = scroll_x.clamp(0.0, 0.0); // horizontal scroll not needed for wrap layout

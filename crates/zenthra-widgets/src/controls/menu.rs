@@ -213,9 +213,20 @@ impl<'u, 'a> MenuBuilder<'u, 'a> {
                 Color::rgb(3.0 / 255.0, 3.0 / 255.0, 3.0 / 255.0) // 3 – popup border
             };
 
+            let popup_x = if let Some((rect, _)) = self.ui.get_recorded_layout(self.id) {
+                rect.origin.x
+            } else {
+                x
+            };
+            let popup_y = if let Some((rect, _)) = self.ui.get_recorded_layout(self.id) {
+                rect.origin.y
+            } else {
+                y
+            };
+
             self.ui.container()
                 .id(popup_id)
-                .absolute(x, y + h + 2.0)
+                .absolute(popup_x, popup_y + h + 2.0)
                 .overlay()
                 .width(270.0)
                 .bg(popup_bg)

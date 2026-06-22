@@ -346,6 +346,9 @@ impl<'u, 'a, 'b> InputBuilder<'u, 'a, 'b> {
             (self.x + self.ui.offset_x, self.y + self.ui.offset_y)
         };
         let is_hovered = self.ui.is_hovered(self.id, actual_x, actual_y, w_box, h_box);
+        if is_hovered {
+            self.ui.cursor_icon = crate::text::CursorIcon::Text;
+        }
         self.ui.dispatch_event(self.id, crate::ui::WidgetEvent::Hover(is_hovered));
         let mut needs_auto_scroll = false;
         let mut changed = false;

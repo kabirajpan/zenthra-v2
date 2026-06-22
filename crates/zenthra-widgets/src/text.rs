@@ -36,6 +36,7 @@ pub enum CursorIcon {
     Text,
     Pointer,
     Crosshair,
+    ColResize,
 }
 
 impl<'u, 'a> TextBuilder<'u, 'a> {

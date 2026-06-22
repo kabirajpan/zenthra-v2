@@ -255,7 +255,7 @@ impl<'u, 'a, 'b> FloatingWindowBuilder<'u, 'a, 'b> {
                 .shadow_opacity(shadow_opacity)
                 .clip(true)
                 .show(|ui| {
-                    // --- Header ---
+                    let mut close_clicked = false;
                     let header_res = ui.container()
                         .full_width()
                         .height(header_height)
@@ -276,22 +276,28 @@ impl<'u, 'a, 'b> FloatingWindowBuilder<'u, 'a, 'b> {
                             if closable {
                                 if ui.button("×")
                                     .bg(Color::TRANSPARENT)
+                                    .hover_bg(Color::rgba(1.0, 1.0, 1.0, 0.1))
                                     .text_color(header_text_color)
-                                    .padding(0.0, 0.0, 0.0, 0.0)
-                                    .size(20.0)
+                                    .padding(4.0, 8.0, 4.0, 8.0)
+                                    .radius_all(4.0)
+                                    .size(16.0)
                                     .show()
                                     .clicked 
                                 {
-                                    *is_open = false;
-                                    ui.request_redraw();
+                                    close_clicked = true;
                                 }
                             } else {
                                 ui.spacing(20.0);
                             }
                         });
 
+                    if close_clicked {
+                        *is_open = false;
+                        ui.request_redraw();
+                    }
+
                     // --- Dragging Logic ---
-                    if header_res.pressed && ui.clicked {
+                    if header_res.pressed && ui.clicked && !close_clicked {
                         if !is_dragging {
                             is_dragging = true;
                             ui.interaction_state.insert(drag_id, 1.0);

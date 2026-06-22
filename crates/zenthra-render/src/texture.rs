@@ -1,3 +1,52 @@
+fn load_image_or_svg(bytes: &[u8], max_dim: Option<u32>) -> Result<(Vec<u8>, u32, u32), image::ImageError> {
+    match image::load_from_memory(bytes) {
+        Ok(img) => {
+            let resized = if let Some(max) = max_dim {
+                img.thumbnail(max, max)
+            } else {
+                img
+            };
+            let rgba = resized.to_rgba8();
+            let dim = rgba.dimensions();
+            Ok((rgba.into_raw(), dim.0, dim.1))
+        }
+        Err(e) => {
+            // Try SVG rendering
+            let opt = resvg::usvg::Options::default();
+            match resvg::usvg::Tree::from_data(bytes, &opt) {
+                Ok(rtree) => {
+                    let size = rtree.size();
+                    let mut w = size.width();
+                    let mut h = size.height();
+                    
+                    let target_max = max_dim.unwrap_or(256) as f32;
+                    let current_max = w.max(h);
+                    if current_max > 0.0 {
+                        let scale = target_max / current_max;
+                        w *= scale;
+                        h *= scale;
+                    }
+                    
+                    let w_u32 = w.round() as u32;
+                    let h_u32 = h.round() as u32;
+                    
+                    if w_u32 > 0 && h_u32 > 0 {
+                        if let Some(mut pixmap) = resvg::tiny_skia::Pixmap::new(w_u32, h_u32) {
+                            let transform = resvg::tiny_skia::Transform::from_scale(
+                                w / size.width(),
+                                h / size.height(),
+                            );
+                            resvg::render(&rtree, transform, &mut pixmap.as_mut());
+                            return Ok((pixmap.data().to_vec(), w_u32, h_u32));
+                        }
+                    }
+                    Err(e)
+                }
+                Err(_) => Err(e),
+            }
+        }
+    }
+}
 
 pub fn create_texture_bind_group(
     device: &wgpu::Device,
@@ -5,13 +54,10 @@ pub fn create_texture_bind_group(
     bgl: &wgpu::BindGroupLayout,
     bytes: &[u8],
 ) -> Result<(wgpu::BindGroup, u32, u32), image::ImageError> {
-    let img = image::load_from_memory(bytes)?;
-    let rgba = img.to_rgba8();
-    let dimensions = rgba.dimensions();
-
+    let (rgba, w, h) = load_image_or_svg(bytes, None)?;
     let size = wgpu::Extent3d {
-        width: dimensions.0,
-        height: dimensions.1,
+        width: w,
+        height: h,
         depth_or_array_layers: 1,
     };
 
@@ -36,8 +82,8 @@ pub fn create_texture_bind_group(
         &rgba,
         wgpu::TexelCopyBufferLayout {
             offset: 0,
-            bytes_per_row: Some(4 * dimensions.0),
-            rows_per_image: Some(dimensions.1),
+            bytes_per_row: Some(4 * w),
+            rows_per_image: Some(h),
         },
         size,
     );
@@ -68,7 +114,7 @@ pub fn create_texture_bind_group(
         label: Some("Image Bind Group"),
     });
 
-    Ok((bind_group, dimensions.0, dimensions.1))
+    Ok((bind_group, w, h))
 }
 
 pub fn create_texture_bind_group_thumbnail(
@@ -78,14 +124,10 @@ pub fn create_texture_bind_group_thumbnail(
     bytes: &[u8],
     max_dim: u32,
 ) -> Result<(wgpu::BindGroup, u32, u32), image::ImageError> {
-    let img = image::load_from_memory(bytes)?;
-    let resized = img.thumbnail(max_dim, max_dim);
-    let rgba = resized.to_rgba8();
-    let dimensions = rgba.dimensions();
-
+    let (rgba, w, h) = load_image_or_svg(bytes, Some(max_dim))?;
     let size = wgpu::Extent3d {
-        width: dimensions.0,
-        height: dimensions.1,
+        width: w,
+        height: h,
         depth_or_array_layers: 1,
     };
 
@@ -110,8 +152,8 @@ pub fn create_texture_bind_group_thumbnail(
         &rgba,
         wgpu::TexelCopyBufferLayout {
             offset: 0,
-            bytes_per_row: Some(4 * dimensions.0),
-            rows_per_image: Some(dimensions.1),
+            bytes_per_row: Some(4 * w),
+            rows_per_image: Some(h),
         },
         size,
     );
@@ -142,6 +184,5 @@ pub fn create_texture_bind_group_thumbnail(
         label: Some("Thumbnail Bind Group"),
     });
 
-    Ok((bind_group, dimensions.0, dimensions.1))
+    Ok((bind_group, w, h))
 }
-

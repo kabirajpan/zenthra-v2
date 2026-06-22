@@ -651,7 +651,7 @@ impl<'u, 'a> ContainerBuilder<'u, 'a> {
             prev_viewport.contains(zenthra_core::Point::new(self.ui.mouse_x, self.ui.mouse_y))
         };
 
-        let container_hover = mouse_in_parent && self.ui.mouse_in_rect(actual_ox, actual_oy, w, h);
+        let container_hover = mouse_in_parent && self.ui.mouse_in_rect(actual_ox, actual_oy, w, h) && !self.ui.is_occluded(id, self.ui.mouse_x, self.ui.mouse_y);
         let container_active = container_hover && self.ui.mouse_down;
         let mut final_scale = 1.0;
 
@@ -707,9 +707,9 @@ impl<'u, 'a> ContainerBuilder<'u, 'a> {
             let mut bc = self.border_color.unwrap_or(Color::TRANSPARENT);
 
             if container_active {
-                bg = self.active_bg.unwrap_or(bg);
-                bw = self.active_border_width.unwrap_or(bw);
-                bc = self.active_border_color.unwrap_or(bc);
+                bg = self.active_bg.or(self.hover_bg).unwrap_or(bg);
+                bw = self.active_border_width.or(self.hover_border_width).unwrap_or(bw);
+                bc = self.active_border_color.or(self.hover_border_color).unwrap_or(bc);
                 final_scale = self.active_scale;
             } else if container_hover {
                 bg = self.hover_bg.unwrap_or(bg);
@@ -848,7 +848,7 @@ impl<'u, 'a> ContainerBuilder<'u, 'a> {
                 let thumb_h = (h / (content_h + self.padding_top + self.padding_bottom)) * h;
                 let thumb_h = thumb_h.max(20.0);
                 let scroll_ratio = scroll_y / max_sy;
-                let is_hover = self.ui.mouse_in_rect(actual_ox + w - bar_thickness - bar_margin - 2.0, actual_oy + (h - thumb_h) * scroll_ratio, bar_thickness + 4.0, thumb_h);
+                let is_hover = self.ui.mouse_in_rect(actual_ox + w - bar_thickness - bar_margin - 2.0, actual_oy + (h - thumb_h) * scroll_ratio, bar_thickness + 4.0, thumb_h) && !self.ui.is_occluded(id, self.ui.mouse_x, self.ui.mouse_y);
                 let is_dragging = self.ui.active_drag.as_ref().map(|d| d.id == id && d.start_mouse <= -1000.0).unwrap_or(false); 
 
                 // Handle Drag Y
@@ -904,7 +904,7 @@ impl<'u, 'a> ContainerBuilder<'u, 'a> {
                 let thumb_w = (w / (content_w + self.padding_left + self.padding_right)) * w;
                 let thumb_w = thumb_w.max(20.0);
                 let scroll_ratio = scroll_x / max_sx;
-                let is_hover = self.ui.mouse_in_rect(actual_ox + (w - thumb_w) * scroll_ratio, actual_oy + h - bar_thickness - bar_margin - 2.0, thumb_w, bar_thickness + 4.0);
+                let is_hover = self.ui.mouse_in_rect(actual_ox + (w - thumb_w) * scroll_ratio, actual_oy + h - bar_thickness - bar_margin - 2.0, thumb_w, bar_thickness + 4.0) && !self.ui.is_occluded(id, self.ui.mouse_x, self.ui.mouse_y);
                 let is_dragging = self.ui.active_drag.as_ref().map(|d| d.id == id && d.start_mouse > -1000.0).unwrap_or(false);
 
                 if self.ui.clicked && is_hover {

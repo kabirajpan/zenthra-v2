@@ -25,3 +25,4 @@ pub use controls::*;
 pub use containers::{CardBuilder, PanelBuilder};
 pub use layout::StackBuilder;
 pub mod icons;
+pub use image::ImageBuilder;

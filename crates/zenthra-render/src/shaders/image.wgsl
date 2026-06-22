@@ -40,6 +40,7 @@ struct VertexOutput {
     @location(9)  grayscale:     f32,
     @location(10) brightness:    f32,
     @location(11) opacity:       f32,
+    @location(12) uv_rect:       vec4<f32>,
     @location(13) uv:            vec2<f32>,
     @location(14) bg_color:      vec4<f32>,
     @location(15) world_pos:     vec2<f32>,
@@ -124,14 +125,14 @@ fn vs_main(
     out.brightness    = instance.brightness;
     out.opacity       = instance.opacity;
     out.bg_color      = instance.bg_color;
+    out.uv_rect       = instance.uv_rect;
 
     // 5. UV Mapping with Flipping
     // We only map UVs for the actual image rect, excluding expansion
     let img_norm = (out.local_pos / instance.size) + 0.5;
-    let clamped_norm = clamp(img_norm, vec2<f32>(0.0), vec2<f32>(1.0));
     
     // Apply Flip
-    let flipped_norm = (clamped_norm - 0.5) * instance.flip + 0.5;
+    let flipped_norm = (img_norm - 0.5) * instance.flip + 0.5;
     
     out.uv = vec2<f32>(
         instance.uv_rect.x + flipped_norm.x * instance.uv_rect.z,
@@ -152,11 +153,13 @@ fn sdf_rounded_box(p: vec2<f32>, b: vec2<f32>, r: vec4<f32>) -> f32 {
     return length(max(q, vec2<f32>(0.0))) + min(max(q.x, q.y), 0.0) - corner;
 }
 
-fn gaussian_shadow(d: f32, sigma: f32) -> f32 {
-    if d > 0.0 {
-        return exp(-0.5 * (d * d) / (sigma * sigma));
+fn sample_alpha(uv: vec2<f32>, uv_rect: vec4<f32>) -> f32 {
+    let min_uv = uv_rect.xy;
+    let max_uv = uv_rect.xy + uv_rect.zw;
+    if uv.x >= min_uv.x && uv.x <= max_uv.x && uv.y >= min_uv.y && uv.y <= max_uv.y {
+        return textureSampleLevel(t_diffuse, s_diffuse, uv, 0.0).a;
     }
-    return 1.0;
+    return 0.0;
 }
 
 @fragment
@@ -174,10 +177,30 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
     // 1. Shadow
     var shadow_alpha = 0.0;
     if in.shadow_blur > 0.1 && in.shadow_color.a > 0.0 {
-        let shadow_p = in.local_pos - in.shadow_offset;
-        let shadow_d = sdf_rounded_box(shadow_p, in.half_size, r);
-        let sigma    = in.shadow_blur * 0.5;
-        shadow_alpha = gaussian_shadow(shadow_d, sigma);
+        let img_size = in.half_size * 2.0;
+        let uv_scale = in.uv_rect.zw / img_size;
+        let uv_offset = in.shadow_offset * uv_scale;
+        
+        let sigma = in.shadow_blur * 0.5;
+        let dx = sigma * uv_scale.x;
+        let dy = sigma * uv_scale.y;
+        
+        let center_uv = in.uv - uv_offset;
+        
+        let t00 = sample_alpha(center_uv, in.uv_rect);
+        
+        let t10 = sample_alpha(center_uv + vec2<f32>(-dx, 0.0), in.uv_rect);
+        let t20 = sample_alpha(center_uv + vec2<f32>(dx, 0.0), in.uv_rect);
+        let t01 = sample_alpha(center_uv + vec2<f32>(0.0, -dy), in.uv_rect);
+        let t02 = sample_alpha(center_uv + vec2<f32>(0.0, dy), in.uv_rect);
+        
+        let t11 = sample_alpha(center_uv + vec2<f32>(-dx, -dy), in.uv_rect);
+        let t22 = sample_alpha(center_uv + vec2<f32>(dx, dy), in.uv_rect);
+        let t12 = sample_alpha(center_uv + vec2<f32>(-dx, dy), in.uv_rect);
+        let t21 = sample_alpha(center_uv + vec2<f32>(dx, -dy), in.uv_rect);
+        
+        let blurred_alpha = 0.25 * t00 + 0.125 * (t10 + t20 + t01 + t02) + 0.0625 * (t11 + t22 + t12 + t21);
+        shadow_alpha = blurred_alpha;
     }
     let premul_shadow = vec4<f32>(
         in.shadow_color.rgb * in.shadow_color.a * shadow_alpha,
@@ -194,7 +217,8 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
     
     // Only sample if UVs are within the valid 0..1 range
     // (This allows us to shrink the image inside the box using app.rs logic)
-    if in.uv.x >= 0.0 && in.uv.x <= 1.0 && in.uv.y >= 0.0 && in.uv.y <= 1.0 {
+    let is_inside_image = abs(in.local_pos.x) <= in.half_size.x && abs(in.local_pos.y) <= in.half_size.y;
+    if is_inside_image && in.uv.x >= 0.0 && in.uv.x <= 1.0 && in.uv.y >= 0.0 && in.uv.y <= 1.0 {
         tex_color = textureSample(t_diffuse, s_diffuse, in.uv);
     }
     

@@ -188,7 +188,7 @@ impl ApplicationHandler for AppRunner {
                 if let Some(w) = &mut self.window { w.request_redraw(); }
             }
             WindowEvent::MouseInput { button, state, .. } => {
-                println!("MouseButton: {:?} {:?}", button, state); self.pending_events.push(PlatformEvent::MouseButton { button, state });
+                self.pending_events.push(PlatformEvent::MouseButton { button, state });
                 if let Some(w) = &mut self.window { w.request_redraw(); }
             }
             WindowEvent::MouseWheel { delta, .. } => {
@@ -231,15 +231,19 @@ impl ApplicationHandler for AppRunner {
                 if let Some(w) = &mut self.window { w.request_redraw(); }
             }
             WindowEvent::KeyboardInput { event, .. } => {
-                if event.state == winit::event::ElementState::Pressed {
-                    if let winit::keyboard::PhysicalKey::Code(key) = event.physical_key {
-                         println!("KeyDown: {:?}", key); self.pending_events.push(PlatformEvent::KeyDown { key });
+                if let winit::keyboard::PhysicalKey::Code(key) = event.physical_key {
+                    if event.state == winit::event::ElementState::Pressed {
+                        self.pending_events.push(PlatformEvent::KeyDown { key });
+                    } else {
+                        self.pending_events.push(PlatformEvent::KeyUp { key });
                     }
-                    
+                }
+                
+                if event.state == winit::event::ElementState::Pressed {
                     if let Some(text) = event.text {
                         for c in text.chars() {
                             if !c.is_control() {
-                                println!("CharTyped: {}", c); self.pending_events.push(PlatformEvent::CharTyped(c));
+                                self.pending_events.push(PlatformEvent::CharTyped(c));
                             }
                         }
                     }

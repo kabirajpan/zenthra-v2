@@ -16,3 +16,4 @@ bytemuck     = { workspace = true }
 glam         = { workspace = true }
 log          = { workspace = true }
 image        = { workspace = true }
+resvg = "0.47.0"

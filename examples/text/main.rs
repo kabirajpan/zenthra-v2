@@ -20,6 +20,6 @@ fn main() {
                 // .padding_x(30.0)
                 .highlight(Color::RED)
                 .show();
-        })
-        .run();
+            })
+    .run();
 }

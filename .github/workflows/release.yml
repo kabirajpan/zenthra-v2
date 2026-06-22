@@ -1,4 +1,8 @@
-name: Zenthra Framework CI Check
+name: Zenthra Framework CI Check (Legacy)
+
+# This workflow is kept for branch-check compatibility.
+# For full multi-OS CI, see ci.yml.
+# For app-specific release builds, see apps/file_manager and apps/image_viewer workflows.
 
 on:
   push:
@@ -8,16 +12,28 @@ on:
 
 jobs:
   check:
-    name: Cargo Check & Test
+    name: Quick Cargo Check (Linux)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+
       - name: Install System Dependencies (Linux)
         run: |
           sudo apt-get update
-          sudo apt-get install -y pkg-config libx11-dev libx11-xcb-dev libxkbcommon-dev libwayland-dev libegl1-mesa-dev libgbm-dev
-      - uses: dtolnay/rust-toolchain@stable
+          sudo apt-get install -y \
+            pkg-config \
+            libx11-dev \
+            libx11-xcb-dev \
+            libxkbcommon-dev \
+            libwayland-dev \
+            libegl1-mesa-dev \
+            libgbm-dev
+
+      - name: Setup Rust Toolchain
+        uses: dtolnay/rust-toolchain@stable
+
       - name: Run check
         run: cargo check
+
       - name: Run tests
         run: cargo test --workspace --exclude examples/window_test_mobile
