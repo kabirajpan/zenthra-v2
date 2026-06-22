@@ -56,4 +56,4 @@ jobs:
         run: cargo check
 
       - name: Run Cargo Tests
-        run: cargo test --workspace --exclude examples/window_test_mobile
+        run: cargo test --workspace --exclude window_test_mobile
