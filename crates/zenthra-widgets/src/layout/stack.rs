@@ -488,6 +488,18 @@ fn offset_draw(cmd: &mut DrawCommand, dx: f32, dy: f32) {
             i.instance.clip_rect[0] += dx;
             i.instance.clip_rect[1] += dy;
         }
+        DrawCommand::BackdropBlur(b) => {
+            b.x += dx;
+            b.y += dy;
+            b.clip_rect[0] += dx;
+            b.clip_rect[1] += dy;
+        }
+        DrawCommand::CustomPostProcess(b) => {
+            b.x += dx;
+            b.y += dy;
+            b.clip_rect[0] += dx;
+            b.clip_rect[1] += dy;
+        }
     }
 }
 
@@ -497,6 +509,8 @@ fn draw_origin(cmd: &DrawCommand) -> (f32, f32) {
         DrawCommand::Text(t) => (t.pos[0], t.pos[1]),
         DrawCommand::OverlayRect(c) => (c.x, c.y),
         DrawCommand::Image(i) => (i.instance.pos[0], i.instance.pos[1]),
+        DrawCommand::BackdropBlur(b) => (b.x, b.y),
+        DrawCommand::CustomPostProcess(b) => (b.x, b.y),
     }
 }
 
@@ -506,6 +520,8 @@ fn set_clip(cmd: &mut DrawCommand, clip: [f32; 4]) {
         DrawCommand::Text(t) => t.clip = intersect_rects(t.clip, clip),
         DrawCommand::OverlayRect(c) => c.clip = intersect_rects(c.clip, clip),
         DrawCommand::Image(i) => i.instance.clip_rect = intersect_rects(i.instance.clip_rect, clip),
+        DrawCommand::BackdropBlur(b) => b.clip_rect = intersect_rects(b.clip_rect, clip),
+        DrawCommand::CustomPostProcess(b) => b.clip_rect = intersect_rects(b.clip_rect, clip),
     }
 }
 

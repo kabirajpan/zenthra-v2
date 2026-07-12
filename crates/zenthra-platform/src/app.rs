@@ -39,6 +39,8 @@ pub struct App {
     width: u32,
     height: u32,
     decorations: bool,
+    transparent: bool,
+    blur: bool,
     draw_fn: Option<Box<dyn FnMut(&mut Frame) -> bool + 'static>>,
 }
 
@@ -49,6 +51,8 @@ impl App {
             width: 800,
             height: 600,
             decorations: true,
+            transparent: false,
+            blur: false,
             draw_fn: None,
         }
     }
@@ -67,6 +71,24 @@ impl App {
     pub fn decorations(mut self, dec: bool) -> Self {
         self.decorations = dec;
         self
+    }
+
+    pub fn transparent(mut self, trans: bool) -> Self {
+        self.transparent = trans;
+        self
+    }
+
+    pub fn blur(mut self, blur: bool) -> Self {
+        self.blur = blur;
+        self
+    }
+
+    pub fn is_transparent(&self) -> bool {
+        self.transparent
+    }
+
+    pub fn has_blur(&self) -> bool {
+        self.blur
     }
 
     pub fn with_ui<F>(mut self, f: F) -> Self
@@ -88,6 +110,8 @@ impl App {
             width: self.width,
             height: self.height,
             decorations: self.decorations,
+            transparent: self.transparent,
+            blur: self.blur,
             draw_fn: self.draw_fn,
             window: None,
             pending_events: Vec::new(),
@@ -102,6 +126,8 @@ struct AppRunner {
     width: u32,
     height: u32,
     decorations: bool,
+    transparent: bool,
+    blur: bool,
     draw_fn: Option<Box<dyn FnMut(&mut Frame) -> bool + 'static>>,
     window: Option<Window>,
     pending_events: Vec<PlatformEvent>,
@@ -163,6 +189,8 @@ impl ApplicationHandler for AppRunner {
                 self.width,
                 self.height,
                 self.decorations,
+                self.transparent,
+                self.transparent && self.blur,
             ));
             window.request_redraw();
             self.window = Some(window);

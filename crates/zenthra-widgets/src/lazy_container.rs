@@ -316,9 +316,11 @@ impl<'u, 'a> LazyContainerBuilder<'u, 'a> {
 /// Apply a clip rect to any draw command.
 fn apply_clip(cmd: &mut DrawCommand, clip: [f32; 4]) {
     match cmd {
-        DrawCommand::Rect(r)        => r.instance.clip_rect = clip,
-        DrawCommand::Text(t)        => t.clip = clip,
-        DrawCommand::OverlayRect(o) => o.clip = clip,
-        DrawCommand::Image(i)       => i.instance.clip_rect = clip,
+        DrawCommand::Rect(r)          => r.instance.clip_rect = clip,
+        DrawCommand::Text(t)          => t.clip = clip,
+        DrawCommand::OverlayRect(o)   => o.clip = clip,
+        DrawCommand::Image(i)         => i.instance.clip_rect = clip,
+        DrawCommand::BackdropBlur(b)  => b.clip_rect = clip,
+        DrawCommand::CustomPostProcess(b) => b.clip_rect = clip,
     }
 }

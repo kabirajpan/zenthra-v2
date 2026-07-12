@@ -4,6 +4,19 @@ use crate::ui::{DrawCommand, RectDraw, TextDraw, Ui};
 use zenthra_core::{Color, Id, Rect, Response};
 use zenthra_render::RectInstance;
 
+fn get_theme_color(ui: &Ui, base_id: u64, default: Color) -> Color {
+    let r = ui.interaction_state.get(&Id::from_u64(base_id)).copied();
+    let g = ui.interaction_state.get(&Id::from_u64(base_id + 1)).copied();
+    let b = ui.interaction_state.get(&Id::from_u64(base_id + 2)).copied();
+    let a = ui.interaction_state.get(&Id::from_u64(base_id + 3)).copied();
+    
+    if let (Some(r), Some(g), Some(b), Some(a)) = (r, g, b, a) {
+        Color::rgba(r, g, b, a)
+    } else {
+        default
+    }
+}
+
 pub struct MenuBarBuilder<'u, 'a> {
     ui: &'u mut Ui<'a>,
     bg: Option<Color>,
@@ -70,7 +83,13 @@ pub struct MenuBuilder<'u, 'a> {
 
 impl<'u, 'a> MenuBuilder<'u, 'a> {
     pub fn new(ui: &'u mut Ui<'a>, label: &str) -> Self {
-        let id = ui.id();
+        let mut hasher = std::collections::hash_map::DefaultHasher::new();
+        use std::hash::{Hash, Hasher};
+        label.hash(&mut hasher);
+        if let Some(parent) = ui.semantic_stack.last() {
+            parent.hash(&mut hasher);
+        }
+        let id = Id::from_u64((hasher.finish() & 0x7FFFFF) + 1);
         Self {
             ui,
             label: label.to_string(),
@@ -136,6 +155,13 @@ impl<'u, 'a> MenuBuilder<'u, 'a> {
         }
 
         let is_light_theme = self.ui.interaction_state.get(&Id::from_u64(999999999)).copied().unwrap_or(0.0) > 0.5;
+        let is_glassmorphism = self.ui.interaction_state.get(&Id::from_u64(999999998)).copied().unwrap_or(0.0) > 0.5;
+
+        let theme_accent = get_theme_color(self.ui, 999999980, Color::rgb(255.0 / 255.0, 214.0 / 255.0, 0.0 / 255.0));
+        let theme_highlight = get_theme_color(self.ui, 999999970, Color::rgba(255.0 / 255.0, 255.0 / 255.0, 255.0 / 255.0, 0.08));
+        let theme_text_primary = get_theme_color(self.ui, 999999960, Color::rgb(224.0 / 255.0, 224.0 / 255.0, 224.0 / 255.0));
+        let theme_bg_panel = get_theme_color(self.ui, 999999940, Color::rgb(1.0 / 255.0, 1.0 / 255.0, 1.0 / 255.0));
+        let theme_border = get_theme_color(self.ui, 999999930, Color::rgb(3.0 / 255.0, 3.0 / 255.0, 3.0 / 255.0));
 
         let bg_color = if is_light_theme {
             if is_currently_active {
@@ -147,7 +173,7 @@ impl<'u, 'a> MenuBuilder<'u, 'a> {
             }
         } else {
             if is_currently_active || is_hovered {
-                Color::rgb(3.0 / 255.0, 3.0 / 255.0, 3.0 / 255.0) // 3 – hover/active
+                theme_highlight
             } else {
                 Color::TRANSPARENT
             }
@@ -157,9 +183,9 @@ impl<'u, 'a> MenuBuilder<'u, 'a> {
             Color::rgb(0.1, 0.1, 0.15)
         } else {
             if is_currently_active || is_hovered {
-                Color::rgb(255.0 / 255.0, 214.0 / 255.0, 0.0 / 255.0) // #FFD600 vivid yellow (accent)
+                theme_accent
             } else {
-                Color::rgb(224.0 / 255.0, 224.0 / 255.0, 224.0 / 255.0) // #e0e0e0 (text_primary)
+                theme_text_primary
             }
         };
 
@@ -204,13 +230,13 @@ impl<'u, 'a> MenuBuilder<'u, 'a> {
             let popup_bg = if is_light_theme {
                 Color::WHITE
             } else {
-                Color::rgb(1.0 / 255.0, 1.0 / 255.0, 1.0 / 255.0) // 1 – popup bg
+                theme_bg_panel
             };
 
             let popup_border = if is_light_theme {
                 Color::rgb(0.8, 0.8, 0.85)
             } else {
-                Color::rgb(3.0 / 255.0, 3.0 / 255.0, 3.0 / 255.0) // 3 – popup border
+                theme_border
             };
 
             let popup_x = if let Some((rect, _)) = self.ui.get_recorded_layout(self.id) {
@@ -224,19 +250,31 @@ impl<'u, 'a> MenuBuilder<'u, 'a> {
                 y
             };
 
-            self.ui.container()
-                .id(popup_id)
-                .absolute(popup_x, popup_y + h + 2.0)
-                .overlay()
-                .width(270.0)
-                .bg(popup_bg)
-                .border(popup_border, 1.0)
-                .radius_all(4.0)
-                .padding(4.0, 4.0, 4.0, 4.0)
-                .column()
-                .show(|ui| {
+            self.ui.overlay(|ui| {
+                let mut container = ui.container()
+                    .id(popup_id)
+                    .absolute(popup_x, popup_y + h + 2.0)
+                    .overlay()
+                    .width(270.0)
+                    .radius_all(4.0)
+                    .padding(4.0, 4.0, 4.0, 4.0)
+                    .column();
+
+                if is_glassmorphism {
+                    container = container
+                        .bg(popup_bg.with_alpha(0.65))
+                        .border(popup_border.with_alpha(0.08), 1.0)
+                        .backdrop_filter(zenthra_core::BackdropFilter::new().blur(15.0, zenthra_core::style::blur::Type::Glassmorphism));
+                } else {
+                    container = container
+                        .bg(popup_bg)
+                        .border(popup_border, 1.0);
+                }
+
+                container.show(|ui| {
                     f(ui);
                 });
+            });
 
             // Discard child variables and restore parent's
             let _ = std::mem::take(&mut self.ui.child_draw_ranges);
@@ -262,7 +300,13 @@ pub struct SubMenuBuilder<'u, 'a> {
 
 impl<'u, 'a> SubMenuBuilder<'u, 'a> {
     pub fn new(ui: &'u mut Ui<'a>, label: &str) -> Self {
-        let id = ui.id();
+        let mut hasher = std::collections::hash_map::DefaultHasher::new();
+        use std::hash::{Hash, Hasher};
+        label.hash(&mut hasher);
+        if let Some(parent) = ui.semantic_stack.last() {
+            parent.hash(&mut hasher);
+        }
+        let id = Id::from_u64((hasher.finish() & 0x7FFFFF) + 1);
         Self {
             ui,
             label: label.to_string(),
@@ -299,13 +343,25 @@ impl<'u, 'a> SubMenuBuilder<'u, 'a> {
             self.ui.interaction_state.insert(hover_flag_key, 1.0);
         }
 
-        // Open sub-menu on hover
-        if is_hovered && !is_currently_active {
-            self.ui.interaction_state.insert(active_submenu_key, self.id.raw() as f32);
+        // Toggle on click
+        if self.ui.clicked && is_hovered {
+            if is_currently_active {
+                self.ui.interaction_state.insert(active_submenu_key, 0.0);
+            } else {
+                self.ui.interaction_state.insert(active_submenu_key, self.id.raw() as f32);
+            }
             self.ui.needs_redraw = true;
         }
 
         let is_light_theme = self.ui.interaction_state.get(&Id::from_u64(999999999)).copied().unwrap_or(0.0) > 0.5;
+        let is_glassmorphism = self.ui.interaction_state.get(&Id::from_u64(999999998)).copied().unwrap_or(0.0) > 0.5;
+
+        let theme_accent = get_theme_color(self.ui, 999999980, Color::rgb(255.0 / 255.0, 214.0 / 255.0, 0.0 / 255.0));
+        let theme_highlight = get_theme_color(self.ui, 999999970, Color::rgba(255.0 / 255.0, 255.0 / 255.0, 255.0 / 255.0, 0.08));
+        let theme_text_primary = get_theme_color(self.ui, 999999960, Color::rgb(224.0 / 255.0, 224.0 / 255.0, 224.0 / 255.0));
+        let theme_text_muted = get_theme_color(self.ui, 999999950, Color::rgb(136.0 / 255.0, 136.0 / 255.0, 136.0 / 255.0));
+        let theme_bg_panel = get_theme_color(self.ui, 999999940, Color::rgb(1.0 / 255.0, 1.0 / 255.0, 1.0 / 255.0));
+        let theme_border = get_theme_color(self.ui, 999999930, Color::rgb(3.0 / 255.0, 3.0 / 255.0, 3.0 / 255.0));
 
         let bg_color = if is_light_theme {
             if is_currently_active || is_hovered {
@@ -315,7 +371,7 @@ impl<'u, 'a> SubMenuBuilder<'u, 'a> {
             }
         } else {
             if is_currently_active || is_hovered {
-                Color::rgb(3.0 / 255.0, 3.0 / 255.0, 3.0 / 255.0) // 3 – hover/active
+                theme_highlight
             } else {
                 Color::TRANSPARENT
             }
@@ -325,9 +381,9 @@ impl<'u, 'a> SubMenuBuilder<'u, 'a> {
             Color::rgb(0.1, 0.1, 0.15)
         } else {
             if is_currently_active || is_hovered {
-                Color::rgb(255.0 / 255.0, 214.0 / 255.0, 0.0 / 255.0) // #FFD600 vivid yellow (accent)
+                theme_accent
             } else {
-                Color::rgb(224.0 / 255.0, 224.0 / 255.0, 224.0 / 255.0) // #e0e0e0 (text_primary)
+                theme_text_primary
             }
         };
 
@@ -335,9 +391,9 @@ impl<'u, 'a> SubMenuBuilder<'u, 'a> {
             Color::rgb(0.5, 0.5, 0.5)
         } else {
             if is_currently_active || is_hovered {
-                Color::rgb(255.0 / 255.0, 214.0 / 255.0, 0.0 / 255.0) // #FFD600 vivid yellow (accent)
+                theme_accent
             } else {
-                Color::rgb(102.0 / 255.0, 102.0 / 255.0, 102.0 / 255.0) // #666666 (text_muted)
+                theme_text_muted
             }
         };
 
@@ -391,28 +447,40 @@ impl<'u, 'a> SubMenuBuilder<'u, 'a> {
             let popup_bg = if is_light_theme {
                 Color::WHITE
             } else {
-                Color::rgb(1.0 / 255.0, 1.0 / 255.0, 1.0 / 255.0) // 1 – popup bg
+                theme_bg_panel
             };
 
             let popup_border = if is_light_theme {
                 Color::rgb(0.8, 0.8, 0.85)
             } else {
-                Color::rgb(3.0 / 255.0, 3.0 / 255.0, 3.0 / 255.0) // 3 – popup border
+                theme_border
             };
 
-            self.ui.container()
-                .id(sub_popup_id)
-                .absolute(x + w + 4.0, y)
-                .overlay()
-                .width(270.0)
-                .bg(popup_bg)
-                .border(popup_border, 1.0)
-                .radius_all(4.0)
-                .padding(4.0, 4.0, 4.0, 4.0)
-                .column()
-                .show(|ui| {
+            self.ui.overlay(|ui| {
+                let mut container = ui.container()
+                    .id(sub_popup_id)
+                    .absolute(x + w - 2.0, y)
+                    .overlay()
+                    .width(270.0)
+                    .radius_all(4.0)
+                    .padding(4.0, 4.0, 4.0, 4.0)
+                    .column();
+
+                if is_glassmorphism {
+                    container = container
+                        .bg(popup_bg.with_alpha(0.65))
+                        .border(popup_border.with_alpha(0.08), 1.0)
+                        .backdrop_filter(zenthra_core::BackdropFilter::new().blur(15.0, zenthra_core::style::blur::Type::Glassmorphism));
+                } else {
+                    container = container
+                        .bg(popup_bg)
+                        .border(popup_border, 1.0);
+                }
+
+                container.show(|ui| {
                     f(ui);
                 });
+            });
 
             // Discard child variables and restore parent's
             let _ = std::mem::take(&mut self.ui.child_draw_ranges);
@@ -439,7 +507,13 @@ pub struct MenuItemBuilder<'u, 'a> {
 
 impl<'u, 'a> MenuItemBuilder<'u, 'a> {
     pub fn new(ui: &'u mut Ui<'a>, label: &str) -> Self {
-        let id = ui.id();
+        let mut hasher = std::collections::hash_map::DefaultHasher::new();
+        use std::hash::{Hash, Hasher};
+        label.hash(&mut hasher);
+        if let Some(parent) = ui.semantic_stack.last() {
+            parent.hash(&mut hasher);
+        }
+        let id = Id::from_u64((hasher.finish() & 0x7FFFFF) + 1);
         Self {
             ui,
             label: label.to_string(),
@@ -479,6 +553,11 @@ impl<'u, 'a> MenuItemBuilder<'u, 'a> {
 
         let is_light_theme = self.ui.interaction_state.get(&Id::from_u64(999999999)).copied().unwrap_or(0.0) > 0.5;
 
+        let theme_accent = get_theme_color(self.ui, 999999980, Color::rgb(255.0 / 255.0, 214.0 / 255.0, 0.0 / 255.0));
+        let theme_highlight = get_theme_color(self.ui, 999999970, Color::rgba(255.0 / 255.0, 255.0 / 255.0, 255.0 / 255.0, 0.08));
+        let theme_text_primary = get_theme_color(self.ui, 999999960, Color::rgb(224.0 / 255.0, 224.0 / 255.0, 224.0 / 255.0));
+        let theme_text_muted = get_theme_color(self.ui, 999999950, Color::rgb(136.0 / 255.0, 136.0 / 255.0, 136.0 / 255.0));
+
         let bg_color = if is_light_theme {
             if is_hovered {
                 Color::rgb(0.9, 0.9, 0.95)
@@ -487,7 +566,7 @@ impl<'u, 'a> MenuItemBuilder<'u, 'a> {
             }
         } else {
             if is_hovered {
-                Color::rgb(3.0 / 255.0, 3.0 / 255.0, 3.0 / 255.0) // 3 – hover
+                theme_highlight
             } else {
                 Color::TRANSPARENT
             }
@@ -497,9 +576,9 @@ impl<'u, 'a> MenuItemBuilder<'u, 'a> {
             Color::rgb(0.1, 0.1, 0.15)
         } else {
             if is_hovered {
-                Color::rgb(255.0 / 255.0, 214.0 / 255.0, 0.0 / 255.0) // #FFD600 vivid yellow (accent)
+                theme_accent
             } else {
-                Color::rgb(224.0 / 255.0, 224.0 / 255.0, 224.0 / 255.0) // #e0e0e0 (text_primary)
+                theme_text_primary
             }
         };
 
@@ -507,9 +586,9 @@ impl<'u, 'a> MenuItemBuilder<'u, 'a> {
             Color::rgb(0.5, 0.5, 0.5)
         } else {
             if is_hovered {
-                Color::rgb(255.0 / 255.0, 214.0 / 255.0, 0.0 / 255.0) // #FFD600 vivid yellow (accent)
+                theme_accent
             } else {
-                Color::rgb(102.0 / 255.0, 102.0 / 255.0, 102.0 / 255.0) // #666666 (text_muted)
+                theme_text_muted
             }
         };
 

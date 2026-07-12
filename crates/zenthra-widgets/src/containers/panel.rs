@@ -11,8 +11,8 @@ pub struct PanelBuilder<'u, 'a, 'b> {
     width: Option<f32>,
     height: Option<f32>,
     padding: f32,
-    bg: Color,
-    border_color: Color,
+    bg: Option<Color>,
+    border_color: Option<Color>,
     border_width: f32,
     radius: f32,
 
@@ -27,7 +27,7 @@ pub struct PanelBuilder<'u, 'a, 'b> {
     collapsed: Option<&'b mut bool>,
 
     // Shadows
-    shadow_color: Color,
+    shadow_color: Option<Color>,
     shadow_offset: [f32; 2],
     shadow_blur: f32,
     shadow_opacity: f32,
@@ -41,21 +41,21 @@ impl<'u, 'a, 'b> PanelBuilder<'u, 'a, 'b> {
             id,
             width: None,
             height: None,
-            padding: 14.0,
-            bg: Color::rgb(0.12, 0.12, 0.15),
-            border_color: Color::rgb(0.2, 0.2, 0.24),
-            border_width: 1.0,
-            radius: 8.0,
+            padding: 0.0,
+            bg: None,
+            border_color: None,
+            border_width: 0.0,
+            radius: 0.0,
             title: None,
             subtitle: None,
-            header_bg: Some(Color::rgb(0.15, 0.15, 0.19)),
-            header_padding: 12.0,
-            collapsible: true,
+            header_bg: None,
+            header_padding: 0.0,
+            collapsible: false,
             collapsed: None,
-            shadow_color: Color::rgba(0.0, 0.0, 0.0, 0.3),
-            shadow_offset: [0.0, 2.0],
-            shadow_blur: 8.0,
-            shadow_opacity: 0.25,
+            shadow_color: None,
+            shadow_offset: [0.0, 0.0],
+            shadow_blur: 0.0,
+            shadow_opacity: 0.0,
         }
     }
 
@@ -109,12 +109,12 @@ impl<'u, 'a, 'b> PanelBuilder<'u, 'a, 'b> {
     }
 
     pub fn bg(mut self, bg: Color) -> Self {
-        self.bg = bg;
+        self.bg = Some(bg);
         self
     }
 
     pub fn border(mut self, color: Color, width: f32) -> Self {
-        self.border_color = color;
+        self.border_color = Some(color);
         self.border_width = width;
         self
     }
@@ -130,7 +130,7 @@ impl<'u, 'a, 'b> PanelBuilder<'u, 'a, 'b> {
     }
 
     pub fn shadow(mut self, color: Color, x: f32, y: f32, blur: f32) -> Self {
-        self.shadow_color = color;
+        self.shadow_color = Some(color);
         self.shadow_offset = [x, y];
         self.shadow_blur = blur;
         self
@@ -150,12 +150,21 @@ impl<'u, 'a, 'b> PanelBuilder<'u, 'a, 'b> {
         // Outer panel container
         let mut panel_container = self.ui.container()
             .id(self.id)
-            .column()
-            .bg(self.bg)
-            .border(self.border_color, self.border_width)
-            .radius_all(self.radius)
-            .shadow(self.shadow_color, self.shadow_offset[0], self.shadow_offset[1], self.shadow_blur)
-            .shadow_opacity(self.shadow_opacity);
+            .column();
+
+        if let Some(bg) = self.bg {
+            panel_container = panel_container.bg(bg);
+        }
+        if let Some(bc) = self.border_color {
+            panel_container = panel_container.border(bc, self.border_width);
+        }
+        if self.radius != 0.0 {
+            panel_container = panel_container.radius_all(self.radius);
+        }
+        if let Some(sc) = self.shadow_color {
+            panel_container = panel_container.shadow(sc, self.shadow_offset[0], self.shadow_offset[1], self.shadow_blur)
+                .shadow_opacity(self.shadow_opacity);
+        }
 
         if let Some(w) = self.width {
             panel_container = panel_container.width(w);
@@ -229,11 +238,13 @@ impl<'u, 'a, 'b> PanelBuilder<'u, 'a, 'b> {
             if !is_collapsed {
                 // If header is present, we draw a thin divider line
                 if has_header {
-                    ui.container()
+                    let mut div = ui.container()
                         .full_width()
-                        .height(1.0)
-                        .bg(self.border_color)
-                        .show(|_| {});
+                        .height(1.0);
+                    if let Some(bc) = self.border_color {
+                        div = div.bg(bc);
+                    }
+                    div.show(|_| {});
                 }
 
                 ui.container()

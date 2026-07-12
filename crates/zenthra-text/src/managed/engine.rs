@@ -30,8 +30,8 @@ impl Zentype {
             let path = nerd_font_path.to_path_buf();
             std::thread::spawn(move || {
                 match font_system.lock().unwrap().db_mut().load_font_file(&path) {
-                    Ok(_) => println!("Successfully auto-loaded Nerd Font from {:?}", path),
-                    Err(e) => eprintln!("Failed to auto-load Nerd Font: {:?}", e),
+                    Ok(_) => {}
+                    Err(e) => log::error!("Failed to auto-load Nerd Font: {:?}", e),
                 }
             });
         }

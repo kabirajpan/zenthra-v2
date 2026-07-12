@@ -1,5 +1,5 @@
 use zenthra_platform::app::{App as PlatformApp, Frame};
-use zenthra_render::RectPipeline;
+use zenthra_render::{RectPipeline, BlurPipeline, BlurScratch, BlitPipeline, run_kawase_blur};
 use zenthra_text::prelude::*;
 use zenthra_widgets::ui::DrawCommand;
 use zenthra_widgets::Ui;
@@ -8,6 +8,7 @@ pub struct App {
     platform: PlatformApp,
     fonts: Vec<String>,
     font_data: Vec<Vec<u8>>,
+    custom_shaders: Vec<(&'static str, &'static str)>,
 }
 
 impl App {
@@ -16,7 +17,13 @@ impl App {
             platform: PlatformApp::new(),
             fonts: Vec::new(),
             font_data: Vec::new(),
+            custom_shaders: Vec::new(),
         }
+    }
+
+    pub fn register_custom_shader(mut self, id: &'static str, source: &'static str) -> Self {
+        self.custom_shaders.push((id, source));
+        self
     }
 
     pub fn load_font_path(mut self, path: &str) -> Self {
@@ -41,6 +48,14 @@ impl App {
         self.platform = self.platform.decorations(dec);
         self
     }
+    pub fn transparent(mut self, trans: bool) -> Self {
+        self.platform = self.platform.transparent(trans);
+        self
+    }
+    pub fn blur(mut self, blur_state: bool) -> Self {
+        self.platform = self.platform.blur(blur_state);
+        self
+    }
 
     pub fn with_ui<F>(mut self, mut f: F) -> Self
     where
@@ -48,6 +63,9 @@ impl App {
     {
         let mut rect_pipeline: Option<RectPipeline> = None;
         let mut image_pipeline: Option<zenthra_render::ImagePipeline> = None;
+        let mut blur_pipeline:  Option<BlurPipeline> = None;
+        let mut blit_pipeline:  Option<BlitPipeline> = None;
+        let mut blur_scratch:   Option<BlurScratch> = None;
         let mut texture_cache: std::collections::HashMap<
             zenthra_core::ImageSource,
             (std::sync::Arc<wgpu::BindGroup>, u32, u32),
@@ -89,6 +107,15 @@ impl App {
 
         let fonts = std::mem::take(&mut self.fonts);
         let font_data_list = std::mem::take(&mut self.font_data);
+        let custom_shaders_list = std::mem::take(&mut self.custom_shaders);
+        let custom_shaders_map: std::collections::HashMap<&'static str, &'static str> =
+            custom_shaders_list.into_iter().collect();
+        let mut custom_pipelines: std::collections::HashMap<
+            &'static str,
+            wgpu::RenderPipeline,
+        > = std::collections::HashMap::new();
+
+        let is_transparent = self.platform.is_transparent();
         self.platform = self.platform.with_ui(move |frame: &mut Frame| {
             let elapsed = start_time.elapsed().as_secs_f32();
             let device = frame.window.gpu.device.clone();
@@ -196,6 +223,17 @@ impl App {
                 .get_or_insert_with(|| zenthra_render::ImagePipeline::new(&device, config.format));
             ip.prepare(queue, width, height);
 
+            // Lazily create / resize blur & blit pipelines + scratch textures
+            let bp = blur_pipeline.get_or_insert_with(|| BlurPipeline::new(&device, config.format));
+            let blitp = blit_pipeline.get_or_insert_with(|| BlitPipeline::new(&device, config.format));
+            let scratch = {
+                let needs_new = blur_scratch.as_ref().map_or(true, |s| s.needs_resize(width, height));
+                if needs_new {
+                    blur_scratch = Some(BlurScratch::new(&device, width, height, config.format));
+                }
+                blur_scratch.as_ref().unwrap()
+            };
+
             let font_system = engine.font_system();
             let (logical_w, logical_h) = (width as f32 / sf, height as f32 / sf);
 
@@ -273,6 +311,7 @@ impl App {
                     (ui.draws, ui.overlays)
                 };
 
+                // ── Acquire surface + encoder ─────────────────────────────────
                 let surface_texture = match frame.window.gpu.surface.get_current_texture() {
                     wgpu::CurrentSurfaceTexture::Success(t) => t,
                     _ => return false,
@@ -280,19 +319,32 @@ impl App {
                 let view = surface_texture.texture.create_view(&wgpu::TextureViewDescriptor::default());
                 let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: Some("Zenthra Frame") });
 
-                // --- PASS 1: CLEAR ---
-                let is_light_theme = interaction_state.get(&zenthra_core::Id::from_u64(999999999)).copied().unwrap_or(0.0) > 0.5;
-                let clear_color = if is_light_theme {
-                    wgpu::Color { r: 0.95, g: 0.95, b: 0.96, a: 1.0 }
-                } else {
-                    wgpu::Color { r: 0.0, g: 0.0, b: 0.0, a: 1.0 }
-                };
+                // ── OFFSCREEN TEXTURE ──────────────────────────────────────────
+                // All rendering targets scratch.full_a (RENDER_ATTACHMENT | COPY_SRC).
+                // This lets us snapshot the scene for backdrop blur without touching the surface.
+                let offscreen_view = &scratch.full_a_v;
 
+                // ── PASS 1: CLEAR offscreen ────────────────────────────────────
+                let clear_color = if is_transparent {
+                    wgpu::Color {
+                        r: 0.0,
+                        g: 0.0,
+                        b: 0.0,
+                        a: 0.0,
+                    }
+                } else {
+                    wgpu::Color {
+                        r: 0.06,
+                        g: 0.06,
+                        b: 0.08,
+                        a: 1.0,
+                    }
+                };
                 {
                     encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                         label: Some("Clear Pass"),
                         color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                            view: &view,
+                            view: offscreen_view,
                             resolve_target: None,
                             ops: wgpu::Operations {
                                 load: wgpu::LoadOp::Clear(clear_color),
@@ -307,201 +359,31 @@ impl App {
                     });
                 }
 
-                // Prepare RectPipeline uniforms once for the frame
                 rp.prepare(&device, queue, width, height, &[]);
 
-                // Prepare RectPipeline uniforms once for the frame
-                rp.prepare(&device, queue, width, height, &[]);
-
-                // Temporary storage for buffers to keep them alive during the pass
                 let mut temp_buffers: Vec<wgpu::Buffer> = Vec::new();
 
-                // Helper to process a command list grouped by type to optimize draw calls and render passes
-                let mut process_grouped = |encoder: &mut wgpu::CommandEncoder, view: &wgpu::TextureView, cmds: &[DrawCommand], temp_bufs: &mut Vec<wgpu::Buffer>| {
-                    let mut rect_cmds = Vec::new();
-                    let mut image_cmds = Vec::new();
-                    let mut text_cmds = Vec::new();
-                    let mut overlay_rect_cmds = Vec::new();
-
-                    for cmd in cmds {
-                        match cmd {
-                            DrawCommand::Rect(rd) => rect_cmds.push(rd),
-                            DrawCommand::Image(id_cmd) => image_cmds.push(id_cmd),
-                            DrawCommand::Text(td) => text_cmds.push(td),
-                            DrawCommand::OverlayRect(od) => overlay_rect_cmds.push(od),
-                        }
-                    }
-
-                    // 1. Render all Rects in a single batch/pass
-                    if !rect_cmds.is_empty() {
-                        let mut instances = Vec::with_capacity(rect_cmds.len());
-                        for rd in rect_cmds {
-                            let mut inst = rd.instance;
-                            inst.pos[0] *= sf; inst.pos[1] *= sf;
-                            inst.size[0] *= sf; inst.size[1] *= sf;
-                            inst.shadow_offset[0] *= sf; inst.shadow_offset[1] *= sf;
-                            inst.shadow_blur *= sf;
-                            inst.clip_rect[0] *= sf; inst.clip_rect[1] *= sf;
-                            inst.clip_rect[2] *= sf; inst.clip_rect[3] *= sf;
-                            instances.push(inst);
-                        }
-                        
-                        use wgpu::util::DeviceExt;
-                        let buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                            label: Some("Rect Group Buffer"),
-                            contents: bytemuck::cast_slice(&instances),
-                            usage: wgpu::BufferUsages::VERTEX,
-                        });
-
-                        {
-                            let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-                                label: Some("Rect Group Pass"),
-                                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                                    view,
-                                    resolve_target: None,
-                                    ops: wgpu::Operations {
-                                        load: wgpu::LoadOp::Load,
-                                        store: wgpu::StoreOp::Store,
-                                    },
-                                    depth_slice: None,
-                                })],
-                                depth_stencil_attachment: None,
-                                timestamp_writes: None,
-                                occlusion_query_set: None,
-                                multiview_mask: None,
-                            });
-                            
-                            pass.set_pipeline(&rp.pipeline);
-                            pass.set_bind_group(0, &rp.uniform_bg, &[]);
-                            pass.set_vertex_buffer(0, buf.slice(..));
-                            pass.draw(0..6, 0..instances.len() as u32);
-                        }
-                        temp_bufs.push(buf);
-                    }
-
-                    // 2. Render all Images
-                    if !image_cmds.is_empty() {
-                        for id_cmd in &image_cmds {
-                            if !texture_cache.contains_key(&id_cmd.source) {
-                                if !loading_textures.contains(&id_cmd.source) {
-                                    loading_textures.insert(id_cmd.source.clone());
-                                    let tx = tx.clone();
-                                    let device = device.clone();
-                                    let queue = frame.window.gpu.queue.clone();
-                                    let bgl = ip.texture_bgl.clone();
-                                    let source = id_cmd.source.clone();
-                                    let winit_window = frame.window.winit_window.clone();
-
-                                    std::thread::spawn(move || {
-                                        let result = match &source {
-                                            zenthra_core::ImageSource::Path(p) => {
-                                                match std::fs::read(p) {
-                                                    Ok(bytes) => {
-                                                        match zenthra_render::texture::create_texture_bind_group(&device, &queue, &bgl, &bytes) {
-                                                            Ok((bg, w, h)) => Ok((bg, w, h)),
-                                                            Err(e) => Err(format!("Failed to create texture: {:?}", e)),
-                                                        }
-                                                    }
-                                                    Err(e) => Err(format!("Failed to read file: {:?}", e)),
-                                                }
-                                            }
-                                            zenthra_core::ImageSource::Thumbnail(p) => {
-                                                match std::fs::read(p) {
-                                                    Ok(bytes) => {
-                                                        match zenthra_render::texture::create_texture_bind_group_thumbnail(&device, &queue, &bgl, &bytes, 200) {
-                                                            Ok((bg, w, h)) => Ok((bg, w, h)),
-                                                            Err(e) => Err(format!("Failed to create thumbnail: {:?}", e)),
-                                                        }
-                                                    }
-                                                    Err(e) => Err(format!("Failed to read file: {:?}", e)),
-                                                }
-                                            }
-                                            zenthra_core::ImageSource::Bytes(b) => {
-                                                match zenthra_render::texture::create_texture_bind_group(&device, &queue, &bgl, b) {
-                                                    Ok((bg, w, h)) => Ok((bg, w, h)),
-                                                    Err(e) => Err(format!("Failed to create texture: {:?}", e)),
-                                                }
-                                            }
-                                        };
-                                        let _ = tx.send((source, result));
-                                        winit_window.request_redraw();
-                                    });
-                                }
-                            } else {
-                                if let Some(pos) = texture_lru.iter().position(|x| *x == id_cmd.source) {
-                                    texture_lru.remove(pos);
-                                }
-                                texture_lru.push_back(id_cmd.source.clone());
-                            }
-                        }
-
-                        let mut pass_buffers = Vec::with_capacity(image_cmds.len());
-                        for id_cmd in &image_cmds {
-                            if let Some((_bg, _tw, _th)) = texture_cache.get(&id_cmd.source) {
-                                let mut inst = id_cmd.instance;
-                                inst.pos[0] *= sf; inst.pos[1] *= sf;
-                                inst.size[0] *= sf; inst.size[1] *= sf;
-                                inst.clip_rect[0] *= sf; inst.clip_rect[1] *= sf;
-                                inst.clip_rect[2] *= sf; inst.clip_rect[3] *= sf;
-                                
-                                use wgpu::util::DeviceExt;
-                                let buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                                    label: Some("Image Instance"),
-                                    contents: bytemuck::bytes_of(&inst),
-                                    usage: wgpu::BufferUsages::VERTEX,
-                                });
-                                pass_buffers.push(buf);
-                            }
-                        }
-
-                        {
-                            let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-                                label: Some("Image Group Pass"),
-                                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                                    view,
-                                    resolve_target: None,
-                                    ops: wgpu::Operations {
-                                        load: wgpu::LoadOp::Load,
-                                        store: wgpu::StoreOp::Store,
-                                    },
-                                    depth_slice: None,
-                                })],
-                                depth_stencil_attachment: None,
-                                timestamp_writes: None,
-                                occlusion_query_set: None,
-                                multiview_mask: None,
-                            });
-
-                            let mut buf_idx = 0;
-                            for id_cmd in &image_cmds {
-                                if let Some((bg, _tw, _th)) = texture_cache.get(&id_cmd.source) {
-                                    let buf = &pass_buffers[buf_idx];
-                                    buf_idx += 1;
-                                    ip.draw(&mut pass, bg, buf, 1);
-                                }
-                            }
-                        }
-                        temp_bufs.extend(pass_buffers);
-                    }
-
-                    // 3. Render all Texts
-                    if !text_cmds.is_empty() {
-                        for td in &text_cmds {
-                            let mut opts = td.options.clone();
-                            opts.scale_factor = sf;
-                            opts.clip_rect = Some([td.clip[0] * sf, td.clip[1] * sf, td.clip[2] * sf, td.clip[3] * sf]);
-                            engine.draw(queue, &td.text, td.pos, &opts);
-                        }
-
+                // ── Ordered draw loop (handles BackdropBlur in-order) ──────────
+                // Batches rect/image/text commands as before, but flushes them before
+                // any BackdropBlur and runs the Kawase pass in between.
+                let flush_rects = |encoder: &mut wgpu::CommandEncoder,
+                                   dst: &wgpu::TextureView,
+                                   instances: &[zenthra_render::RectInstance],
+                                   temp_bufs: &mut Vec<wgpu::Buffer>| {
+                    if instances.is_empty() { return; }
+                    use wgpu::util::DeviceExt;
+                    let buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                        label: Some("Rect Batch"),
+                        contents: bytemuck::cast_slice(instances),
+                        usage: wgpu::BufferUsages::VERTEX,
+                    });
+                    {
                         let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-                            label: Some("Text Group Pass"),
+                            label: Some("Rect Pass"),
                             color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                                view,
+                                view: dst,
                                 resolve_target: None,
-                                ops: wgpu::Operations {
-                                    load: wgpu::LoadOp::Load,
-                                    store: wgpu::StoreOp::Store,
-                                },
+                                ops: wgpu::Operations { load: wgpu::LoadOp::Load, store: wgpu::StoreOp::Store },
                                 depth_slice: None,
                             })],
                             depth_stencil_attachment: None,
@@ -509,40 +391,75 @@ impl App {
                             occlusion_query_set: None,
                             multiview_mask: None,
                         });
-                        engine.render(&mut pass);
+                        pass.set_pipeline(&rp.pipeline);
+                        pass.set_bind_group(0, &rp.uniform_bg, &[]);
+                        pass.set_vertex_buffer(0, buf.slice(..));
+                        pass.draw(0..6, 0..instances.len() as u32);
                     }
+                    temp_bufs.push(buf);
+                };
 
-                    // 4. Render all OverlayRects
-                    if !overlay_rect_cmds.is_empty() {
-                        let mut instances = Vec::with_capacity(overlay_rect_cmds.len());
-                        for od in overlay_rect_cmds {
-                            let inst = zenthra_render::RectInstance {
-                                pos: [od.x * sf, od.y * sf],
-                                size: [od.width * sf, od.height * sf],
-                                color: od.color.to_array(),
-                                clip_rect: [od.clip[0] * sf, od.clip[1] * sf, od.clip[2] * sf, od.clip[3] * sf],
-                                ..Default::default()
-                            };
-                            instances.push(inst);
+                let mut process_commands = |encoder: &mut wgpu::CommandEncoder,
+                                        dst: &wgpu::TextureView,
+                                        cmds: &[DrawCommand],
+                                        temp_bufs: &mut Vec<wgpu::Buffer>| {
+                    let mut pending_rects: Vec<zenthra_render::RectInstance> = Vec::new();
+                    let mut pending_images: Vec<(&zenthra_widgets::ui::ImageDraw, wgpu::Buffer)> = Vec::new();
+                    let mut pending_texts: Vec<&zenthra_widgets::ui::TextDraw> = Vec::new();
+                    let mut pending_overlay_rects: Vec<zenthra_render::RectInstance> = Vec::new();
+
+                    // Flush all accumulated batches in correct painter's order:
+                    // rects → images → text → overlay rects
+                    let mut flush_all = |encoder: &mut wgpu::CommandEncoder,
+                                     pending_rects: &mut Vec<zenthra_render::RectInstance>,
+                                     pending_images: &mut Vec<(&zenthra_widgets::ui::ImageDraw, wgpu::Buffer)>,
+                                     pending_texts: &mut Vec<&zenthra_widgets::ui::TextDraw>,
+                                     pending_overlay_rects: &mut Vec<zenthra_render::RectInstance>,
+                                     temp_bufs: &mut Vec<wgpu::Buffer>| {
+                        flush_rects(encoder, dst, pending_rects, temp_bufs);
+                        pending_rects.clear();
+
+                        // Images
+                        if !pending_images.is_empty() {
+                            {
+                                let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                                    label: Some("Image Pass"),
+                                    color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                                        view: dst,
+                                        resolve_target: None,
+                                        ops: wgpu::Operations { load: wgpu::LoadOp::Load, store: wgpu::StoreOp::Store },
+                                        depth_slice: None,
+                                    })],
+                                    depth_stencil_attachment: None,
+                                    timestamp_writes: None,
+                                    occlusion_query_set: None,
+                                    multiview_mask: None,
+                                });
+                                for (id_cmd, buf) in pending_images.iter() {
+                                    if let Some((bg, _, _)) = texture_cache.get(&id_cmd.source) {
+                                        ip.draw(&mut pass, bg, buf, 1);
+                                    }
+                                }
+                            }
+                            for (_, buf) in pending_images.drain(..) {
+                                temp_bufs.push(buf);
+                            }
                         }
 
-                        use wgpu::util::DeviceExt;
-                        let buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                            label: Some("Overlay Rect Group Buffer"),
-                            contents: bytemuck::cast_slice(&instances),
-                            usage: wgpu::BufferUsages::VERTEX,
-                        });
-
-                        {
+                        // Text
+                        if !pending_texts.is_empty() {
+                            for td in pending_texts.drain(..) {
+                                let mut opts = td.options.clone();
+                                opts.scale_factor = sf;
+                                opts.clip_rect = Some([td.clip[0]*sf, td.clip[1]*sf, td.clip[2]*sf, td.clip[3]*sf]);
+                                engine.draw(queue, &td.text, td.pos, &opts);
+                            }
                             let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-                                label: Some("Overlay Rect Group Pass"),
+                                label: Some("Text Pass"),
                                 color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                                    view,
+                                    view: dst,
                                     resolve_target: None,
-                                    ops: wgpu::Operations {
-                                        load: wgpu::LoadOp::Load,
-                                        store: wgpu::StoreOp::Store,
-                                    },
+                                    ops: wgpu::Operations { load: wgpu::LoadOp::Load, store: wgpu::StoreOp::Store },
                                     depth_slice: None,
                                 })],
                                 depth_stencil_attachment: None,
@@ -550,24 +467,315 @@ impl App {
                                 occlusion_query_set: None,
                                 multiview_mask: None,
                             });
-                            pass.set_pipeline(&rp.pipeline);
-                            pass.set_bind_group(0, &rp.uniform_bg, &[]);
-                            pass.set_vertex_buffer(0, buf.slice(..));
-                            pass.draw(0..6, 0..instances.len() as u32);
+                            engine.render(&mut pass);
                         }
-                        temp_bufs.push(buf);
+
+                        // Overlay rects
+                        flush_rects(encoder, dst, pending_overlay_rects, temp_bufs);
+                        pending_overlay_rects.clear();
+                    };
+
+                    for cmd in cmds {
+                        match cmd {
+                            DrawCommand::Rect(rd) => {
+                                let mut inst = rd.instance;
+                                inst.pos[0] *= sf; inst.pos[1] *= sf;
+                                inst.size[0] *= sf; inst.size[1] *= sf;
+                                inst.shadow_offset[0] *= sf; inst.shadow_offset[1] *= sf;
+                                inst.shadow_blur *= sf;
+                                inst.clip_rect[0] *= sf; inst.clip_rect[1] *= sf;
+                                inst.clip_rect[2] *= sf; inst.clip_rect[3] *= sf;
+                                pending_rects.push(inst);
+                            }
+                            DrawCommand::Image(id_cmd) => {
+                                // Kick off async load if needed
+                                if !texture_cache.contains_key(&id_cmd.source) {
+                                    if !loading_textures.contains(&id_cmd.source) {
+                                        loading_textures.insert(id_cmd.source.clone());
+                                        let tx2 = tx.clone();
+                                        let device2 = device.clone();
+                                        let queue2 = frame.window.gpu.queue.clone();
+                                        let bgl2 = ip.texture_bgl.clone();
+                                        let source2 = id_cmd.source.clone();
+                                        let winit2 = frame.window.winit_window.clone();
+                                        std::thread::spawn(move || {
+                                            let result = match &source2 {
+                                                zenthra_core::ImageSource::Path(p) => {
+                                                    std::fs::read(p).map_err(|e| format!("{e:?}")).and_then(|bytes|
+                                                        zenthra_render::texture::create_texture_bind_group(&device2, &queue2, &bgl2, &bytes).map_err(|e| format!("{e:?}")))
+                                                }
+                                                zenthra_core::ImageSource::Thumbnail(p) => {
+                                                    std::fs::read(p).map_err(|e| format!("{e:?}")).and_then(|bytes|
+                                                        zenthra_render::texture::create_texture_bind_group_thumbnail(&device2, &queue2, &bgl2, &bytes, 200).map_err(|e| format!("{e:?}")))
+                                                }
+                                                zenthra_core::ImageSource::Bytes(b) => {
+                                                    zenthra_render::texture::create_texture_bind_group(&device2, &queue2, &bgl2, b).map_err(|e| format!("{e:?}"))
+                                                }
+                                            };
+                                            let _ = tx2.send((source2, result));
+                                            winit2.request_redraw();
+                                        });
+                                    }
+                                } else {
+                                    if let Some(pos) = texture_lru.iter().position(|x| *x == id_cmd.source) {
+                                        texture_lru.remove(pos);
+                                    }
+                                    texture_lru.push_back(id_cmd.source.clone());
+                                    if texture_cache.contains_key(&id_cmd.source) {
+                                        let mut inst = id_cmd.instance;
+                                        inst.pos[0] *= sf; inst.pos[1] *= sf;
+                                        inst.size[0] *= sf; inst.size[1] *= sf;
+                                        inst.clip_rect[0] *= sf; inst.clip_rect[1] *= sf;
+                                        inst.clip_rect[2] *= sf; inst.clip_rect[3] *= sf;
+                                        use wgpu::util::DeviceExt;
+                                        let buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                                            label: Some("Image Instance"),
+                                            contents: bytemuck::bytes_of(&inst),
+                                            usage: wgpu::BufferUsages::VERTEX,
+                                        });
+                                        pending_images.push((id_cmd, buf));
+                                    }
+                                }
+                            }
+                            DrawCommand::Text(td) => {
+                                pending_texts.push(td);
+                            }
+                            DrawCommand::OverlayRect(od) => {
+                                let inst = zenthra_render::RectInstance {
+                                    pos: [od.x * sf, od.y * sf],
+                                    size: [od.width * sf, od.height * sf],
+                                    color: od.color.to_array(),
+                                    clip_rect: [od.clip[0]*sf, od.clip[1]*sf, od.clip[2]*sf, od.clip[3]*sf],
+                                    ..Default::default()
+                                };
+                                pending_overlay_rects.push(inst);
+                            }
+                            DrawCommand::BackdropBlur(bd) => {
+                                // ── Flush everything drawn so far ─────────────
+                                flush_all(encoder,
+                                    &mut pending_rects, &mut pending_images,
+                                    &mut pending_texts, &mut pending_overlay_rects,
+                                    temp_bufs);
+
+                                // ── Execute requested blur pass: full_a → mips → full_b ──
+                                run_kawase_blur(
+                                    bp, scratch, &device, encoder,
+                                    &scratch.full_a_v,   // read scene
+                                    &scratch.full_b_v,   // write blurred
+                                    bd.blur_radius * sf,
+                                );
+
+                                // ── Composite blurred region onto full_a ──────
+                                let rect_pos = [bd.x * sf, bd.y * sf];
+                                let rect_size = [bd.width * sf, bd.height * sf];
+                                let radius = [
+                                    bd.radius[0] * sf,
+                                    bd.radius[1] * sf,
+                                    bd.radius[2] * sf,
+                                    bd.radius[3] * sf,
+                                ];
+                                let btype_val = match bd.blur_type {
+                                    zenthra_core::style::blur::Type::Normal => 0.0,
+                                    zenthra_core::style::blur::Type::Frosted => 1.0,
+                                    zenthra_core::style::blur::Type::Glassmorphism => 2.0,
+                                    zenthra_core::style::blur::Type::OpaqueGlass => 3.0,
+                                };
+                                blitp.blit_to_clipped(
+                                    &device, encoder,
+                                    &scratch.full_b_v,
+                                    dst,
+                                    rect_pos,
+                                    rect_size,
+                                    radius,
+                                    scratch.width,
+                                    scratch.height,
+                                    bd.brightness,
+                                    bd.saturation,
+                                    bd.contrast,
+                                    btype_val,
+                                    bd.opacity,
+                                );
+                            }
+                            DrawCommand::CustomPostProcess(cp) => {
+                                // ── Flush everything drawn so far ─────────────
+                                flush_all(encoder,
+                                    &mut pending_rects, &mut pending_images,
+                                    &mut pending_texts, &mut pending_overlay_rects,
+                                    temp_bufs);
+
+                                // ── If blur_radius > 0.0, run Kawase blur ────
+                                let src_view = if cp.blur_radius > 0.0 {
+                                    run_kawase_blur(
+                                        bp, scratch, &device, encoder,
+                                        &scratch.full_a_v,
+                                        &scratch.full_b_v,
+                                        cp.blur_radius * sf,
+                                    );
+                                    &scratch.full_b_v
+                                } else {
+                                     // Copy full_a to full_b so we sample from full_b and write to full_a (avoiding conflicting usages)
+                                     encoder.copy_texture_to_texture(
+                                         wgpu::TexelCopyTextureInfo {
+                                             texture: &scratch.full_a,
+                                             mip_level: 0,
+                                             origin: wgpu::Origin3d::ZERO,
+                                             aspect: wgpu::TextureAspect::All,
+                                         },
+                                         wgpu::TexelCopyTextureInfo {
+                                             texture: &scratch.full_b,
+                                             mip_level: 0,
+                                             origin: wgpu::Origin3d::ZERO,
+                                             aspect: wgpu::TextureAspect::All,
+                                         },
+                                         wgpu::Extent3d {
+                                             width: scratch.width,
+                                             height: scratch.height,
+                                             depth_or_array_layers: 1,
+                                         },
+                                     );
+                                     &scratch.full_b_v
+                                 };
+
+                                // ── Compile custom shader if needed ───────────
+                                let shader_src = custom_shaders_map.get(cp.shader_id).copied();
+                                if let Some(src) = shader_src {
+                                    let pipeline = custom_pipelines.entry(cp.shader_id).or_insert_with(|| {
+                                        let vs_module = device.create_shader_module(wgpu::include_wgsl!("../../zenthra-render/src/shaders/blit.wgsl"));
+                                        let fs_module = device.create_shader_module(wgpu::ShaderModuleDescriptor {
+                                            label: Some(cp.shader_id),
+                                            source: wgpu::ShaderSource::Wgsl(src.into()),
+                                        });
+
+                                        let layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+                                            label: Some("Custom PostProcess Pipeline Layout"),
+                                            bind_group_layouts: &[Some(&blitp.bgl), Some(&blitp.backdrop_bgl)],
+                                            immediate_size: 0,
+                                        });
+
+                                        device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+                                            label: Some(cp.shader_id),
+                                            layout: Some(&layout),
+                                            vertex: wgpu::VertexState {
+                                                module: &vs_module,
+                                                entry_point: Some("vs_backdrop"),
+                                                buffers: &[],
+                                                compilation_options: Default::default(),
+                                            },
+                                            fragment: Some(wgpu::FragmentState {
+                                                module: &fs_module,
+                                                entry_point: Some("fs_main"),
+                                                targets: &[Some(wgpu::ColorTargetState {
+                                                    format: config.format,
+                                                    blend: Some(wgpu::BlendState::ALPHA_BLENDING),
+                                                    write_mask: wgpu::ColorWrites::ALL,
+                                                })],
+                                                compilation_options: Default::default(),
+                                            }),
+                                            primitive: wgpu::PrimitiveState::default(),
+                                            depth_stencil: None,
+                                            multisample: wgpu::MultisampleState::default(),
+                                            multiview_mask: None,
+                                            cache: None,
+                                        })
+                                    });
+
+                                    // ── Composite with custom shader ─────────────
+                                    let rect_pos = [cp.x * sf, cp.y * sf];
+                                    let rect_size = [cp.width * sf, cp.height * sf];
+                                    let radius = [
+                                        cp.radius[0] * sf,
+                                        cp.radius[1] * sf,
+                                        cp.radius[2] * sf,
+                                        cp.radius[3] * sf,
+                                    ];
+
+                                    // Render pass setup (same as blit_to_clipped but using custom pipeline)
+                                    use wgpu::util::DeviceExt;
+                                    let bg = device.create_bind_group(&wgpu::BindGroupDescriptor {
+                                        label: Some("Custom Blit Clipped BG"),
+                                        layout: &blitp.bgl,
+                                        entries: &[
+                                            wgpu::BindGroupEntry {
+                                                binding: 0,
+                                                resource: wgpu::BindingResource::TextureView(src_view),
+                                            },
+                                            wgpu::BindGroupEntry {
+                                                binding: 1,
+                                                resource: wgpu::BindingResource::Sampler(&blitp.sampler),
+                                            },
+                                        ],
+                                    });
+
+                                    let uniforms = zenthra_render::BackdropUniforms {
+                                         radius,
+                                         rect_pos,
+                                         rect_size,
+                                         screen_size: [scratch.width as f32, scratch.height as f32],
+                                         time: elapsed,
+                                         brightness: 1.0,
+                                         saturation: 1.0,
+                                         contrast: 1.0,
+                                         blur_type: 0.0,
+                                         opacity: 1.0, padding: [cp.blur_radius, 0.0], _end_padding: [0.0; 2],
+                                     };
+
+                                    let uniform_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                                        label: Some("Custom Blit Uniform Buffer"),
+                                        contents: bytemuck::bytes_of(&uniforms),
+                                        usage: wgpu::BufferUsages::UNIFORM,
+                                    });
+
+                                    let uniform_bg = device.create_bind_group(&wgpu::BindGroupDescriptor {
+                                        label: Some("Custom Blit Uniform BG"),
+                                        layout: &blitp.backdrop_bgl,
+                                        entries: &[
+                                            wgpu::BindGroupEntry {
+                                                binding: 0,
+                                                resource: uniform_buf.as_entire_binding(),
+                                            },
+                                        ],
+                                    });
+
+                                    let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                                        label: Some("Custom Blit Clipped Pass"),
+                                        color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                                            view: dst,
+                                            resolve_target: None,
+                                            ops: wgpu::Operations { load: wgpu::LoadOp::Load, store: wgpu::StoreOp::Store },
+                                            depth_slice: None,
+                                        })],
+                                        depth_stencil_attachment: None,
+                                        timestamp_writes: None,
+                                        occlusion_query_set: None,
+                                        multiview_mask: None,
+                                    });
+
+                                    pass.set_pipeline(pipeline);
+                                    pass.set_bind_group(0, &bg, &[]);
+                                    pass.set_bind_group(1, &uniform_bg, &[]);
+                                    pass.draw(0..6, 0..1);
+                                }
+                            }
+                        }
                     }
+
+                    // Final flush of any remaining batches
+                    flush_all(encoder,
+                        &mut pending_rects, &mut pending_images,
+                        &mut pending_texts, &mut pending_overlay_rects,
+                        temp_bufs);
                 };
 
-                {
-                    use std::fs::OpenOptions;
-                    use std::io::Write;
-                    if let Ok(mut file) = OpenOptions::new().create(true).append(true).open("window_debug.log") {
-                        let _ = writeln!(file, "FRAME: draws.len()={}, overlays.len()={}, sf={}, width={}, height={}", draws.len(), overlays.len(), sf, width, height);
-                    }
-                }
-                process_grouped(&mut encoder, &view, &draws, &mut temp_buffers);
-                process_grouped(&mut encoder, &view, &overlays, &mut temp_buffers);
+                process_commands(&mut encoder, offscreen_view, &draws, &mut temp_buffers);
+                process_commands(&mut encoder, offscreen_view, &overlays, &mut temp_buffers);
+
+                // ── FINAL: Blit offscreen → surface ────────────────────────────
+                blitp.blit_to(
+                    &device, &mut encoder,
+                    offscreen_view,
+                    &view,
+                    wgpu::LoadOp::Clear(clear_color),
+                );
 
                 queue.submit(std::iter::once(encoder.finish()));
                 surface_texture.present();

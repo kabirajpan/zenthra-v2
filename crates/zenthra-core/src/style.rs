@@ -117,3 +117,59 @@ pub enum BorderAlignment {
     Center,
     Outside,
 }
+
+pub mod blur {
+    #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+    pub enum Type {
+        #[default]
+        Normal,
+        Frosted,
+        Glassmorphism,
+        OpaqueGlass,
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum Filter {
+    Blur(f32, blur::Type),
+    Opacity(f32),
+    Saturate(f32),
+    Brightness(f32),
+    Contrast(f32),
+}
+
+#[derive(Debug, Clone, PartialEq, Default)]
+pub struct BackdropFilter {
+    pub filters: Vec<Filter>,
+}
+
+impl BackdropFilter {
+    pub fn new() -> Self {
+        Self { filters: Vec::new() }
+    }
+
+    pub fn blur(mut self, radius: f32, kind: blur::Type) -> Self {
+        self.filters.push(Filter::Blur(radius, kind));
+        self
+    }
+
+    pub fn opacity(mut self, factor: f32) -> Self {
+        self.filters.push(Filter::Opacity(factor));
+        self
+    }
+
+    pub fn saturate(mut self, factor: f32) -> Self {
+        self.filters.push(Filter::Saturate(factor));
+        self
+    }
+
+    pub fn brightness(mut self, factor: f32) -> Self {
+        self.filters.push(Filter::Brightness(factor));
+        self
+    }
+
+    pub fn contrast(mut self, factor: f32) -> Self {
+        self.filters.push(Filter::Contrast(factor));
+        self
+    }
+}

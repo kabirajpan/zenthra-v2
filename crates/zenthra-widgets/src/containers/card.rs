@@ -11,13 +11,13 @@ pub struct CardBuilder<'u, 'a> {
     width: Option<f32>,
     height: Option<f32>,
     padding: f32,
-    bg: Color,
-    border_color: Color,
+    bg: Option<Color>,
+    border_color: Option<Color>,
     border_width: f32,
     radius: f32,
     
     // Shadows
-    shadow_color: Color,
+    shadow_color: Option<Color>,
     shadow_offset: [f32; 2],
     shadow_blur: f32,
     shadow_opacity: f32,
@@ -26,6 +26,11 @@ pub struct CardBuilder<'u, 'a> {
     hover_scale: f32,
     hover_bg: Option<Color>,
     hover_border_color: Option<Color>,
+    
+    // Backdrop Filter
+    backdrop_filter: Option<zenthra_core::BackdropFilter>,
+    opacity: Option<f32>,
+    bg_opacity: Option<f32>,
 }
 
 impl<'u, 'a> CardBuilder<'u, 'a> {
@@ -36,18 +41,21 @@ impl<'u, 'a> CardBuilder<'u, 'a> {
             id,
             width: None,
             height: None,
-            padding: 16.0,
-            bg: Color::rgb(0.13, 0.13, 0.16),
-            border_color: Color::rgb(0.22, 0.22, 0.26),
-            border_width: 1.0,
-            radius: 8.0,
-            shadow_color: Color::rgba(0.0, 0.0, 0.0, 0.5),
-            shadow_offset: [0.0, 4.0],
-            shadow_blur: 12.0,
-            shadow_opacity: 0.35,
+            padding: 0.0,
+            bg: None,
+            border_color: None,
+            border_width: 0.0,
+            radius: 0.0,
+            shadow_color: None,
+            shadow_offset: [0.0, 0.0],
+            shadow_blur: 0.0,
+            shadow_opacity: 0.0,
             hover_scale: 1.0,
             hover_bg: None,
             hover_border_color: None,
+            backdrop_filter: None,
+            opacity: None,
+            bg_opacity: None,
         }
     }
 
@@ -81,12 +89,12 @@ impl<'u, 'a> CardBuilder<'u, 'a> {
     }
 
     pub fn bg(mut self, bg: Color) -> Self {
-        self.bg = bg;
+        self.bg = Some(bg);
         self
     }
 
     pub fn border(mut self, color: Color, width: f32) -> Self {
-        self.border_color = color;
+        self.border_color = Some(color);
         self.border_width = width;
         self
     }
@@ -97,7 +105,7 @@ impl<'u, 'a> CardBuilder<'u, 'a> {
     }
 
     pub fn shadow(mut self, color: Color, x: f32, y: f32, blur: f32) -> Self {
-        self.shadow_color = color;
+        self.shadow_color = Some(color);
         self.shadow_offset = [x, y];
         self.shadow_blur = blur;
         self
@@ -123,18 +131,47 @@ impl<'u, 'a> CardBuilder<'u, 'a> {
         self
     }
 
+    pub fn backdrop_filter(mut self, filter: zenthra_core::BackdropFilter) -> Self {
+        self.backdrop_filter = Some(filter);
+        self
+    }
+
+    pub fn opacity(mut self, o: f32) -> Self {
+        self.opacity = Some(o);
+        self
+    }
+
+    pub fn bg_opacity(mut self, o: f32) -> Self {
+        self.bg_opacity = Some(o);
+        self
+    }
+
     pub fn show<F>(self, f: F)
     where F: FnOnce(&mut Ui) {
         let mut container = self.ui.container()
             .id(self.id)
             .column()
-            .padding_all(self.padding)
-            .bg(self.bg)
-            .border(self.border_color, self.border_width)
-            .radius_all(self.radius)
-            .shadow(self.shadow_color, self.shadow_offset[0], self.shadow_offset[1], self.shadow_blur)
-            .shadow_opacity(self.shadow_opacity);
+            .padding_all(self.padding);
 
+        if let Some(bg) = self.bg {
+            container = container.bg(bg);
+        }
+        if let Some(bgo) = self.bg_opacity {
+            container = container.bg_opacity(bgo);
+        }
+        if let Some(o) = self.opacity {
+            container = container.opacity(o);
+        }
+        if let Some(bc) = self.border_color {
+            container = container.border(bc, self.border_width);
+        }
+        if self.radius != 0.0 {
+            container = container.radius_all(self.radius);
+        }
+        if let Some(sc) = self.shadow_color {
+            container = container.shadow(sc, self.shadow_offset[0], self.shadow_offset[1], self.shadow_blur)
+                .shadow_opacity(self.shadow_opacity);
+        }
         if let Some(w) = self.width {
             container = container.width(w);
         }
@@ -149,6 +186,9 @@ impl<'u, 'a> CardBuilder<'u, 'a> {
         }
         if self.hover_scale != 1.0 {
             container = container.hover_scale(self.hover_scale);
+        }
+        if let Some(filter) = self.backdrop_filter {
+            container = container.backdrop_filter(filter);
         }
 
         container.show(|ui: &mut Ui| {

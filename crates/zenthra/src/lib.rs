@@ -4,10 +4,10 @@ pub mod app;
 pub use app::App;
 pub use zenthra_core::{
     Color, EdgeInsets, Event, Id, Point, Rect, RenderMode, Response, Size, Align, BorderAlignment,
-    ImageSource, ObjectFit,
+    ImageSource, ObjectFit, BackdropFilter, Filter, style,
 };
 pub use zenthra_widgets::container::{Direction, Wrap};
-pub use zenthra_widgets::text::{FontWeight, CursorIcon};
+pub use zenthra_widgets::text::{FontWeight, CursorIcon, TextWrap, FontStyle};
 pub use zenthra_widgets::{
     Ui, ButtonBuilder, ContainerBuilder, InputBuilder, SliderBuilder, TextBuilder,
     TextAreaBuilder, FloatingWindowBuilder, ImageBuilder, CardBuilder, PanelBuilder,
@@ -22,9 +22,10 @@ pub mod prelude {
     pub use crate::App;
     pub use zenthra_core::{
         Color, EdgeInsets, RenderMode, Response, Align, BorderAlignment, ImageSource, ObjectFit,
+        BackdropFilter, Filter, style,
     };
     pub use zenthra_widgets::container::{Direction, Wrap};
-    pub use zenthra_widgets::text::{FontWeight, CursorIcon};
+    pub use zenthra_widgets::text::{FontWeight, CursorIcon, TextWrap, FontStyle};
     pub use zenthra_widgets::{
         Ui, ButtonBuilder, ContainerBuilder, InputBuilder, SliderBuilder, TextBuilder,
         TextAreaBuilder, FloatingWindowBuilder, ImageBuilder, CardBuilder, PanelBuilder,

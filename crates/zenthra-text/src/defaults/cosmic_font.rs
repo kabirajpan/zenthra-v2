@@ -78,7 +78,52 @@ impl CosmicFontProvider {
             self.buffer.set_size(&mut fs, Some(mw), Some(current_h));
         }
 
-        self.buffer.set_text(&mut fs, text, &options.as_attrs(), Shaping::Advanced, None);
+        let mut final_text = text.to_string();
+        if options.ellipsis && options.max_width.is_some() && options.wrap == crate::types::options::TextWrap::None {
+            let max_w = options.max_width.unwrap();
+            self.buffer.set_text(&mut fs, text, &options.as_attrs(), Shaping::Advanced, None);
+            self.buffer.shape_until_scroll(&mut fs, false);
+            let mut original_w = 0.0f32;
+            for run in self.buffer.layout_runs() {
+                for glyph in run.glyphs.iter() {
+                    original_w = original_w.max(glyph.x + glyph.w);
+                }
+            }
+            if original_w > max_w {
+                let chars: Vec<char> = text.chars().collect();
+                let mut low = 0;
+                let mut high = chars.len();
+                let mut best_fit = String::new();
+                while low <= high {
+                    let mid = (low + high) / 2;
+                    let test_str = format!("{}...", &chars[0..mid].iter().collect::<String>());
+                    self.buffer.set_text(&mut fs, &test_str, &options.as_attrs(), Shaping::Advanced, None);
+                    self.buffer.shape_until_scroll(&mut fs, false);
+                    let mut test_w = 0.0f32;
+                    for run in self.buffer.layout_runs() {
+                        for glyph in run.glyphs.iter() {
+                            test_w = test_w.max(glyph.x + glyph.w);
+                        }
+                    }
+                    if test_w <= max_w {
+                        best_fit = test_str;
+                        low = mid + 1;
+                    } else {
+                        if mid == 0 {
+                            break;
+                        }
+                        high = mid - 1;
+                    }
+                }
+                final_text = if best_fit.is_empty() {
+                    "...".to_string()
+                } else {
+                    best_fit
+                };
+            }
+        }
+
+        self.buffer.set_text(&mut fs, &final_text, &options.as_attrs(), Shaping::Advanced, None);
         
         // Apply alignment before final layout
         if let Some(alignment) = options.align {

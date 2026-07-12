@@ -30,6 +30,7 @@ pub struct FloatingWindowBuilder<'u, 'a, 'b> {
     closable: bool,
     modal: bool,
     light_dismiss: bool,
+    backdrop_filter: Option<zenthra_core::BackdropFilter>,
 }
 
 impl<'u, 'a, 'b> FloatingWindowBuilder<'u, 'a, 'b> {
@@ -60,6 +61,7 @@ impl<'u, 'a, 'b> FloatingWindowBuilder<'u, 'a, 'b> {
             closable: true,
             modal: false,
             light_dismiss: false,
+            backdrop_filter: None,
         }
     }
 
@@ -86,6 +88,11 @@ impl<'u, 'a, 'b> FloatingWindowBuilder<'u, 'a, 'b> {
 
     pub fn bg(mut self, bg: Color) -> Self {
         self.bg = bg;
+        self
+    }
+
+    pub fn backdrop_filter(mut self, filter: zenthra_core::BackdropFilter) -> Self {
+        self.backdrop_filter = Some(filter);
         self
     }
 
@@ -244,7 +251,7 @@ impl<'u, 'a, 'b> FloatingWindowBuilder<'u, 'a, 'b> {
                 }));
             }
 
-            ui.container()
+            let mut container = ui.container()
                 .absolute(win_x, win_y)
                 .width(width)
                 .height(height)
@@ -253,8 +260,11 @@ impl<'u, 'a, 'b> FloatingWindowBuilder<'u, 'a, 'b> {
                 .radius_all(radius)
                 .shadow(shadow_color, shadow_offset[0], shadow_offset[1], shadow_blur)
                 .shadow_opacity(shadow_opacity)
-                .clip(true)
-                .show(|ui| {
+                .clip(true);
+            if let Some(ref filter) = self.backdrop_filter {
+                container = container.backdrop_filter(filter.clone());
+            }
+            container.show(|ui| {
                     let mut close_clicked = false;
                     let header_res = ui.container()
                         .full_width()
@@ -361,6 +371,12 @@ impl<'u, 'a, 'b> FloatingWindowBuilder<'u, 'a, 'b> {
                         }
                         DrawCommand::Image(img) => {
                             let _ = writeln!(file, "  [{}] Image: pos={:?}, size={:?}, clip_rect={:?}", i, img.instance.pos, img.instance.size, img.instance.clip_rect);
+                        }
+                        DrawCommand::BackdropBlur(b) => {
+                            let _ = writeln!(file, "  [{}] BackdropBlur: pos=[{},{}], size=[{},{}], blur_radius={}", i, b.x, b.y, b.width, b.height, b.blur_radius);
+                        }
+                        DrawCommand::CustomPostProcess(cp) => {
+                            let _ = writeln!(file, "  [{}] CustomPostProcess: pos=[{},{}], size=[{},{}], shader_id={}, blur_radius={}", i, cp.x, cp.y, cp.width, cp.height, cp.shader_id, cp.blur_radius);
                         }
                     }
                 }

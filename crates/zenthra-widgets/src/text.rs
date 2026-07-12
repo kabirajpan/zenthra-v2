@@ -1,5 +1,5 @@
 use zenthra_text::prelude::*;
-pub use zenthra_text::prelude::FontWeight;
+pub use zenthra_text::prelude::{FontWeight, TextWrap, FontStyle};
 // use zenthra_text::traits::FontProvider;
 use crate::ui::{DrawCommand, TextDraw, Ui};
 use zenthra_core::{Color, EdgeInsets, Role, SemanticNode, Rect, Align, Id};
@@ -296,6 +296,12 @@ impl<'u, 'a> TextBuilder<'u, 'a> {
         self.options = self.options.wrap(strategy.into());
         self
     }
+
+    pub fn ellipsis(mut self, enabled: bool) -> Self {
+        self.options = self.options.ellipsis(enabled);
+        self
+    }
+
 
     pub fn align(mut self, alignment: Align) -> Self {
         let halign = match alignment {

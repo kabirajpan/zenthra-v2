@@ -28,6 +28,7 @@ pub struct TextOptions {
     pub min_width: Option<f32>,
     pub clip_rect: Option<[f32; 4]>,
     pub scale_factor: f32,
+    pub ellipsis: bool,
 }
 
 
@@ -55,12 +56,13 @@ impl Default for TextOptions {
             max_width: None,
             max_height: None,
             line_height: 1.2,
-            wrap: TextWrap::Word,
+            wrap: TextWrap::None,
             align: None,
             valign: None,
             min_width: None,
             clip_rect: None,
             scale_factor: 1.0,
+            ellipsis: true,
         }
     }
 }
@@ -153,6 +155,12 @@ impl TextOptions {
         self.scale_factor = sf;
         self
     }
+
+    pub fn ellipsis(mut self, enabled: bool) -> Self {
+        self.ellipsis = enabled;
+        self
+    }
+
 
     pub fn apply(&self, font_system: &mut FontSystem, buffer: &mut Buffer) {
 

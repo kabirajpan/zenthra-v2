@@ -56,7 +56,7 @@ pub struct ContainerBuilder<'u, 'a> {
     min_height: Option<f32>,
     scroll_x: bool,
     scroll_y: bool,
-    clip: bool,
+    clip: Option<bool>,
     pub id: zenthra_core::Id,
     radius: [f32; 4],
     border_alignment: BorderAlignment,
@@ -70,6 +70,9 @@ pub struct ContainerBuilder<'u, 'a> {
     active_border_color: Option<Color>,
     active_border_width: Option<f32>,
     active_scale: f32,
+    backdrop_blur: Option<f32>,
+    post_process_shader: Option<&'static str>,
+    backdrop_filter: Option<zenthra_core::BackdropFilter>,
 }
 
 impl<'u, 'a> ContainerBuilder<'u, 'a> {
@@ -113,7 +116,7 @@ impl<'u, 'a> ContainerBuilder<'u, 'a> {
             min_height: None,
             scroll_x: false,
             scroll_y: false,
-            clip: false,
+            clip: None,
             id,
             radius: [0.0; 4],
             border_alignment: BorderAlignment::Inside,
@@ -127,6 +130,9 @@ impl<'u, 'a> ContainerBuilder<'u, 'a> {
             active_border_color: None,
             active_border_width: None,
             active_scale: 1.0,
+            backdrop_blur: None,
+            post_process_shader: None,
+            backdrop_filter: None,
         }
     }
 
@@ -193,17 +199,17 @@ impl<'u, 'a> ContainerBuilder<'u, 'a> {
     }
     pub fn scroll_x(mut self, e: bool) -> Self {
         self.scroll_x = e;
-        if e { self.clip = true; }
+        if e { self.clip = Some(true); }
         self
     }
     pub fn scroll_y(mut self, e: bool) -> Self {
         self.scroll_y = e;
-        if e { self.clip = true; }
+        if e { self.clip = Some(true); }
         self
     }
     /// Force clip the overflowing content bounds of this container regardless of scrolling state
     pub fn clip(mut self, enabled: bool) -> Self {
-        self.clip = enabled;
+        self.clip = Some(enabled);
         self
     }
     pub fn padding(mut self, t: f32, r: f32, b: f32, l: f32) -> Self {
@@ -364,6 +370,12 @@ impl<'u, 'a> ContainerBuilder<'u, 'a> {
         self.bg = Some(c);
         self
     }
+    pub fn bg_opacity(mut self, opacity: f32) -> Self {
+        if let Some(ref mut bg) = self.bg {
+            bg.a = opacity;
+        }
+        self
+    }
     pub fn border(mut self, c: Color, w: f32) -> Self {
         self.border_color = Some(c);
         self.border_width = w;
@@ -414,6 +426,24 @@ impl<'u, 'a> ContainerBuilder<'u, 'a> {
 
     pub fn border_alignment(mut self, alignment: BorderAlignment) -> Self {
         self.border_alignment = alignment;
+        self
+    }
+
+    /// Enable glassmorphism: blurs the scene content behind this container.
+    /// `radius` is in logical pixels — higher values produce a softer, deeper blur.
+    /// Typically 10.0–40.0. Combine with a semi-transparent `.bg()` for the frosted glass look.
+    pub fn backdrop_blur(mut self, radius: f32) -> Self {
+        self.backdrop_blur = Some(radius);
+        self
+    }
+
+    pub fn post_process_shader(mut self, shader_id: &'static str) -> Self {
+        self.post_process_shader = Some(shader_id);
+        self
+    }
+
+    pub fn backdrop_filter(mut self, filter: zenthra_core::BackdropFilter) -> Self {
+        self.backdrop_filter = Some(filter);
         self
     }
 
@@ -477,6 +507,7 @@ impl<'u, 'a> ContainerBuilder<'u, 'a> {
     {
         // 1. Capture the start position and own ID
         let id = self.id;
+        let actual_clip = self.clip.unwrap_or(self.width.is_some() || self.height.is_some() || self.scroll_x || self.scroll_y);
 
         self.start_x = self.ui.cursor_x;
         self.start_y = self.ui.cursor_y;
@@ -563,7 +594,7 @@ impl<'u, 'a> ContainerBuilder<'u, 'a> {
         self.ui.cursor_y = self.ui.base_y;
 
         // Update viewport for children if clipping is enabled
-        if self.clip {
+        if actual_clip {
             if let Some((rect, _)) = self.ui.get_recorded_layout(id) {
                 let my_screen_rect = [rect.origin.x + prev_global_ox, rect.origin.y + prev_global_oy, rect.size.width, rect.size.height];
                 let parent_rect = [prev_viewport.origin.x, prev_viewport.origin.y, prev_viewport.size.width, prev_viewport.size.height];
@@ -573,7 +604,17 @@ impl<'u, 'a> ContainerBuilder<'u, 'a> {
         }
 
         // -- Run Children --
+        if self.is_overlay {
+            let key = zenthra_core::Id::from_u64((id.raw() << 8) | 99);
+            self.ui.interaction_state.insert(key, 1.0);
+            self.ui.active_overlay_stack.push(id);
+        }
+
         f(self.ui);
+
+        if self.is_overlay {
+            self.ui.active_overlay_stack.pop();
+        }
 
         // Restore global offsets
         self.ui.offset_x = prev_global_ox;
@@ -680,6 +721,16 @@ impl<'u, 'a> ContainerBuilder<'u, 'a> {
                                 consumed = true;
                             }
                         }
+                        // Fallback: standard vertical wheel scrolls horizontal-only viewports
+                        if self.scroll_x && !self.scroll_y && *delta_y != 0.0 && *delta_x == 0.0 {
+                            let val = *delta_y;
+                            let can_left = sx > 0.0 && val > 0.0;
+                            let can_right = sx < max_sx && val < 0.0;
+                            if can_left || can_right {
+                                sx -= val * 15.0;
+                                consumed = true;
+                            }
+                        }
                         if consumed {
                             keep = false;
                             self.ui.needs_redraw = true;
@@ -700,6 +751,125 @@ impl<'u, 'a> ContainerBuilder<'u, 'a> {
         };
 
         let clip = [ox, oy, w, h];
+
+        // Glassmorphism/Custom Shaders: emit draw command before background
+        let filter_draw = if let Some(ref filter) = self.backdrop_filter {
+            let mut blur_radius = 0.0;
+            let mut blur_type = zenthra_core::style::blur::Type::Normal;
+            let mut brightness = 1.0;
+            let mut saturation = 1.0;
+            let mut contrast = 1.0;
+            let mut opacity = 1.0;
+
+            for f in &filter.filters {
+                match f {
+                    zenthra_core::Filter::Blur(r, t) => {
+                        blur_radius = *r;
+                        blur_type = *t;
+                    }
+                    zenthra_core::Filter::Opacity(o) => {
+                        opacity = *o;
+                    }
+                    zenthra_core::Filter::Saturate(s) => {
+                        saturation = *s;
+                    }
+                    zenthra_core::Filter::Brightness(b) => {
+                        brightness = *b;
+                    }
+                    zenthra_core::Filter::Contrast(c) => {
+                        contrast = *c;
+                    }
+                }
+            }
+
+            if blur_radius > 0.0 {
+                Some(crate::ui::BackdropBlurDraw {
+                    x:           ox,
+                    y:           oy,
+                    width:       w,
+                    height:      h,
+                    radius:      [
+                        self.radius[3], // TL
+                        self.radius[2], // TR
+                        self.radius[1], // BR
+                        self.radius[0], // BL
+                    ],
+                    blur_radius,
+                    clip_rect: clip,
+                    brightness,
+                    saturation,
+                    contrast,
+                    opacity,
+                    blur_type,
+                })
+            } else {
+                None
+            }
+        } else if let Some(blur_radius) = self.backdrop_blur {
+            Some(crate::ui::BackdropBlurDraw {
+                x:           ox,
+                y:           oy,
+                width:       w,
+                height:      h,
+                radius:      [
+                    self.radius[3], // TL
+                    self.radius[2], // TR
+                    self.radius[1], // BR
+                    self.radius[0], // BL
+                ],
+                blur_radius,
+                clip_rect: clip,
+                brightness: 1.12,
+                saturation: 1.20,
+                contrast: 1.0,
+                opacity: 1.0,
+                blur_type: zenthra_core::style::blur::Type::Glassmorphism, // fallback
+            })
+        } else {
+            None
+        };
+
+        let push_overlay = self.is_overlay && !self.ui.skip_clip_stack.last().cloned().unwrap_or(false);
+
+        if let Some(shader_id) = self.post_process_shader {
+            let blur_radius = if let Some(ref filter) = self.backdrop_filter {
+                let mut r = 0.0;
+                for f in &filter.filters {
+                    if let zenthra_core::Filter::Blur(radius, _) = f {
+                        r = *radius;
+                    }
+                }
+                Some(r)
+            } else {
+                None
+            }.or(self.backdrop_blur).unwrap_or(0.0);
+            let cp = crate::ui::CustomPostProcessDraw {
+                x:           ox,
+                y:           oy,
+                width:       w,
+                height:      h,
+                radius:      [
+                    self.radius[3], // TL
+                    self.radius[2], // TR
+                    self.radius[1], // BR
+                    self.radius[0], // BL
+                ],
+                blur_radius,
+                shader_id,
+                clip_rect: clip,
+            };
+            if push_overlay {
+                self.ui.overlays.push(DrawCommand::CustomPostProcess(cp));
+            } else {
+                self.ui.draws.push(DrawCommand::CustomPostProcess(cp));
+            }
+        } else if let Some(bd) = filter_draw {
+            if push_overlay {
+                self.ui.overlays.push(DrawCommand::BackdropBlur(bd));
+            } else {
+                self.ui.draws.push(DrawCommand::BackdropBlur(bd));
+            }
+        }
 
         // Background
         if let Some(mut bg) = self.bg {
@@ -723,7 +893,7 @@ impl<'u, 'a> ContainerBuilder<'u, 'a> {
             let visual_ox = ox - (visual_w - w) / 2.0;
             let visual_oy = oy - (visual_h - h) / 2.0;
 
-            if self.is_overlay {
+            if push_overlay {
                 self.ui.overlays.push(DrawCommand::Rect(RectDraw {
                     instance: RectInstance {
                         pos: [visual_ox, visual_oy],
@@ -811,7 +981,7 @@ impl<'u, 'a> ContainerBuilder<'u, 'a> {
             // Shift visual commands
             for draw in &mut self.children_draws[*start..*end] {
                 offset_draw(draw, final_dx, final_dy);
-                if self.scroll_x || self.scroll_y || self.clip {
+                if self.scroll_x || self.scroll_y || actual_clip {
                     set_clip(draw, clip);
                 }
             }
@@ -830,8 +1000,9 @@ impl<'u, 'a> ContainerBuilder<'u, 'a> {
 
 
         // Flush children draws to parent
+        let push_overlay = self.is_overlay && !self.ui.skip_clip_stack.last().cloned().unwrap_or(false);
         for draw in self.children_draws.drain(..) {
-            if self.is_overlay {
+            if push_overlay {
                 self.ui.overlays.push(draw);
             } else {
                 self.ui.draws.push(draw);
@@ -895,7 +1066,7 @@ impl<'u, 'a> ContainerBuilder<'u, 'a> {
                         color,
                         clip: [ox, oy, w, h], 
                     });
-                    if self.is_overlay { self.ui.overlays.push(draw); } else { self.ui.draws.push(draw); }
+                    if push_overlay { self.ui.overlays.push(draw); } else { self.ui.draws.push(draw); }
                 }
             }
 
@@ -948,7 +1119,7 @@ impl<'u, 'a> ContainerBuilder<'u, 'a> {
                         color,
                         clip: [ox, oy, w, h],
                     });
-                    if self.is_overlay { self.ui.overlays.push(draw); } else { self.ui.draws.push(draw); }
+                    if push_overlay { self.ui.overlays.push(draw); } else { self.ui.draws.push(draw); }
                 }
             }
         }
@@ -1347,6 +1518,18 @@ fn offset_draw(cmd: &mut DrawCommand, dx: f32, dy: f32) {
             i.instance.clip_rect[0] += dx;
             i.instance.clip_rect[1] += dy;
         }
+        DrawCommand::BackdropBlur(b) => {
+            b.x += dx;
+            b.y += dy;
+            b.clip_rect[0] += dx;
+            b.clip_rect[1] += dy;
+        }
+        DrawCommand::CustomPostProcess(b) => {
+            b.x += dx;
+            b.y += dy;
+            b.clip_rect[0] += dx;
+            b.clip_rect[1] += dy;
+        }
     }
 }
 
@@ -1356,6 +1539,8 @@ fn draw_origin(cmd: &DrawCommand) -> (f32, f32) {
         DrawCommand::Text(t) => (t.pos[0], t.pos[1]),
         DrawCommand::OverlayRect(c) => (c.x, c.y),
         DrawCommand::Image(i) => (i.instance.pos[0], i.instance.pos[1]),
+        DrawCommand::BackdropBlur(b) => (b.x, b.y),
+        DrawCommand::CustomPostProcess(b) => (b.x, b.y),
     }
 }
 
@@ -1365,6 +1550,8 @@ fn set_clip(cmd: &mut DrawCommand, clip: [f32; 4]) {
         DrawCommand::Text(t) => t.clip = intersect_rects(t.clip, clip),
         DrawCommand::OverlayRect(c) => c.clip = intersect_rects(c.clip, clip),
         DrawCommand::Image(i) => i.instance.clip_rect = intersect_rects(i.instance.clip_rect, clip),
+        DrawCommand::BackdropBlur(b) => b.clip_rect = intersect_rects(b.clip_rect, clip),
+        DrawCommand::CustomPostProcess(b) => b.clip_rect = intersect_rects(b.clip_rect, clip),
     }
 }
 

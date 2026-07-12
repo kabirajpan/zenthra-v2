@@ -35,11 +35,51 @@ pub struct ImageDraw {
     pub internal_offset: [f32; 2],
 }
 
+/// Requests the renderer to blur the scene behind this rect.
+/// The renderer will copy the current offscreen framebuffer region,
+/// run a Dual-Kawase blur pass, and composite it as the background
+/// before drawing the tinted/bordered rect on top.
+pub struct BackdropBlurDraw {
+    /// Position and size in logical pixels
+    pub x:      f32,
+    pub y:      f32,
+    pub width:  f32,
+    pub height: f32,
+    /// Per-corner radius: [top-left, top-right, bottom-right, bottom-left]
+    pub radius: [f32; 4],
+    /// Blur radius in logical pixels — maps to Kawase offset parameter
+    pub blur_radius: f32,
+    /// Clipping rect [x, y, w, h] in logical pixels
+    pub clip_rect: [f32; 4],
+    
+    // CSS-like backdrop filters:
+    pub brightness: f32,
+    pub saturation: f32,
+    pub contrast: f32,
+    pub opacity: f32,
+    pub blur_type: zenthra_core::style::blur::Type,
+}
+
+pub struct CustomPostProcessDraw {
+    pub x:      f32,
+    pub y:      f32,
+    pub width:  f32,
+    pub height: f32,
+    pub radius: [f32; 4],
+    pub blur_radius: f32,
+    pub shader_id: &'static str,
+    pub clip_rect: [f32; 4],
+}
+
 pub enum DrawCommand {
     Rect(RectDraw),
     Text(TextDraw),
     OverlayRect(OverlayRectDraw),
     Image(ImageDraw),
+    /// Glassmorphism backdrop blur
+    BackdropBlur(BackdropBlurDraw),
+    /// Custom post-process shader effect
+    CustomPostProcess(CustomPostProcessDraw),
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -106,6 +146,7 @@ pub struct Ui<'a> {
     pub requested_redraw_at: Option<std::time::Instant>,
     pub event_listeners: std::collections::HashMap<Id, Vec<EventHandler<'a>>>,
     pub window_actions: Vec<zenthra_platform::app::WindowAction>,
+    pub active_overlay_stack: Vec<Id>,
 }
 
 impl<'a> Ui<'a> {
@@ -193,6 +234,7 @@ impl<'a> Ui<'a> {
             requested_redraw_at: None,
             event_listeners: std::collections::HashMap::new(),
             window_actions: Vec::new(),
+            active_overlay_stack: Vec::new(),
         }
     }
 
@@ -312,6 +354,22 @@ impl<'a> Ui<'a> {
             }
         }
 
+        // Check active overlays occlusion (if mouse is inside an overlay, block background widgets)
+        for (&other_id, other_rect) in self.screen_layout_cache {
+            let overlay_key = Id::from_u64((other_id.raw() << 8) | 99);
+            let is_overlay = self.interaction_state.get(&overlay_key).map(|&v| v > 0.5).unwrap_or(false);
+            if is_overlay {
+                // If the mouse is inside this overlay screen rect
+                if x >= other_rect.origin.x && x <= other_rect.origin.x + other_rect.size.width &&
+                   y >= other_rect.origin.y && y <= other_rect.origin.y + other_rect.size.height {
+                    // And if we are NOT inside this overlay stack context
+                    if !self.active_overlay_stack.contains(&other_id) {
+                        return true; // We are occluded by the overlay!
+                    }
+                }
+            }
+        }
+
         // Check z-order occlusion
         for (&other_id, other_rect) in self.screen_layout_cache {
             let other_win_id = self.widget_window_map.get(&other_id).copied().unwrap_or(other_id);
@@ -342,8 +400,12 @@ impl<'a> Ui<'a> {
     where
         F: FnOnce(&mut Ui),
     {
-        // Swap draws and overlays so that any pushes to self.draws go to self.overlays
-        std::mem::swap(&mut self.draws, &mut self.overlays);
+        let already_swapped = self.skip_clip_stack.last().cloned().unwrap_or(false);
+
+        if !already_swapped {
+            // Swap draws and overlays so that any pushes to self.draws go to self.overlays
+            std::mem::swap(&mut self.draws, &mut self.overlays);
+        }
 
         self.skip_clip_stack.push(true);
         let prev_viewport = self.current_viewport;
@@ -354,8 +416,10 @@ impl<'a> Ui<'a> {
         self.current_viewport = prev_viewport;
         self.skip_clip_stack.pop();
 
-        // Swap back to restore self.draws and commit new draws to self.overlays
-        std::mem::swap(&mut self.draws, &mut self.overlays);
+        if !already_swapped {
+            // Swap back to restore self.draws and commit new draws to self.overlays
+            std::mem::swap(&mut self.draws, &mut self.overlays);
+        }
     }
 
     pub fn get_recorded_layout(&self, id: Id) -> Option<(Rect, u64)> {

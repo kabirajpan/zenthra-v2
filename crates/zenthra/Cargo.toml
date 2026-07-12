@@ -163,3 +163,15 @@ path = "../../examples/color_test.rs"
 [[example]]
 name = "declarative_event_test"
 path = "../../examples/declarative_event_test.rs"
+
+[[example]]
+name = "glassmorphism_demo"
+path = "../../examples/glassmorphism_demo.rs"
+
+[[example]]
+name = "custom_shader_demo"
+path = "../../examples/custom_shader_demo.rs"
+
+[[example]]
+name = "simple_window"
+path = "../../examples/simple_window.rs"
