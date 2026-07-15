@@ -15,10 +15,8 @@ Here are some native applications built entirely with the Zenthra framework:
 ![Zenthra View](https://raw.githubusercontent.com/kabirajpan/zenthra-v2/main/assets/zenthra_view.jpeg)
 
 ### ZenFile (Native File Manager)
-![ZenFile](https://raw.githubusercontent.com/kabirajpan/zenthra-v2/main/assets/zenfile.png)
-
-### ZenFile Glassmorphism
-![ZenFile Glassmorphism](https://raw.githubusercontent.com/kabirajpan/zenthra-v2/main/assets/zenfile_glassmorphis.png)
+<img src="https://raw.githubusercontent.com/kabirajpan/zenthra-v2/main/assets/zenfile.png" width="100%" />
+<img src="https://raw.githubusercontent.com/kabirajpan/zenthra-v2/main/assets/zenfile_glassmorphis.png" width="49%" /> <img src="https://raw.githubusercontent.com/kabirajpan/zenthra-v2/main/assets/zenfile_glassmorphism2.png" width="49%" />
 
 ---
 
