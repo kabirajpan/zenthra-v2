@@ -2,8 +2,8 @@
 
 A high-performance, immediate-mode UI framework written in Rust. Zenthra is built from scratch with a custom GPU render pipeline, a flexible layout engine, and a widget system designed for speed and ergonomics.
 
-🌐 **Website:** [zenthralabs.com](https://zenthralabs.com)  
-📖 **Documentation:** [zenthralabs.com/products/zenthra/docs/](https://zenthralabs.com/products/zenthra/docs/)
+🌐 **Website:** [zenthralabs.dev](https://zenthralabs.dev)  
+📖 **Documentation:** [zenthralabs.dev/products/zenthra/docs/](https://zenthralabs.dev/products/zenthra/docs/)
 
 ---
 
