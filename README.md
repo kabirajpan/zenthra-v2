@@ -12,10 +12,13 @@ A high-performance, immediate-mode UI framework written in Rust. Zenthra is buil
 Here are some native applications built entirely with the Zenthra framework:
 
 ### Zenthra View (Native Image Viewer)
-![Zenthra View](assets/zenthra_view.jpeg)
+![Zenthra View](https://raw.githubusercontent.com/kabirajpan/zenthra-v2/main/assets/zenthra_view.jpeg)
 
 ### ZenFile (Native File Manager)
-![ZenFile](assets/zenfile.png)
+![ZenFile](https://raw.githubusercontent.com/kabirajpan/zenthra-v2/main/assets/zenfile.png)
+
+### ZenFile Glassmorphism
+![ZenFile Glassmorphism](https://raw.githubusercontent.com/kabirajpan/zenthra-v2/main/assets/zenfile_glassmorphis.png)
 
 ---
 
@@ -33,13 +36,25 @@ Here are some native applications built entirely with the Zenthra framework:
 
 ---
 
+## Understanding the Paradigm
+
+### Immediate-Mode API
+Zenthra uses an **Immediate-Mode** programming model (similar to `egui` or `Dear ImGui`). Instead of maintaining a persistent, memory-heavy tree of widgets (like the HTML DOM or traditional desktop toolkits), your application code describes the entire UI layout and behavior *every frame* in line with execution. This eliminates state-synchronization bugs and keeps your code simple and readable.
+
+### Event-Driven vs. Continuous Rendering
+While Zenthra's API is immediate-mode, its rendering loop is highly optimized:
+- **Event-Driven (Default):** To save CPU/GPU resources and battery life, Zenthra sleeps when there is no activity. It only runs your UI functions and redraws the window when it receives a system event (e.g. mouse movement, clicks, keyboard input, or window resizing).
+- **Continuous:** If you are running animations, transitions, or games, Zenthra can dynamically switch to continuous rendering to redraw the screen at your monitor's full refresh rate (60+ FPS).
+
+---
+
 ## Quick Start
 
 Add `zenthra` to your dependencies in `Cargo.toml`:
 
 ```toml
 [dependencies]
-zenthra = "0.1.2"
+zenthra = "0.2.0"
 ```
 
 Create a minimal application in `src/main.rs`:

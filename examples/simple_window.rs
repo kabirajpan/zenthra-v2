@@ -9,11 +9,16 @@ fn main() {
     App::new()
         .title("Zenthra — Simple Window")
         .size(800, 600)
+        .bg(Color::rgba(25.0 / 255.0, 28.0 / 255.0, 36.0 / 255.0, 1.0))
+        .bg_opacity(0.4)
+        .backdrop_filter(
+            BackdropFilter::new()
+                .blur(20.0, style::blur::Type::Glassmorphism)
+        )
         .with_ui(|ui: &mut Ui| {
             ui.container()
                 .full_width()
                 .full_height()
-                .bg(Color::rgba(25.0 / 255.0, 28.0 / 255.0, 36.0 / 255.0, 1.0))
                 .show(|ui| {
                     // Draw colorful blobs behind the card to demonstrate blur
                     // Top-left purple blob

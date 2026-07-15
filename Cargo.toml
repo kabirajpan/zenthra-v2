@@ -62,3 +62,6 @@ incremental = true   # Ensures incremental compilation is enabled
 # while keeping our workspace crates compiling instantly.
 [profile.dev.package."*"]
 opt-level = 3
+
+[patch.crates-io]
+winit = { git = "https://github.com/rust-windowing/winit", rev = "refs/pull/4580/head" }

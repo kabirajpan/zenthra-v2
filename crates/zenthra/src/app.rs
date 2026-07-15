@@ -9,6 +9,9 @@ pub struct App {
     fonts: Vec<String>,
     font_data: Vec<Vec<u8>>,
     custom_shaders: Vec<(&'static str, &'static str)>,
+    backdrop_tint: Option<zenthra_core::Color>,
+    backdrop_opacity: Option<f32>,
+    backdrop_filter: Option<zenthra_core::BackdropFilter>,
 }
 
 impl App {
@@ -18,6 +21,9 @@ impl App {
             fonts: Vec::new(),
             font_data: Vec::new(),
             custom_shaders: Vec::new(),
+            backdrop_tint: None,
+            backdrop_opacity: None,
+            backdrop_filter: None,
         }
     }
 
@@ -54,6 +60,53 @@ impl App {
     }
     pub fn blur(mut self, blur_state: bool) -> Self {
         self.platform = self.platform.blur(blur_state);
+        self
+    }
+    pub fn backdrop_tint(mut self, tint: zenthra_core::Color) -> Self {
+        self.backdrop_tint = Some(tint);
+        if tint.a < 1.0 {
+            self.platform = self.platform.transparent(true);
+        }
+        self
+    }
+    pub fn bg(mut self, color: zenthra_core::Color) -> Self {
+        self.backdrop_tint = Some(color);
+        if color.a < 1.0 {
+            self.platform = self.platform.transparent(true);
+        }
+        self
+    }
+    pub fn bg_opacity(mut self, opacity: f32) -> Self {
+        self.backdrop_opacity = Some(opacity);
+        if opacity < 1.0 {
+            self.platform = self.platform.transparent(true);
+        }
+        self
+    }
+    pub fn backdrop_filter(mut self, filter: zenthra_core::BackdropFilter) -> Self {
+        self.backdrop_filter = Some(filter.clone());
+        let mut transparent = false;
+        let mut blur = false;
+        for f in &filter.filters {
+            match f {
+                zenthra_core::Filter::Blur(_, _) => {
+                    blur = true;
+                    transparent = true;
+                }
+                zenthra_core::Filter::Opacity(alpha) => {
+                    if *alpha < 1.0 {
+                        transparent = true;
+                    }
+                }
+                _ => {}
+            }
+        }
+        if transparent {
+            self.platform = self.platform.transparent(true);
+        }
+        if blur {
+            self.platform = self.platform.blur(true);
+        }
         self
     }
 
@@ -116,6 +169,9 @@ impl App {
         > = std::collections::HashMap::new();
 
         let is_transparent = self.platform.is_transparent();
+        let backdrop_tint = self.backdrop_tint;
+        let backdrop_opacity = self.backdrop_opacity;
+        let backdrop_filter = self.backdrop_filter.clone();
         self.platform = self.platform.with_ui(move |frame: &mut Frame| {
             let elapsed = start_time.elapsed().as_secs_f32();
             let device = frame.window.gpu.device.clone();
@@ -325,7 +381,24 @@ impl App {
                 let offscreen_view = &scratch.full_a_v;
 
                 // ── PASS 1: CLEAR offscreen ────────────────────────────────────
-                let clear_color = if is_transparent {
+                let clear_color = if let Some(tint) = backdrop_tint {
+                    let mut alpha = tint.a;
+                    if let Some(op) = backdrop_opacity {
+                        alpha = op;
+                    } else if let Some(ref filter) = backdrop_filter {
+                        for f in &filter.filters {
+                            if let zenthra_core::Filter::Opacity(a) = f {
+                                alpha = tint.a * a;
+                            }
+                        }
+                    }
+                    wgpu::Color {
+                        r: tint.r as f64,
+                        g: tint.g as f64,
+                        b: tint.b as f64,
+                        a: alpha as f64,
+                    }
+                } else if is_transparent {
                     wgpu::Color {
                         r: 0.0,
                         g: 0.0,
