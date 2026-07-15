@@ -713,7 +713,34 @@ impl App {
                                 let shader_src = custom_shaders_map.get(cp.shader_id).copied();
                                 if let Some(src) = shader_src {
                                     let pipeline = custom_pipelines.entry(cp.shader_id).or_insert_with(|| {
-                                        let vs_module = device.create_shader_module(wgpu::include_wgsl!("../../zenthra-render/src/shaders/blit.wgsl"));
+                                        let vs_module = device.create_shader_module(wgpu::ShaderModuleDescriptor {
+                                             label: Some("Custom PostProcess VS"),
+                                             source: wgpu::ShaderSource::Wgsl(std::borrow::Cow::Borrowed(
+                                                 r#"
+                                                 struct VsOut {
+                                                     @builtin(position) pos: vec4<f32>,
+                                                     @location(0)       uv:  vec2<f32>,
+                                                 }
+                                                 @vertex
+                                                 fn vs_main(@builtin(vertex_index) vi: u32) -> VsOut {
+                                                     var positions = array<vec2<f32>, 3>(
+                                                         vec2<f32>(-1.0, -1.0),
+                                                         vec2<f32>( 3.0, -1.0),
+                                                         vec2<f32>(-1.0,  3.0),
+                                                     );
+                                                     var uvs = array<vec2<f32>, 3>(
+                                                         vec2<f32>(0.0, 1.0),
+                                                         vec2<f32>(2.0, 1.0),
+                                                         vec2<f32>(0.0, -1.0),
+                                                     );
+                                                     var out: VsOut;
+                                                     out.pos = vec4<f32>(positions[vi], 0.0, 1.0);
+                                                     out.uv  = uvs[vi];
+                                                     return out;
+                                                 }
+                                                 "#
+                                             )),
+                                         });
                                         let fs_module = device.create_shader_module(wgpu::ShaderModuleDescriptor {
                                             label: Some(cp.shader_id),
                                             source: wgpu::ShaderSource::Wgsl(src.into()),
