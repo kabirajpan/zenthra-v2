@@ -1,6 +1,6 @@
 [package]
 name    = "zenthra"
-version.workspace = true
+version = "0.2.1"
 edition.workspace = true
 license.workspace = true
 description = "A high-performance, immediate-mode UI framework written in Rust"
@@ -21,16 +21,16 @@ target_sdk_version = 33
 debuggable = true
 
 [dependencies]
-zenthra-core      = { workspace = true }
-zenthra-render    = { workspace = true }
-zenthra-layout    = { workspace = true }
-zenthra-widgets   = { workspace = true }
-zenthra-state     = { workspace = true }
-zenthra-animation = { workspace = true }
-zenthra-text      = { workspace = true }
-zenthra-input     = { workspace = true }
-zenthra-platform  = { workspace = true }
-zenthra-theme     = { workspace = true }
+zenthra-core      = { path = "../zenthra-core", version = "0.2.0" }
+zenthra-render    = { path = "../zenthra-render", version = "0.2.0" }
+zenthra-layout    = { path = "../zenthra-layout", version = "0.2.0" }
+zenthra-widgets   = { path = "../zenthra-widgets", version = "0.2.0" }
+zenthra-state     = { path = "../zenthra-state", version = "0.2.0" }
+zenthra-animation = { path = "../zenthra-animation", version = "0.2.0" }
+zenthra-text      = { path = "../zenthra-text", version = "0.2.0" }
+zenthra-input     = { path = "../zenthra-input", version = "0.2.0" }
+zenthra-platform  = { path = "../zenthra-platform", version = "0.2.0" }
+zenthra-theme     = { path = "../zenthra-theme", version = "0.2.0" }
 log               = { workspace = true }
 wgpu              = { workspace = true }
 winit             = { workspace = true }
