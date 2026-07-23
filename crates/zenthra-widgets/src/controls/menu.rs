@@ -1,7 +1,7 @@
 // crates/zenthra-widgets/src/controls/menu.rs
 
 use crate::ui::{DrawCommand, RectDraw, TextDraw, Ui};
-use zenthra_core::{Color, Id, Rect, Response};
+use zenthra_core::{Color, Id, Rect, Response, Align};
 use zenthra_render::RectInstance;
 
 fn get_theme_color(ui: &Ui, base_id: u64, default: Color) -> Color {
@@ -296,6 +296,7 @@ pub struct SubMenuBuilder<'u, 'a> {
     ui: &'u mut Ui<'a>,
     label: String,
     id: Id,
+    width: f32,
 }
 
 impl<'u, 'a> SubMenuBuilder<'u, 'a> {
@@ -311,7 +312,13 @@ impl<'u, 'a> SubMenuBuilder<'u, 'a> {
             ui,
             label: label.to_string(),
             id,
+            width: 262.0,
         }
+    }
+
+    pub fn width(mut self, width: f32) -> Self {
+        self.width = width;
+        self
     }
 
     pub fn show<F>(self, f: F)
@@ -323,7 +330,7 @@ impl<'u, 'a> SubMenuBuilder<'u, 'a> {
         let is_currently_active = active_submenu_id == self.id.raw();
 
         let (x, y) = (self.ui.cursor_x, self.ui.cursor_y);
-        let w = 262.0;
+        let w = self.width;
         let h = 26.0;
 
         let (actual_ox, actual_oy, actual_w, actual_h) = if let Some((rect, _)) = self.ui.get_recorded_layout(self.id) {
@@ -397,35 +404,28 @@ impl<'u, 'a> SubMenuBuilder<'u, 'a> {
             }
         };
 
-        let start_draw = self.ui.draws.len();
+        self.ui.container()
+            .id(self.id)
+            .width(w)
+            .height(26.0)
+            .row()
+            .valign(Align::Center)
+            .padding(2.0, 14.0, 2.0, 8.0)
+            .radius_all(4.0)
+            .bg(bg_color)
+            .show(|ui| {
+                ui.text(&self.label)
+                    .size(11.0)
+                    .color(text_color)
+                    .show();
 
-        self.ui.draws.push(DrawCommand::Rect(RectDraw {
-            instance: RectInstance {
-                pos: [x, y],
-                size: [w, h],
-                color: bg_color.to_array(),
-                radius: [3.0; 4],
-                ..Default::default()
-            }
-        }));
-
-        self.ui.draws.push(DrawCommand::Text(TextDraw {
-            text: self.label.clone(),
-            pos: [x + 8.0, y + 6.0],
-            options: zenthra_text::prelude::TextOptions::new().font_size(13.0).color(text_color),
-            clip: [x, y, w, h],
-        }));
-
-        // Right arrow indicator
-        self.ui.draws.push(DrawCommand::Text(TextDraw {
-            text: crate::icons::NF_FA_CHEVRON_RIGHT.to_string(),
-            pos: [x + w - 15.0, y + 6.0],
-            options: zenthra_text::prelude::TextOptions::new().font_size(12.0).color(chevron_color),
-            clip: [x, y, w, h],
-        }));
-
-        self.ui.record_layout(self.id, Rect::new(x, y, w, h));
-        self.ui.advance(w, h, start_draw);
+                ui.container().fill_x().halign(Align::Right).show(|ui| {
+                    ui.text(crate::icons::NF_FA_CHEVRON_RIGHT)
+                        .size(10.0)
+                        .color(chevron_color)
+                        .show();
+                });
+            });
 
         if is_currently_active {
             let sub_popup_id = Id::from_u64((self.id.raw() << 8) | 11);
@@ -461,7 +461,7 @@ impl<'u, 'a> SubMenuBuilder<'u, 'a> {
                     .id(sub_popup_id)
                     .absolute(x + w - 2.0, y)
                     .overlay()
-                    .width(270.0)
+                    .width(w + 12.0)
                     .radius_all(4.0)
                     .padding(4.0, 4.0, 4.0, 4.0)
                     .column();

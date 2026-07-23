@@ -73,6 +73,7 @@ pub struct ContainerBuilder<'u, 'a> {
     backdrop_blur: Option<f32>,
     post_process_shader: Option<&'static str>,
     backdrop_filter: Option<zenthra_core::BackdropFilter>,
+    draggable_window: bool,
 }
 
 impl<'u, 'a> ContainerBuilder<'u, 'a> {
@@ -133,6 +134,7 @@ impl<'u, 'a> ContainerBuilder<'u, 'a> {
             backdrop_blur: None,
             post_process_shader: None,
             backdrop_filter: None,
+            draggable_window: false,
         }
     }
 
@@ -195,6 +197,10 @@ impl<'u, 'a> ContainerBuilder<'u, 'a> {
     pub fn scrollable(mut self, x: bool, y: bool) -> Self {
         self.scroll_x = x;
         self.scroll_y = y;
+        self
+    }
+    pub fn draggable_window(mut self, drag: bool) -> Self {
+        self.draggable_window = drag;
         self
     }
     pub fn scroll_x(mut self, e: bool) -> Self {
@@ -694,6 +700,40 @@ impl<'u, 'a> ContainerBuilder<'u, 'a> {
 
         let container_hover = mouse_in_parent && self.ui.mouse_in_rect(actual_ox, actual_oy, w, h) && !self.ui.is_occluded(id, self.ui.mouse_x, self.ui.mouse_y);
         let container_active = container_hover && self.ui.mouse_down;
+
+        if self.draggable_window && container_active {
+            let is_child_interactive_hovered = child_ids_only.iter().any(|&cid| {
+                if let Some(node) = self.ui.semantic_nodes.iter().find(|n| n.id == cid) {
+                    match node.role {
+                        zenthra_core::Role::Button |
+                        zenthra_core::Role::Link |
+                        zenthra_core::Role::CheckBox |
+                        zenthra_core::Role::RadioButton |
+                        zenthra_core::Role::TextInput |
+                        zenthra_core::Role::TextArea |
+                        zenthra_core::Role::Slider |
+                        zenthra_core::Role::Switch |
+                        zenthra_core::Role::Menu => {
+                            if let Some(rect) = self.ui.screen_layout_cache.get(&cid)
+                                .or_else(|| self.ui.next_screen_layout_cache.get(&cid))
+                            {
+                                rect.contains(zenthra_core::Point::new(self.ui.mouse_x, self.ui.mouse_y))
+                            } else {
+                                false
+                            }
+                        }
+                        _ => false,
+                    }
+                } else {
+                    false
+                }
+            });
+
+            if !is_child_interactive_hovered {
+                self.ui.drag();
+            }
+        }
+
         let mut final_scale = 1.0;
 
         let (scroll_x, scroll_y) = if self.scroll_x || self.scroll_y {

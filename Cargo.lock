@@ -367,7 +367,7 @@ dependencies = [
  "rustc-hash 2.1.2",
  "self_cell",
  "skrifa",
- "smol_str 0.3.6",
+ "smol_str 0.3.2",
  "swash",
  "sys-locale",
  "unicode-bidi",
@@ -2088,9 +2088,9 @@ dependencies = [
 
 [[package]]
 name = "smol_str"
-version = "0.3.6"
+version = "0.3.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4aaa7368fcf4852a4c2dd92df0cace6a71f2091ca0a23391ce7f3a31833f1523"
+checksum = "9676b89cd56310a87b93dec47b11af744f34d5fc9f367b829474eec0a891350d"
 
 [[package]]
 name = "spirv"

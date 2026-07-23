@@ -434,6 +434,22 @@ impl<'a> Ui<'a> {
         self.needs_redraw = true;
     }
 
+    pub fn minimize(&mut self) {
+        self.window_actions.push(zenthra_platform::app::WindowAction::Minimize);
+    }
+
+    pub fn maximize(&mut self) {
+        self.window_actions.push(zenthra_platform::app::WindowAction::Maximize);
+    }
+
+    pub fn close(&mut self) {
+        self.window_actions.push(zenthra_platform::app::WindowAction::Close);
+    }
+
+    pub fn drag(&mut self) {
+        self.window_actions.push(zenthra_platform::app::WindowAction::Drag);
+    }
+
     pub fn get_max_bounds(&self) -> (f32, f32) {
         (self.max_x, self.max_y)
     }
@@ -777,7 +793,7 @@ mod tests {
             &mut scroll_state,
             &mut cursor_state,
             &mut interaction_state,
-            None, false, 0.0,
+            None, false, false, 0.0,
             &layout_cache,
             &mut next_layout_cache,
             &screen_layout_cache,
@@ -820,7 +836,7 @@ mod tests {
             &mut scroll_state,
             &mut cursor_state,
             &mut interaction_state,
-            None, false, 0.0,
+            None, false, false, 0.0,
             &layout_cache,
             &mut next_layout_cache,
             &screen_layout_cache,

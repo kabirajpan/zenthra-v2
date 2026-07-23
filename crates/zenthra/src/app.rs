@@ -354,6 +354,9 @@ impl App {
                     needs_redraw |= ui.needs_redraw;
                     frame.request_redraw_at = ui.requested_redraw_at;
                     frame.window_actions = ui.window_actions.clone();
+                    if !frame.window_actions.is_empty() {
+                        ui_mouse_down = false;
+                    }
 
                     let winit_cursor = match ui.cursor_icon {
                         zenthra_widgets::text::CursorIcon::Default => winit::window::CursorIcon::Default,
