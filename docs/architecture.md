@@ -68,18 +68,102 @@ container.show(|ui| {
 
 ---
 
-## State Management
+## State Management & Reactivity
 
-Zenthra persists state across frames via hash maps keyed by widget `Id`:
+Zenthra combines immediate-mode UI rendering with a fine-grained reactive state engine (`zenthra-state`), bringing SolidJS/Leptos-style automatic dependency tracking and zero-overhead data binding to desktop Rust applications.
+
+### 1. Reactive Signals (`Signal<T>`)
+```rust
+use zenthra::prelude::*;
+
+let count = Signal::new(0);
+
+// Reading (registers dependencies automatically)
+let current = count.get();
+count.with(|val| println!("Value: {val}"));
+
+// Writing (notifies subscribers & triggers redraw hook)
+count.set(10);
+count.update(|prev| prev + 1);
+count.with_mut(|val| *val += 5);
+
+// Change detection (skips redraw and notifications if value == current)
+count.set_if_changed(20);
+```
+
+### 2. Derived State (`Computed<T>`)
+Derives reactive values from one or more signals, re-evaluating automatically when dependencies change:
+```rust
+let first = Signal::new("Ada".to_string());
+let last = Signal::new("Lovelace".to_string());
+
+let full_name = Computed::new({
+    let first = first.clone();
+    let last = last.clone();
+    move || format!("{} {}", first.get(), last.get())
+});
+```
+
+### 3. Reactive Effects (`Effect`)
+Executes a closure immediately and re-executes whenever any accessed signals change. Subscriptions are automatically cleaned up when the `Effect` handle is dropped (RAII):
+```rust
+let _effect = Effect::run({
+    let count = count.clone();
+    move || log::info!("Count is: {}", count.get())
+});
+
+// Or detach for the application lifespan:
+// _effect.forget();
+```
+
+### 4. Cross-Thread Signals (`ArcSignal<T>`)
+Thread-safe signal (`Send + Sync`) for background worker threads, network polling, and asynchronous file I/O:
+```rust
+let progress = ArcSignal::new(0.0f32);
+let worker_clone = progress.clone();
+
+std::thread::spawn(move || {
+    worker_clone.set(1.0); // Safely notifies UI and triggers redraw hook
+});
+```
+
+### 5. Batched Updates & Redraw Hooks
+```rust
+// Hook state changes directly into window redraw requests
+on_state_change(|| ui.request_redraw());
+
+// Batch multiple mutations into a single subscriber notification
+batch(|| {
+    x.set(10.0);
+    y.set(20.0);
+});
+```
+
+### 6. Context Provider API (Dependency Injection)
+Thread-local context container to share global data (themes, settings, sessions) across the widget tree without prop drilling:
+```rust
+provide_context(ThemeColors::default());
+
+// Anywhere in the widget tree:
+if let Some(theme) = use_context::<ThemeColors>() {
+    ui.button("Submit").bg(theme.accent).show();
+}
+
+assert!(has_context::<ThemeColors>());
+remove_context::<ThemeColors>();
+```
+
+### 7. Internal Immediate-Mode State (Widget `Id` Maps)
+In addition to application reactivity, Zenthra persists transient widget interaction parameters across frames via deterministic hash maps keyed by widget `Id`:
 
 | Map | Stores |
 |---|---|
 | `scroll_state` | `(scroll_x, scroll_y)` per scrollable container |
-| `cursor_state` | Text cursor position per input widget |
+| `cursor_state` | Text cursor position and buffer per input widget |
 | `interaction_state` | Hover/animation timers per interactive widget |
 | `layout_cache` | Bounding rect per widget (for hit-testing) |
 
-IDs are generated deterministically via `std::hash::DefaultHasher` from a user-supplied key (string, integer, etc.) combined with the parent container's ID.
+IDs are generated deterministically via `std::hash::DefaultHasher` from a user-supplied key combined with the parent container's ID.
 
 ---
 

@@ -147,6 +147,7 @@ pub struct Ui<'a> {
     pub event_listeners: std::collections::HashMap<Id, Vec<EventHandler<'a>>>,
     pub window_actions: Vec<zenthra_platform::app::WindowAction>,
     pub active_overlay_stack: Vec<Id>,
+    pub active_overlays: Vec<Id>,
 }
 
 impl<'a> Ui<'a> {
@@ -235,6 +236,7 @@ impl<'a> Ui<'a> {
             event_listeners: std::collections::HashMap::new(),
             window_actions: Vec::new(),
             active_overlay_stack: Vec::new(),
+            active_overlays: Vec::new(),
         }
     }
 
@@ -342,6 +344,9 @@ impl<'a> Ui<'a> {
 
         // Check active modal blocking
         for (&other_id, _) in self.screen_layout_cache {
+            if other_id == id {
+                continue;
+            }
             let other_win_id = self.widget_window_map.get(&other_id).copied().unwrap_or(other_id);
             let modal_key = Id::from_u64((other_win_id.raw() << 8) | 5);
             let is_modal = self.interaction_state
@@ -356,15 +361,15 @@ impl<'a> Ui<'a> {
 
         // Check active overlays occlusion (if mouse is inside an overlay, block background widgets)
         for (&other_id, other_rect) in self.screen_layout_cache {
-            let overlay_key = Id::from_u64((other_id.raw() << 8) | 99);
-            let is_overlay = self.interaction_state.get(&overlay_key).map(|&v| v > 0.5).unwrap_or(false);
-            if is_overlay {
-                // If the mouse is inside this overlay screen rect
+            if other_id == id {
+                continue;
+            }
+            // Only genuine active overlays from the current frame can occlude
+            if self.active_overlays.contains(&other_id) {
                 if x >= other_rect.origin.x && x <= other_rect.origin.x + other_rect.size.width &&
                    y >= other_rect.origin.y && y <= other_rect.origin.y + other_rect.size.height {
-                    // And if we are NOT inside this overlay stack context
                     if !self.active_overlay_stack.contains(&other_id) {
-                        return true; // We are occluded by the overlay!
+                        return true;
                     }
                 }
             }
@@ -372,6 +377,9 @@ impl<'a> Ui<'a> {
 
         // Check z-order occlusion
         for (&other_id, other_rect) in self.screen_layout_cache {
+            if other_id == id {
+                continue;
+            }
             let other_win_id = self.widget_window_map.get(&other_id).copied().unwrap_or(other_id);
             let other_z_key = Id::from_u64((other_win_id.raw() << 8) | 4);
             if let Some(&other_z) = self.interaction_state.get(&other_z_key) {
@@ -934,5 +942,272 @@ mod tests {
                 "middle_capture".to_string(),
             ]
         );
+    }
+
+    #[test]
+    fn test_item_container_with_image_hover() {
+        let mut scroll_state = HashMap::new();
+        let mut cursor_state = HashMap::new();
+        let mut interaction_state = HashMap::new();
+        let mut layout_cache = HashMap::new();
+        let mut next_layout_cache = HashMap::new();
+        let mut screen_layout_cache = HashMap::new();
+        let mut next_screen_layout_cache = HashMap::new();
+        let widget_window_map = HashMap::new();
+        let mut next_widget_window_map = HashMap::new();
+        let image_sizes = HashMap::new();
+
+        for frame in 1..=3 {
+            let hovered_item_0 = {
+                let mut ui = Ui::new(
+                    800, 600, 1.0, None, Vec::new(), None,
+                    (70.0, 50.0), false, // Mouse is over item 0's image
+                    &mut scroll_state,
+                    &mut cursor_state,
+                    &mut interaction_state,
+                    None, false, false, 0.0,
+                    &layout_cache,
+                    &mut next_layout_cache,
+                    &screen_layout_cache,
+                    &mut next_screen_layout_cache,
+                    &widget_window_map,
+                    &mut next_widget_window_map,
+                    &image_sizes,
+                );
+
+                let mut hov = false;
+
+                ui.container().id("list_container").width(800.0).height(600.0).show(|ui| {
+                    ui.lazy_container()
+                        .item_size(112.0, 96.0)
+                        .count(4)
+                        .id("grid")
+                        .show(|ui, idx| {
+                            let item_id = Id::from_u64(1000 + idx as u64);
+                            let (cur_x, cur_y) = (ui.cursor_x, ui.cursor_y);
+                            let resp = ui.container()
+                                .id(item_id)
+                                .pos(cur_x, cur_y)
+                                .width(112.0)
+                                .height(96.0)
+                                .column()
+                                .align(zenthra_core::Align::Center)
+                                .valign(zenthra_core::Align::Center)
+                                .gap(2.0)
+                                .radius_all(6.0)
+                                .padding(2.0, 2.0, 2.0, 2.0)
+                                .clip(true)
+                                .show(|ui| {
+                                    ui.image(zenthra_core::ImageSource::Bytes(std::sync::Arc::from(&[][..])))
+                                        .size(64.0, 64.0)
+                                        .fit(zenthra_core::ObjectFit::Contain)
+                                        .show();
+                                    ui.container().row().gap(4.0).valign(zenthra_core::Align::Center).show(|ui| {
+                                        ui.text("test").show();
+                                    });
+                                });
+
+                            if idx == 0 {
+                                hov = resp.hovered;
+                            }
+                        });
+                });
+                hov
+            };
+
+            println!("FRAME {}: hovered_item_0 = {}", frame, hovered_item_0);
+            for (id, rect) in &next_screen_layout_cache {
+                println!("  next_screen_layout_cache: id={:?} rect={:?}", id, rect);
+            }
+
+            layout_cache = next_layout_cache.clone();
+            screen_layout_cache = next_screen_layout_cache.clone();
+            next_layout_cache.clear();
+            next_screen_layout_cache.clear();
+
+            assert!(hovered_item_0, "Item 0 must be hovered on Frame {}", frame);
+        }
+    }
+
+    #[test]
+    fn test_submenu_click() {
+        let mut scroll_state = HashMap::new();
+        let mut cursor_state = HashMap::new();
+        let mut interaction_state = HashMap::new();
+        let mut layout_cache = HashMap::new();
+        let mut next_layout_cache = HashMap::new();
+        let mut screen_layout_cache = HashMap::new();
+        let mut next_screen_layout_cache = HashMap::new();
+        let widget_window_map = HashMap::new();
+        let mut next_widget_window_map = HashMap::new();
+        let image_sizes = HashMap::new();
+
+        let active_menu_key = Id::from_u64(999999900);
+        let active_submenu_key = Id::from_u64(999999901);
+        let hover_flag_key = Id::from_u64(999999902);
+
+        // Frame 1: Click "Theme" menu at (10.0, 10.0)
+        {
+            let mut ui = Ui::new(
+                800, 600, 1.0, None, Vec::new(), None,
+                (10.0, 10.0), false,
+                &mut scroll_state, &mut cursor_state, &mut interaction_state,
+                None, true, false, 0.0, // clicked = true
+                &layout_cache, &mut next_layout_cache,
+                &screen_layout_cache, &mut next_screen_layout_cache,
+                &widget_window_map, &mut next_widget_window_map,
+                &image_sizes,
+            );
+
+            ui.container().row().show(|ui| {
+                ui.menu("Theme").show(|ui| {
+                    ui.menu_item("Dark Theme").show();
+                    ui.menu_item("Light Theme").show();
+                    ui.menu_item("Glassmorphism").show();
+                    ui.spacing(4.0);
+                    ui.menu_item("Flat Folder Icons").show();
+                    ui.spacing(4.0);
+                    ui.sub_menu("Accent Color").show(|ui| {
+                        ui.menu_item("Yellow").show();
+                    });
+                });
+            });
+        }
+        layout_cache = next_layout_cache.clone();
+        screen_layout_cache = next_screen_layout_cache.clone();
+        next_layout_cache.clear();
+        next_screen_layout_cache.clear();
+
+        let menu_id = interaction_state.get(&active_menu_key).copied().unwrap_or(0.0);
+        assert_ne!(menu_id, 0.0, "Theme menu should be active after clicking it");
+
+        // Frame 2: Hover over Accent Color
+        for (id, rect) in &screen_layout_cache {
+            // Find Accent Color
+            eprintln!("Frame 2 cache: id={:?}, rect={:?}", id, rect);
+        }
+
+        // Run Frame 2 with mouse at Accent Color (cursor_y should be around 30 + 26*4 + 8)
+        {
+            let mut ui = Ui::new(
+                800, 600, 1.0, None, Vec::new(), None,
+                (50.0, 150.0), false, // hovering at Accent Color
+                &mut scroll_state, &mut cursor_state, &mut interaction_state,
+                None, false, false, 0.0,
+                &layout_cache, &mut next_layout_cache,
+                &screen_layout_cache, &mut next_screen_layout_cache,
+                &widget_window_map, &mut next_widget_window_map,
+                &image_sizes,
+            );
+            ui.container().row().show(|ui| {
+                ui.menu("Theme").show(|ui| {
+                    ui.menu_item("Dark Theme").show();
+                    ui.menu_item("Light Theme").show();
+                    ui.menu_item("Glassmorphism").show();
+                    ui.spacing(4.0);
+                    ui.menu_item("Flat Folder Icons").show();
+                    ui.spacing(4.0);
+                    ui.sub_menu("Accent Color").show(|ui| {
+                        ui.menu_item("Yellow").show();
+                    });
+                });
+            });
+        }
+        layout_cache = next_layout_cache.clone();
+        screen_layout_cache = next_screen_layout_cache.clone();
+        next_layout_cache.clear();
+        next_screen_layout_cache.clear();
+
+        // Print all rects from Frame 2
+        for (id, rect) in &screen_layout_cache {
+            eprintln!("After Frame 2 cache: id={:?}, rect={:?}", id, rect);
+        }
+
+        // Frame 3: Click "Accent Color" with clicked = true at (50.0, 150.0)
+        {
+            let mut ui = Ui::new(
+                800, 600, 1.0, None, Vec::new(), None,
+                (50.0, 150.0), false,
+                &mut scroll_state, &mut cursor_state, &mut interaction_state,
+                None, true, false, 0.0, // clicked = true
+                &layout_cache, &mut next_layout_cache,
+                &screen_layout_cache, &mut next_screen_layout_cache,
+                &widget_window_map, &mut next_widget_window_map,
+                &image_sizes,
+            );
+
+            // Title bar resets hover flag at start
+            ui.interaction_state.insert(hover_flag_key, 0.0);
+
+            ui.container().row().show(|ui| {
+                ui.menu("Theme").show(|ui| {
+                    ui.menu_item("Dark Theme").show();
+                    ui.menu_item("Light Theme").show();
+                    ui.menu_item("Glassmorphism").show();
+                    ui.spacing(4.0);
+                    ui.menu_item("Flat Folder Icons").show();
+                    ui.spacing(4.0);
+                    ui.sub_menu("Accent Color").show(|ui| {
+                        ui.menu_item("Yellow").show();
+                    });
+                });
+            });
+
+            // Title bar light dismiss logic at end
+            let clicked = ui.clicked;
+            let active_menu_id = ui.interaction_state.get(&active_menu_key).copied().map(|v| v as u64).unwrap_or(0);
+            let hover_flag = ui.interaction_state.get(&hover_flag_key).copied().unwrap_or(0.0) > 0.5;
+
+            eprintln!("Frame 3 end: clicked={}, active_menu_id={}, hover_flag={}", clicked, active_menu_id, hover_flag);
+            if active_menu_id != 0 && clicked && !hover_flag {
+                eprintln!("LIGHT DISMISS TRIGGERED IN FRAME 3!");
+                ui.interaction_state.insert(active_menu_key, 0.0);
+                ui.interaction_state.insert(active_submenu_key, 0.0);
+            }
+        }
+
+        let sub_id = interaction_state.get(&active_submenu_key).copied().unwrap_or(0.0);
+        eprintln!("After Frame 3, active_submenu_key = {}", sub_id);
+        assert_ne!(sub_id, 0.0, "Accent Color submenu should be active after clicking it!");
+
+        layout_cache = next_layout_cache.clone();
+        screen_layout_cache = next_screen_layout_cache.clone();
+        next_layout_cache.clear();
+        next_screen_layout_cache.clear();
+
+        // Frame 4: Accent Color is active, render sub-menu
+        {
+            let mut ui = Ui::new(
+                800, 600, 1.0, None, Vec::new(), None,
+                (50.0, 150.0), false,
+                &mut scroll_state, &mut cursor_state, &mut interaction_state,
+                None, false, false, 0.0,
+                &layout_cache, &mut next_layout_cache,
+                &screen_layout_cache, &mut next_screen_layout_cache,
+                &widget_window_map, &mut next_widget_window_map,
+                &image_sizes,
+            );
+
+            ui.container().row().show(|ui| {
+                ui.menu("Theme").show(|ui| {
+                    ui.menu_item("Dark Theme").show();
+                    ui.menu_item("Light Theme").show();
+                    ui.menu_item("Glassmorphism").show();
+                    ui.spacing(4.0);
+                    ui.menu_item("Flat Folder Icons").show();
+                    ui.spacing(4.0);
+                    ui.sub_menu("Accent Color").show(|ui| {
+                        ui.menu_item("Yellow").show();
+                    });
+                });
+            });
+        }
+
+        // Verify that Yellow exists in next_screen_layout_cache
+        let yellow_found = next_screen_layout_cache.iter().any(|(id, rect)| {
+            eprintln!("Frame 4 cache: id={:?}, rect={:?}", id, rect);
+            rect.origin.x > 200.0 // Submenu is to the right
+        });
+        assert!(yellow_found, "Submenu popup item (Yellow) should be rendered in screen layout cache");
     }
 }

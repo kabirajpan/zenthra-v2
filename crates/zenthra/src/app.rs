@@ -323,14 +323,20 @@ impl App {
 
                     f(&mut ui);
 
-                    // Clear modal flags for any window that was not shown in this frame
+                    // Clear modal and overlay flags for any window or overlay that was not shown in this frame
                     let shown_windows: std::collections::HashSet<zenthra_core::Id> = ui.window_overlays.iter().map(|(id, _)| *id).collect();
                     let mut keys_to_clear = Vec::new();
                     for (&key, &val) in ui.interaction_state.iter() {
                         let raw = key.raw();
-                        if (raw & 0xFF) == 5 && val > 0.5 {
+                        let flag_type = raw & 0xFF;
+                        if flag_type == 5 && val > 0.5 {
                             let win_id = zenthra_core::Id::from_u64(raw >> 8);
                             if !shown_windows.contains(&win_id) {
+                                keys_to_clear.push(key);
+                            }
+                        } else if flag_type == 99 && val > 0.5 {
+                            let overlay_id = zenthra_core::Id::from_u64(raw >> 8);
+                            if !ui.active_overlays.contains(&overlay_id) {
                                 keys_to_clear.push(key);
                             }
                         }

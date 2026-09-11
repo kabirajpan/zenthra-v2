@@ -414,6 +414,11 @@ impl<'u, 'a> ContainerBuilder<'u, 'a> {
         self
     }
 
+    pub fn raw_id(mut self, id: zenthra_core::Id) -> Self {
+        self.id = id;
+        self
+    }
+
     pub fn hover_bg(mut self, color: Color) -> Self {
         self.hover_bg = Some(color);
         self
@@ -613,6 +618,7 @@ impl<'u, 'a> ContainerBuilder<'u, 'a> {
         if self.is_overlay {
             let key = zenthra_core::Id::from_u64((id.raw() << 8) | 99);
             self.ui.interaction_state.insert(key, 1.0);
+            self.ui.active_overlays.push(id);
             self.ui.active_overlay_stack.push(id);
         }
 
@@ -686,7 +692,9 @@ impl<'u, 'a> ContainerBuilder<'u, 'a> {
         let max_sx = (content_w + self.padding_left + self.padding_right - w).max(0.0);
         let max_sy = (content_h + self.padding_top + self.padding_bottom - h).max(0.0);
 
-        let (actual_ox, actual_oy) = if let Some((rect, _)) = self.ui.get_recorded_layout(id) {
+        let (actual_ox, actual_oy) = if self.is_absolute || self.pos_x.is_some() || self.pos_y.is_some() {
+            (ox + prev_global_ox, oy + prev_global_oy)
+        } else if let Some((rect, _)) = self.ui.get_recorded_layout(id) {
             (rect.origin.x + prev_global_ox, rect.origin.y + prev_global_oy)
         } else {
             (ox + prev_global_ox, oy + prev_global_oy)
@@ -1031,6 +1039,10 @@ impl<'u, 'a> ContainerBuilder<'u, 'a> {
                 for j in ids_start..ids_end {
                     let cid = child_ids_only[j];
                     if let Some((rect, _)) = self.ui.next_layout_cache.get_mut(&cid) {
+                        rect.origin.x += dx;
+                        rect.origin.y += dy;
+                    }
+                    if let Some(rect) = self.ui.next_screen_layout_cache.get_mut(&cid) {
                         rect.origin.x += dx;
                         rect.origin.y += dy;
                     }

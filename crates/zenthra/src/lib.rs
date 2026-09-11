@@ -17,6 +17,11 @@ pub use zenthra_widgets::{
 pub use zenthra_platform::app::WindowAction;
 pub use zenthra_platform::event::PlatformEvent;
 pub use zenthra_platform as platform;
+pub use zenthra_state::{
+    ArcSignal, Computed, Effect, Signal, Store, batch, clear_context, has_context, on_state_change,
+    provide_context, remove_context, use_context,
+};
+pub use zenthra_state as state;
 
 pub mod prelude {
     pub use crate::App;
@@ -35,4 +40,8 @@ pub mod prelude {
     pub use zenthra_platform::app::WindowAction;
     pub use zenthra_platform::event::PlatformEvent;
     pub use zenthra_platform as platform;
+    pub use zenthra_state::{
+        ArcSignal, Computed, Effect, Signal, Store, batch, clear_context, has_context, provide_context,
+        remove_context, use_context,
+    };
 }

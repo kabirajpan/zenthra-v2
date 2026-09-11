@@ -207,6 +207,11 @@ impl<'u, 'a> ButtonBuilder<'u, 'a> {
         self
     }
 
+    pub fn padding_all(mut self, p: f32) -> Self {
+        self.padding = zenthra_core::EdgeInsets { top: p, right: p, bottom: p, left: p };
+        self
+    }
+
     pub fn padding_x(mut self, x: f32) -> Self {
         self.padding.left = x;
         self.padding.right = x;

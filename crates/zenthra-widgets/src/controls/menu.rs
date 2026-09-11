@@ -1,7 +1,7 @@
 // crates/zenthra-widgets/src/controls/menu.rs
 
 use crate::ui::{DrawCommand, RectDraw, TextDraw, Ui};
-use zenthra_core::{Color, Id, Rect, Response, Align};
+use zenthra_core::{Color, Id, Rect, Response, Role, SemanticNode};
 use zenthra_render::RectInstance;
 
 fn get_theme_color(ui: &Ui, base_id: u64, default: Color) -> Color {
@@ -70,6 +70,7 @@ impl<'u, 'a> MenuBarBuilder<'u, 'a> {
         if active_menu_id != 0 && clicked && !hover_flag {
             self.ui.interaction_state.insert(active_menu_key, 0.0);
             self.ui.interaction_state.insert(active_submenu_key, 0.0);
+            self.ui.clicked = false;
             self.ui.needs_redraw = true;
         }
     }
@@ -207,6 +208,9 @@ impl<'u, 'a> MenuBuilder<'u, 'a> {
             clip: [x, y, w, h + 4.0],
         }));
 
+        self.ui.register_semantic(
+            SemanticNode::new(self.id, Role::Menu, Rect::new(x, y, w, h + 4.0))
+        );
         self.ui.record_layout(self.id, Rect::new(x, y, w, h + 4.0));
         self.ui.advance(w, h + 4.0, start_draw);
 
@@ -252,9 +256,10 @@ impl<'u, 'a> MenuBuilder<'u, 'a> {
 
             self.ui.overlay(|ui| {
                 let mut container = ui.container()
-                    .id(popup_id)
+                    .raw_id(popup_id)
                     .absolute(popup_x, popup_y + h + 2.0)
                     .overlay()
+                    .clip(false)
                     .width(270.0)
                     .radius_all(4.0)
                     .padding(4.0, 4.0, 4.0, 4.0)
@@ -350,13 +355,14 @@ impl<'u, 'a> SubMenuBuilder<'u, 'a> {
             self.ui.interaction_state.insert(hover_flag_key, 1.0);
         }
 
-        // Toggle on click
+        // Open and toggle sub menu on click (not hover)
         if self.ui.clicked && is_hovered {
             if is_currently_active {
                 self.ui.interaction_state.insert(active_submenu_key, 0.0);
             } else {
                 self.ui.interaction_state.insert(active_submenu_key, self.id.raw() as f32);
             }
+            self.ui.clicked = false;
             self.ui.needs_redraw = true;
         }
 
@@ -404,28 +410,37 @@ impl<'u, 'a> SubMenuBuilder<'u, 'a> {
             }
         };
 
-        self.ui.container()
-            .id(self.id)
-            .width(w)
-            .height(26.0)
-            .row()
-            .valign(Align::Center)
-            .padding(2.0, 14.0, 2.0, 8.0)
-            .radius_all(4.0)
-            .bg(bg_color)
-            .show(|ui| {
-                ui.text(&self.label)
-                    .size(11.0)
-                    .color(text_color)
-                    .show();
+        let start_draw = self.ui.draws.len();
 
-                ui.container().fill_x().halign(Align::Right).show(|ui| {
-                    ui.text(crate::icons::NF_FA_CHEVRON_RIGHT)
-                        .size(10.0)
-                        .color(chevron_color)
-                        .show();
-                });
-            });
+        self.ui.draws.push(DrawCommand::Rect(RectDraw {
+            instance: RectInstance {
+                pos: [x, y],
+                size: [w, h],
+                color: bg_color.to_array(),
+                radius: [4.0; 4],
+                ..Default::default()
+            }
+        }));
+
+        self.ui.draws.push(DrawCommand::Text(TextDraw {
+            text: self.label.clone(),
+            pos: [x + 8.0, y + 6.0],
+            options: zenthra_text::prelude::TextOptions::new().font_size(13.0).color(text_color),
+            clip: [x, y, w, h],
+        }));
+
+        self.ui.draws.push(DrawCommand::Text(TextDraw {
+            text: crate::icons::NF_FA_CHEVRON_RIGHT.to_string(),
+            pos: [x + w - 20.0, y + 7.0],
+            options: zenthra_text::prelude::TextOptions::new().font_size(10.0).color(chevron_color),
+            clip: [x, y, w, h],
+        }));
+
+        self.ui.register_semantic(
+            SemanticNode::new(self.id, Role::Button, Rect::new(x, y, w, h))
+        );
+        self.ui.record_layout(self.id, Rect::new(x, y, w, h));
+        self.ui.advance(w, h, start_draw);
 
         if is_currently_active {
             let sub_popup_id = Id::from_u64((self.id.raw() << 8) | 11);
@@ -456,12 +471,21 @@ impl<'u, 'a> SubMenuBuilder<'u, 'a> {
                 theme_border
             };
 
+            let sub_w = w + 12.0;
+            let sub_x = if actual_ox + actual_w + sub_w > self.ui.width as f32 {
+                actual_ox - sub_w + 2.0
+            } else {
+                actual_ox + actual_w - 2.0
+            };
+            let sub_y = (actual_oy - 4.0).max(4.0);
+
             self.ui.overlay(|ui| {
                 let mut container = ui.container()
-                    .id(sub_popup_id)
-                    .absolute(x + w - 2.0, y)
+                    .raw_id(sub_popup_id)
+                    .absolute(sub_x, sub_y)
                     .overlay()
-                    .width(w + 12.0)
+                    .clip(false)
+                    .width(sub_w)
                     .radius_all(4.0)
                     .padding(4.0, 4.0, 4.0, 4.0)
                     .column();
@@ -620,6 +644,9 @@ impl<'u, 'a> MenuItemBuilder<'u, 'a> {
             }));
         }
 
+        self.ui.register_semantic(
+            SemanticNode::new(self.id, Role::Button, Rect::new(x, y, w, h))
+        );
         self.ui.record_layout(self.id, Rect::new(x, y, w, h));
         self.ui.advance(w, h, start_draw);
 
@@ -630,6 +657,7 @@ impl<'u, 'a> MenuItemBuilder<'u, 'a> {
             let active_submenu_key = Id::from_u64(999999901);
             self.ui.interaction_state.insert(active_menu_key, 0.0);
             self.ui.interaction_state.insert(active_submenu_key, 0.0);
+            self.ui.clicked = false;
             self.ui.needs_redraw = true;
         }
 
