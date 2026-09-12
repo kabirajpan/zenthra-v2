@@ -5,6 +5,7 @@ pub struct Response {
     pub clicked: bool,
     pub hovered: bool,
     pub pressed: bool,
+    pub submitted: bool,
 }
 
 impl Response {

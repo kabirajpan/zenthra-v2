@@ -251,6 +251,9 @@ impl App {
                         mouse_pos = (*x as f32 / sf, *y as f32 / sf);
                         needs_redraw = true;
                     }
+                    zenthra_platform::event::PlatformEvent::MouseWheel { .. } => {
+                        needs_redraw = true;
+                    }
                     zenthra_platform::event::PlatformEvent::MouseButton { button, state } => {
                         let was_down = ui_mouse_down;
                         ui_mouse_down = *state == winit::event::ElementState::Pressed;
@@ -266,6 +269,36 @@ impl App {
                             active_drag = None;
                         }
                         needs_redraw = true;
+                    }
+                    zenthra_platform::event::PlatformEvent::KeyDown { key } => {
+                        match key {
+                            winit::keyboard::KeyCode::ControlLeft | winit::keyboard::KeyCode::ControlRight |
+                            winit::keyboard::KeyCode::SuperLeft | winit::keyboard::KeyCode::SuperRight => {
+                                interaction_state.insert(zenthra_core::Id::from_u64(0xFEED_C001), 1.0);
+                            }
+                            winit::keyboard::KeyCode::ShiftLeft | winit::keyboard::KeyCode::ShiftRight => {
+                                interaction_state.insert(zenthra_core::Id::from_u64(0xFEED_581F), 1.0);
+                            }
+                            winit::keyboard::KeyCode::AltLeft | winit::keyboard::KeyCode::AltRight => {
+                                interaction_state.insert(zenthra_core::Id::from_u64(0xFEED_A170), 1.0);
+                            }
+                            _ => {}
+                        }
+                    }
+                    zenthra_platform::event::PlatformEvent::KeyUp { key } => {
+                        match key {
+                            winit::keyboard::KeyCode::ControlLeft | winit::keyboard::KeyCode::ControlRight |
+                            winit::keyboard::KeyCode::SuperLeft | winit::keyboard::KeyCode::SuperRight => {
+                                interaction_state.insert(zenthra_core::Id::from_u64(0xFEED_C001), 0.0);
+                            }
+                            winit::keyboard::KeyCode::ShiftLeft | winit::keyboard::KeyCode::ShiftRight => {
+                                interaction_state.insert(zenthra_core::Id::from_u64(0xFEED_581F), 0.0);
+                            }
+                            winit::keyboard::KeyCode::AltLeft | winit::keyboard::KeyCode::AltRight => {
+                                interaction_state.insert(zenthra_core::Id::from_u64(0xFEED_A170), 0.0);
+                            }
+                            _ => {}
+                        }
                     }
                     _ => {}
                 }
@@ -370,6 +403,7 @@ impl App {
                         zenthra_widgets::text::CursorIcon::Pointer => winit::window::CursorIcon::Pointer,
                         zenthra_widgets::text::CursorIcon::Crosshair => winit::window::CursorIcon::Crosshair,
                         zenthra_widgets::text::CursorIcon::ColResize => winit::window::CursorIcon::ColResize,
+                        zenthra_widgets::text::CursorIcon::RowResize => winit::window::CursorIcon::RowResize,
                     };
                     frame.window.winit_window.set_cursor(winit_cursor);
                     

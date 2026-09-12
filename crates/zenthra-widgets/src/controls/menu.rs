@@ -665,6 +665,7 @@ impl<'u, 'a> MenuItemBuilder<'u, 'a> {
             clicked,
             hovered: is_hovered,
             pressed: is_hovered && self.ui.mouse_down,
+            submitted: false,
         }
     }
 }

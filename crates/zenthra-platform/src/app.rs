@@ -116,6 +116,7 @@ impl App {
             window: None,
             pending_events: Vec::new(),
             next_wakeup: None,
+            active_touch_id: None,
         };
         event_loop.run_app(&mut runner).unwrap();
     }
@@ -132,6 +133,7 @@ struct AppRunner {
     window: Option<Window>,
     pending_events: Vec<PlatformEvent>,
     next_wakeup: Option<std::time::Instant>,
+    active_touch_id: Option<u64>,
 }
 
 impl AppRunner {
@@ -235,8 +237,12 @@ impl ApplicationHandler for AppRunner {
                     y: touch.location.y,
                 });
 
-                // Map first touch to mouse for basic interaction support
-                if touch.id == 0 {
+                // Map primary touch to mouse for basic interaction support
+                if touch.phase == winit::event::TouchPhase::Started && self.active_touch_id.is_none() {
+                    self.active_touch_id = Some(touch.id);
+                }
+
+                if self.active_touch_id == Some(touch.id) {
                     match touch.phase {
                         winit::event::TouchPhase::Started => {
                             self.pending_events.push(PlatformEvent::MouseMoved { x: touch.location.x, y: touch.location.y });
@@ -249,10 +255,12 @@ impl ApplicationHandler for AppRunner {
                             self.pending_events.push(PlatformEvent::MouseMoved { x: touch.location.x, y: touch.location.y });
                         }
                         winit::event::TouchPhase::Ended | winit::event::TouchPhase::Cancelled => {
+                            self.pending_events.push(PlatformEvent::MouseMoved { x: touch.location.x, y: touch.location.y });
                             self.pending_events.push(PlatformEvent::MouseButton { 
                                 button: winit::event::MouseButton::Left, 
                                 state: winit::event::ElementState::Released 
                             });
+                            self.active_touch_id = None;
                         }
                     }
                 }

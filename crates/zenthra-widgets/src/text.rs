@@ -37,6 +37,7 @@ pub enum CursorIcon {
     Pointer,
     Crosshair,
     ColResize,
+    RowResize,
 }
 
 impl<'u, 'a> TextBuilder<'u, 'a> {
@@ -402,6 +403,7 @@ impl<'u, 'a> TextBuilder<'u, 'a> {
             clicked: self.ui.clicked && is_hovered,
             hovered: is_hovered,
             pressed: is_hovered && self.ui.mouse_down,
+            submitted: false,
         };
 
         (response, buffer)

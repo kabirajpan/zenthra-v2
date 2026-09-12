@@ -655,6 +655,7 @@ impl<'u, 'a, 'b> InputBuilder<'u, 'a, 'b> {
             clicked: self.ui.clicked && is_hovered,
             hovered: is_hovered,
             pressed: is_hovered && self.ui.mouse_down,
+            submitted: false,
         }
     }
 }

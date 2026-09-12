@@ -453,6 +453,7 @@ impl<'u, 'a, 'b> SliderBuilder<'u, 'a, 'b> {
             clicked,
             hovered: is_hovered,
             pressed: is_active,
+            submitted: false,
         }
     }
 }

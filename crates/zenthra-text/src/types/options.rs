@@ -177,7 +177,7 @@ impl TextOptions {
 
         // Set size and wrap mode
         let wrap = match self.wrap {
-            TextWrap::Word => cosmic_text::Wrap::Word,
+            TextWrap::Word => cosmic_text::Wrap::WordOrGlyph,
             TextWrap::Character => cosmic_text::Wrap::Glyph,
             TextWrap::None => cosmic_text::Wrap::None,
         };

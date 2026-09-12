@@ -134,7 +134,7 @@ impl<'u, 'a, 'b> FloatingWindowBuilder<'u, 'a, 'b> {
             self.ui.interaction_state.remove(&z_key);
             self.ui.interaction_state.remove(&modal_key);
             self.ui.interaction_state.remove(&opened_key);
-            return Response { clicked: false, hovered: false, pressed: false };
+            return Response { clicked: false, hovered: false, pressed: false, submitted: false };
         }
 
         let drag_id = Id::from_u64((id.raw() << 8) | 1);
@@ -190,7 +190,7 @@ impl<'u, 'a, 'b> FloatingWindowBuilder<'u, 'a, 'b> {
             self.ui.interaction_state.remove(&modal_key);
             self.ui.interaction_state.remove(&opened_key);
             self.ui.needs_redraw = true;
-            return Response { clicked: true, hovered: false, pressed: false };
+            return Response { clicked: true, hovered: false, pressed: false, submitted: false };
         }
 
         // Active focus z-order promotion logic
@@ -388,6 +388,7 @@ impl<'u, 'a, 'b> FloatingWindowBuilder<'u, 'a, 'b> {
             clicked: false,
             hovered: is_hovered,
             pressed: is_dragging,
+            submitted: false,
         }
     }
 }

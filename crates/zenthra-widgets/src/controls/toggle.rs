@@ -549,6 +549,7 @@ impl<'u, 'a, 'b> ToggleBuilder<'u, 'a, 'b> {
             clicked,
             hovered: is_hovered,
             pressed: is_hovered && self.ui.mouse_down,
+            submitted: false,
         }
     }
 }

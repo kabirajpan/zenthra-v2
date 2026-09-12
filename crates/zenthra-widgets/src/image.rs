@@ -565,6 +565,7 @@ impl<'u, 'a> ImageBuilder<'u, 'a> {
             clicked,
             hovered: is_hovered,
             pressed: is_pressed,
+            submitted: false,
         }
     }
 }

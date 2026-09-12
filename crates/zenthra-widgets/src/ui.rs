@@ -323,6 +323,13 @@ impl<'a> Ui<'a> {
         Id::from_u64(self.id_counter)
     }
 
+    pub fn id_from(&self, id: impl std::hash::Hash) -> Id {
+        let mut hasher = std::collections::hash_map::DefaultHasher::new();
+        use std::hash::Hasher;
+        id.hash(&mut hasher);
+        Id::from_u64(hasher.finish())
+    }
+
     pub fn record_layout(&mut self, id: Id, rect: Rect) {
         let id_count = self.id_counter.saturating_sub(id.raw());
 
@@ -395,10 +402,14 @@ impl<'a> Ui<'a> {
     }
 
     pub fn is_hovered(&self, id: Id, fallback_x: f32, fallback_y: f32, fallback_w: f32, fallback_h: f32) -> bool {
-        let is_in = if let Some((rect, _)) = self.get_recorded_layout(id) {
+        let is_in = if let Some(screen_rect) = self.screen_layout_cache.get(&id) {
+            self.mouse_in_rect(screen_rect.origin.x, screen_rect.origin.y, screen_rect.size.width, screen_rect.size.height)
+        } else if let Some((rect, _)) = self.get_recorded_layout(id) {
             self.mouse_in_rect(rect.origin.x + self.offset_x, rect.origin.y + self.offset_y, rect.size.width, rect.size.height)
-        } else {
+        } else if fallback_w > 0.0 && fallback_h > 0.0 {
             self.mouse_in_rect(fallback_x, fallback_y, fallback_w, fallback_h)
+        } else {
+            false
         };
         let mouse_in_viewport = self.current_viewport.contains(zenthra_core::Point::new(self.mouse_x, self.mouse_y));
         is_in && mouse_in_viewport && !self.is_occluded(id, self.mouse_x, self.mouse_y)

@@ -158,8 +158,10 @@ impl<'u, 'a> LazyContainerBuilder<'u, 'a> {
             let events: Vec<_> = ui.input_events.iter().cloned().collect();
             for event in &events {
                 if let PlatformEvent::MouseWheel { delta_y, delta_x, .. } = event {
-                    scroll_y -= delta_y * 15.0;
-                    scroll_x -= delta_x * 15.0;
+                    let step_y = if delta_y.abs() <= 5.0 { delta_y * 38.0 } else { *delta_y };
+                    let step_x = if delta_x.abs() <= 5.0 { delta_x * 38.0 } else { *delta_x };
+                    scroll_y -= step_y;
+                    scroll_x -= step_x;
                     ui.needs_redraw = true;
                 }
             }

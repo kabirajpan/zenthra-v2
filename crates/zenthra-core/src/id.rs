@@ -13,11 +13,11 @@ impl Id {
         Self(NEXT_ID.fetch_add(1, Ordering::Relaxed))
     }
 
-    pub fn from_u64(id: u64) -> Self {
+    pub const fn from_u64(id: u64) -> Self {
         Self(id)
     }
 
-    pub fn raw(self) -> u64 {
+    pub const fn raw(self) -> u64 {
         self.0
     }
 }

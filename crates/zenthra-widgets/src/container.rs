@@ -74,6 +74,7 @@ pub struct ContainerBuilder<'u, 'a> {
     post_process_shader: Option<&'static str>,
     backdrop_filter: Option<zenthra_core::BackdropFilter>,
     draggable_window: bool,
+    pub role: Option<zenthra_core::Role>,
 }
 
 impl<'u, 'a> ContainerBuilder<'u, 'a> {
@@ -108,7 +109,7 @@ impl<'u, 'a> ContainerBuilder<'u, 'a> {
             shadow_blur: 0.0,
             shadow_color: None,
             shadow_offset: [0.0, 0.0],
-            shadow_opacity: 1.0,
+            shadow_opacity: 0.0,
             opacity: 1.0,
             render_mode: None,
             max_width: None,
@@ -135,6 +136,7 @@ impl<'u, 'a> ContainerBuilder<'u, 'a> {
             post_process_shader: None,
             backdrop_filter: None,
             draggable_window: false,
+            role: None,
         }
     }
 
@@ -512,6 +514,18 @@ impl<'u, 'a> ContainerBuilder<'u, 'a> {
         self
     }
 
+    pub fn role(mut self, role: zenthra_core::Role) -> Self {
+        self.role = Some(role);
+        self
+    }
+
+    pub fn clickable(mut self, clickable: bool) -> Self {
+        if clickable && self.role.is_none() {
+            self.role = Some(zenthra_core::Role::Button);
+        }
+        self
+    }
+
     pub fn show<F>(mut self, f: F) -> zenthra_core::Response
     where
         F: FnOnce(&mut Ui),
@@ -580,7 +594,8 @@ impl<'u, 'a> ContainerBuilder<'u, 'a> {
         self.ui.max_y = oy + self.padding_top + self.border_width + avail_h;
 
         self.ui.semantic_stack.push(id);
-        self.ui.register_semantic(zenthra_core::SemanticNode::new(id, zenthra_core::Role::Container, zenthra_core::Rect::new(ox, oy, 0.0, 0.0)));
+        let role = self.role.unwrap_or(zenthra_core::Role::Container);
+        self.ui.register_semantic(zenthra_core::SemanticNode::new(id, role, zenthra_core::Rect::new(ox, oy, 0.0, 0.0)));
 
         let parent_draws = std::mem::take(&mut self.ui.draws);
 
@@ -692,12 +707,14 @@ impl<'u, 'a> ContainerBuilder<'u, 'a> {
         let max_sx = (content_w + self.padding_left + self.padding_right - w).max(0.0);
         let max_sy = (content_h + self.padding_top + self.padding_bottom - h).max(0.0);
 
-        let (actual_ox, actual_oy) = if self.is_absolute || self.pos_x.is_some() || self.pos_y.is_some() {
-            (ox + prev_global_ox, oy + prev_global_oy)
+        let (actual_ox, actual_oy, actual_w, actual_h) = if self.is_absolute || self.pos_x.is_some() || self.pos_y.is_some() {
+            (ox + prev_global_ox, oy + prev_global_oy, w, h)
+        } else if let Some(screen_rect) = self.ui.screen_layout_cache.get(&id) {
+            (screen_rect.origin.x, screen_rect.origin.y, screen_rect.size.width, screen_rect.size.height)
         } else if let Some((rect, _)) = self.ui.get_recorded_layout(id) {
-            (rect.origin.x + prev_global_ox, rect.origin.y + prev_global_oy)
+            (rect.origin.x + prev_global_ox, rect.origin.y + prev_global_oy, rect.size.width, rect.size.height)
         } else {
-            (ox + prev_global_ox, oy + prev_global_oy)
+            (ox + prev_global_ox, oy + prev_global_oy, w, h)
         };
 
         let mouse_in_parent = if self.ui.skip_clip_stack.last().cloned().unwrap_or(false) {
@@ -706,41 +723,8 @@ impl<'u, 'a> ContainerBuilder<'u, 'a> {
             prev_viewport.contains(zenthra_core::Point::new(self.ui.mouse_x, self.ui.mouse_y))
         };
 
-        let container_hover = mouse_in_parent && self.ui.mouse_in_rect(actual_ox, actual_oy, w, h) && !self.ui.is_occluded(id, self.ui.mouse_x, self.ui.mouse_y);
+        let container_hover = mouse_in_parent && self.ui.mouse_in_rect(actual_ox, actual_oy, actual_w, actual_h) && !self.ui.is_occluded(id, self.ui.mouse_x, self.ui.mouse_y);
         let container_active = container_hover && self.ui.mouse_down;
-
-        if self.draggable_window && container_active {
-            let is_child_interactive_hovered = child_ids_only.iter().any(|&cid| {
-                if let Some(node) = self.ui.semantic_nodes.iter().find(|n| n.id == cid) {
-                    match node.role {
-                        zenthra_core::Role::Button |
-                        zenthra_core::Role::Link |
-                        zenthra_core::Role::CheckBox |
-                        zenthra_core::Role::RadioButton |
-                        zenthra_core::Role::TextInput |
-                        zenthra_core::Role::TextArea |
-                        zenthra_core::Role::Slider |
-                        zenthra_core::Role::Switch |
-                        zenthra_core::Role::Menu => {
-                            if let Some(rect) = self.ui.screen_layout_cache.get(&cid)
-                                .or_else(|| self.ui.next_screen_layout_cache.get(&cid))
-                            {
-                                rect.contains(zenthra_core::Point::new(self.ui.mouse_x, self.ui.mouse_y))
-                            } else {
-                                false
-                            }
-                        }
-                        _ => false,
-                    }
-                } else {
-                    false
-                }
-            });
-
-            if !is_child_interactive_hovered {
-                self.ui.drag();
-            }
-        }
 
         let mut final_scale = 1.0;
 
@@ -753,11 +737,13 @@ impl<'u, 'a> ContainerBuilder<'u, 'a> {
                     let mut keep = true;
                     if let zenthra_platform::event::PlatformEvent::MouseWheel { delta_y, delta_x, .. } = event {
                         let mut consumed = false;
+                        let step_y = if delta_y.abs() <= 5.0 { *delta_y * 38.0 } else { *delta_y };
+                        let step_x = if delta_x.abs() <= 5.0 { *delta_x * 38.0 } else { *delta_x };
                         if self.scroll_y && *delta_y != 0.0 {
                             let can_up = sy > 0.0 && *delta_y > 0.0;
                             let can_down = sy < max_sy && *delta_y < 0.0;
                             if can_up || can_down {
-                                sy -= delta_y * 15.0;
+                                sy -= step_y;
                                 consumed = true;
                             }
                         }
@@ -765,17 +751,16 @@ impl<'u, 'a> ContainerBuilder<'u, 'a> {
                             let can_left = sx > 0.0 && *delta_x > 0.0;
                             let can_right = sx < max_sx && *delta_x < 0.0;
                             if can_left || can_right {
-                                sx -= delta_x * 15.0;
+                                sx -= step_x;
                                 consumed = true;
                             }
                         }
                         // Fallback: standard vertical wheel scrolls horizontal-only viewports
                         if self.scroll_x && !self.scroll_y && *delta_y != 0.0 && *delta_x == 0.0 {
-                            let val = *delta_y;
-                            let can_left = sx > 0.0 && val > 0.0;
-                            let can_right = sx < max_sx && val < 0.0;
+                            let can_left = sx > 0.0 && *delta_y > 0.0;
+                            let can_right = sx < max_sx && *delta_y < 0.0;
                             if can_left || can_right {
-                                sx -= val * 15.0;
+                                sx -= step_y;
                                 consumed = true;
                             }
                         }
@@ -1050,6 +1035,35 @@ impl<'u, 'a> ContainerBuilder<'u, 'a> {
             }
         }
 
+        if self.draggable_window && container_active {
+            let is_interactive_hovered = self.ui.semantic_nodes.iter().any(|node| {
+                match node.role {
+                    zenthra_core::Role::Button |
+                    zenthra_core::Role::Link |
+                    zenthra_core::Role::CheckBox |
+                    zenthra_core::Role::RadioButton |
+                    zenthra_core::Role::TextInput |
+                    zenthra_core::Role::TextArea |
+                    zenthra_core::Role::Slider |
+                    zenthra_core::Role::Switch |
+                    zenthra_core::Role::Menu => {
+                        if let Some(rect) = self.ui.screen_layout_cache.get(&node.id)
+                            .or_else(|| self.ui.next_screen_layout_cache.get(&node.id))
+                        {
+                            rect.contains(zenthra_core::Point::new(self.ui.mouse_x, self.ui.mouse_y))
+                        } else {
+                            false
+                        }
+                    }
+                    _ => false,
+                }
+            });
+
+            if !is_interactive_hovered {
+                self.ui.drag();
+            }
+        }
+
 
         // Flush children draws to parent
         let push_overlay = self.is_overlay && !self.ui.skip_clip_stack.last().cloned().unwrap_or(false);
@@ -1204,6 +1218,7 @@ impl<'u, 'a> ContainerBuilder<'u, 'a> {
             clicked: self.ui.clicked && container_hover,
             hovered: container_hover,
             pressed: container_active,
+            submitted: false,
         }
     }
 

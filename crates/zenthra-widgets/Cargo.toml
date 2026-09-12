@@ -19,3 +19,4 @@ zenthra-platform = { workspace = true }
 winit            = { workspace = true }
 glam           = { workspace = true }
 log            = { workspace = true }
+arboard        = "3.6.1"

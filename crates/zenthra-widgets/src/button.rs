@@ -518,6 +518,7 @@ impl<'u, 'a> ButtonBuilder<'u, 'a> {
             clicked,
             hovered: is_hovered,
             pressed: is_pressed,
+            submitted: false,
         }
     }
 }

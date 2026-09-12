@@ -451,6 +451,7 @@ impl<'u, 'a, 'b> CheckboxBuilder<'u, 'a, 'b> {
             clicked,
             hovered: is_hovered,
             pressed: is_pressed,
+            submitted: false,
         }
     }
 }

@@ -3,7 +3,7 @@ pub mod app;
 // Re-export everything the user needs
 pub use app::App;
 pub use zenthra_core::{
-    Color, EdgeInsets, Event, Id, Point, Rect, RenderMode, Response, Size, Align, BorderAlignment,
+    Color, EdgeInsets, Event, Id, Point, Rect, RenderMode, Response, Role, Size, Align, BorderAlignment,
     ImageSource, ObjectFit, BackdropFilter, Filter, style,
 };
 pub use zenthra_widgets::container::{Direction, Wrap};
@@ -26,7 +26,7 @@ pub use zenthra_state as state;
 pub mod prelude {
     pub use crate::App;
     pub use zenthra_core::{
-        Color, EdgeInsets, RenderMode, Response, Align, BorderAlignment, ImageSource, ObjectFit,
+        Color, EdgeInsets, RenderMode, Response, Role, Align, BorderAlignment, ImageSource, ObjectFit,
         BackdropFilter, Filter, style,
     };
     pub use zenthra_widgets::container::{Direction, Wrap};

@@ -66,7 +66,7 @@ impl CosmicFontProvider {
         self.buffer.set_metrics(&mut fs, Metrics::new(font_size, line_height));
         
         let wrap = match options.wrap {
-            crate::types::options::TextWrap::Word => cosmic_text::Wrap::Word,
+            crate::types::options::TextWrap::Word => cosmic_text::Wrap::WordOrGlyph,
             crate::types::options::TextWrap::Character => cosmic_text::Wrap::Glyph,
             crate::types::options::TextWrap::None => cosmic_text::Wrap::None,
         };

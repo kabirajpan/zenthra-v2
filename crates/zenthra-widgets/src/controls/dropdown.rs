@@ -341,6 +341,7 @@ impl<'u, 'a, 'b, T: PartialEq + Clone + ToString> DropdownBuilder<'u, 'a, 'b, T>
             clicked: false, // Dropdown handles its own clicks
             hovered: is_hovered,
             pressed: is_hovered && self.ui.mouse_down,
+            submitted: false,
         }
     }
 }

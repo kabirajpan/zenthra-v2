@@ -339,6 +339,7 @@ impl<'u, 'a> ProgressBarBuilder<'u, 'a> {
             clicked: self.ui.clicked && is_hovered,
             hovered: is_hovered,
             pressed: self.ui.mouse_down && is_hovered,
+            submitted: false,
         }
     }
 }
