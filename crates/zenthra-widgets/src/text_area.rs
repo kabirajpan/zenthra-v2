@@ -10,10 +10,80 @@ const SHIFT_STATE_KEY: Id = Id::from_u64(0xFEED_581F);
 const ALT_STATE_KEY: Id = Id::from_u64(0xFEED_A170);
 
 fn get_clipboard_text() -> Option<String> {
-    arboard::Clipboard::new().ok().and_then(|mut cb| cb.get_text().ok())
+    #[cfg(target_os = "linux")]
+    {
+        if std::env::var_os("WAYLAND_DISPLAY").is_some() {
+            if let Ok(output) = std::process::Command::new("wl-paste")
+                .args(&["--type", "text/plain;charset=utf-8", "-n"])
+                .output()
+            {
+                if output.status.success() {
+                    if let Ok(s) = String::from_utf8(output.stdout) {
+                        if !s.is_empty() {
+                            return Some(s);
+                        }
+                    }
+                }
+            }
+            if let Ok(output) = std::process::Command::new("wl-paste")
+                .arg("-n")
+                .output()
+            {
+                if output.status.success() {
+                    if let Ok(s) = String::from_utf8(output.stdout) {
+                        if !s.is_empty() {
+                            return Some(s);
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    if let Ok(mut cb) = arboard::Clipboard::new() {
+        if let Ok(text) = cb.get_text() {
+            if !text.is_empty() {
+                return Some(text);
+            }
+        }
+    }
+
+    #[cfg(target_os = "linux")]
+    {
+        if let Ok(output) = std::process::Command::new("xclip")
+            .args(&["-selection", "clipboard", "-o"])
+            .output()
+        {
+            if output.status.success() {
+                if let Ok(s) = String::from_utf8(output.stdout) {
+                    if !s.is_empty() {
+                        return Some(s);
+                    }
+                }
+            }
+        }
+    }
+
+    None
 }
 
 fn set_clipboard_text(text: &str) {
+    #[cfg(target_os = "linux")]
+    {
+        if std::env::var_os("WAYLAND_DISPLAY").is_some() {
+            use std::io::Write;
+            if let Ok(mut child) = std::process::Command::new("wl-copy")
+                .stdin(std::process::Stdio::piped())
+                .spawn()
+            {
+                if let Some(mut stdin) = child.stdin.take() {
+                    let _ = stdin.write_all(text.as_bytes());
+                }
+                let _ = child.wait();
+            }
+        }
+    }
+
     if let Ok(mut cb) = arboard::Clipboard::new() {
         let _ = cb.set_text(text);
     }

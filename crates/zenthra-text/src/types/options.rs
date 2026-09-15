@@ -62,7 +62,7 @@ impl Default for TextOptions {
             min_width: None,
             clip_rect: None,
             scale_factor: 1.0,
-            ellipsis: true,
+            ellipsis: false,
         }
     }
 }
