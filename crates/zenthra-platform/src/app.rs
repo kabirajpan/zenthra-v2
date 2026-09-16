@@ -313,7 +313,14 @@ impl ApplicationHandler for AppRunner {
 
     fn about_to_wait(&mut self, event_loop: &ActiveEventLoop) {
         if let Some(wakeup) = self.next_wakeup {
-            event_loop.set_control_flow(winit::event_loop::ControlFlow::WaitUntil(wakeup));
+            if std::time::Instant::now() >= wakeup {
+                self.next_wakeup = None;
+                if let Some(w) = &mut self.window {
+                    w.request_redraw();
+                }
+            } else {
+                event_loop.set_control_flow(winit::event_loop::ControlFlow::WaitUntil(wakeup));
+            }
         } else {
             event_loop.set_control_flow(winit::event_loop::ControlFlow::Wait);
         }

@@ -23,17 +23,43 @@ impl Zentype {
         // Initialize default engines
         let shaper = Box::new(CosmicFontProvider::new());
         
-        // Auto-load Symbols Nerd Font asynchronously if present in assets/fonts/
-        let nerd_font_path = std::path::Path::new("assets/fonts/SymbolsNerdFont-Regular.ttf");
-        if nerd_font_path.exists() {
-            let font_system = shaper.font_system();
-            let path = nerd_font_path.to_path_buf();
-            std::thread::spawn(move || {
-                match font_system.lock().unwrap().db_mut().load_font_file(&path) {
-                    Ok(_) => {}
-                    Err(e) => log::error!("Failed to auto-load Nerd Font: {:?}", e),
+        // Auto-discover and load all fonts from assets/fonts/
+        let font_system = shaper.font_system();
+        let fonts_dir = std::path::Path::new("assets/fonts");
+        if fonts_dir.is_dir() {
+            if let Ok(entries) = std::fs::read_dir(fonts_dir) {
+                for entry in entries.flatten() {
+                    let path = entry.path();
+                    let is_font = path.extension()
+                        .and_then(|ext| ext.to_str())
+                        .map(|ext| ext.eq_ignore_ascii_case("ttf") || ext.eq_ignore_ascii_case("otf"))
+                        .unwrap_or(false);
+
+                    if is_font {
+                        let size = std::fs::metadata(&path).map(|m| m.len()).unwrap_or(0);
+                        let fs_clone = font_system.clone();
+                        let p = path.clone();
+                        if size > 500_000 {
+                            // Large font (e.g. SymbolsNerdFont 2.5MB): load in background thread
+                            std::thread::spawn(move || {
+                                if let Ok(mut fs) = fs_clone.lock() {
+                                    let _ = fs.db_mut().load_font_file(&p);
+                                }
+                            });
+                        } else {
+                            // Small font (e.g. Moderniz 11KB): load synchronously for instant availability
+                            if let Ok(mut fs) = font_system.lock() {
+                                let _ = fs.db_mut().load_font_file(&path);
+                            }
+                        }
+                    }
                 }
-            });
+            }
+        }
+
+        // Embedded fallback for Moderniz font to guarantee branding availability anywhere
+        if let Ok(mut fs) = font_system.lock() {
+            let _ = fs.db_mut().load_font_data(include_bytes!("../../../../assets/fonts/Moderniz.otf").to_vec());
         }
 
         let font_system = shaper.font_system();
