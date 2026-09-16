@@ -12,8 +12,8 @@ pub enum Direction {
 #[derive(Debug, Clone, Copy, PartialEq, Default)]
 pub enum Wrap {
     #[default]
-    Auto,
     NoWrap,
+    Auto,
     Wrap,
     WrapReverse,
     RightToLeft,
@@ -87,7 +87,7 @@ impl<'u, 'a> ContainerBuilder<'u, 'a> {
             direction: Direction::Column,
             halign: Align::Left,
             valign: Align::Top,
-            wrap: Wrap::Auto,
+            wrap: Wrap::NoWrap,
             children_draws: Vec::new(),
             child_sizes: Vec::new(),
             child_ranges: Vec::new(),
@@ -689,9 +689,10 @@ impl<'u, 'a> ContainerBuilder<'u, 'a> {
             Wrap::NoWrap => self.layout_no_wrap(ox, oy, avail_w, avail_h, &mut target_positions),
             Wrap::Auto => {
                 // Auto wrapper: automatically wrap if direction is Row, not horizontally scrolling,
-                // not single-row distributed (SpaceBetween/SpaceAround), and children exceed available width.
+                // not single-row distributed (SpaceBetween/SpaceAround), not fixed-height, and children exceed available width.
                 let should_wrap = self.direction == Direction::Row
                     && !self.scroll_x
+                    && self.height.is_none()
                     && self.halign != Align::SpaceBetween
                     && self.halign != Align::SpaceAround
                     && (avail_w > 0.0)
