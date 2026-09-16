@@ -118,7 +118,17 @@ impl App {
             next_wakeup: None,
             active_touch_id: None,
         };
-        event_loop.run_app(&mut runner).unwrap();
+        if let Err(err) = event_loop.run_app(&mut runner) {
+            match err {
+                winit::error::EventLoopError::ExitFailure(0) => {}
+                winit::error::EventLoopError::ExitFailure(code) => {
+                    log::debug!("Event loop exited with code: {code}");
+                }
+                other => {
+                    log::error!("Event loop error: {other}");
+                }
+            }
+        }
     }
 }
 
@@ -158,6 +168,7 @@ impl AppRunner {
         
         self.next_wakeup = request_redraw_at;
         
+        let mut should_close = false;
         for action in actions {
             match action {
                 WindowAction::Drag => {
@@ -171,11 +182,17 @@ impl AppRunner {
                     window.winit_window.set_maximized(!is_max);
                 }
                 WindowAction::Close => {
-                    event_loop.exit();
+                    should_close = true;
                 }
             }
         }
         
+        if should_close {
+            self.window = None;
+            event_loop.exit();
+            return;
+        }
+
         if needs_redraw {
             window.request_redraw();
         }
@@ -202,6 +219,7 @@ impl ApplicationHandler for AppRunner {
     fn window_event(&mut self, event_loop: &ActiveEventLoop, _id: WindowId, event: WindowEvent) {
         match event {
             WindowEvent::CloseRequested => {
+                self.window = None;
                 event_loop.exit();
             }
             WindowEvent::Resized(size) => {
@@ -299,5 +317,9 @@ impl ApplicationHandler for AppRunner {
         } else {
             event_loop.set_control_flow(winit::event_loop::ControlFlow::Wait);
         }
+    }
+
+    fn exiting(&mut self, _event_loop: &ActiveEventLoop) {
+        self.window = None;
     }
 }
