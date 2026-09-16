@@ -1251,12 +1251,17 @@ impl<'u, 'a, 'b> TextAreaBuilder<'u, 'a, 'b> {
             use crate::ui::RectDraw;
             use zenthra_render::RectInstance;
             let border_col = if is_focused {
-                self.focus_border_color.or(self.border_color).unwrap_or(Color::rgba(1.0, 1.0, 1.0, 0.4)).to_array()
+                self.focus_border_color
+                    .or(self.border_color)
+                    .unwrap_or(if self.border_width > 0.0 { Color::rgba(1.0, 1.0, 1.0, 0.4) } else { Color::TRANSPARENT })
+                    .to_array()
             } else {
-                self.border_color.unwrap_or(Color::rgba(1.0, 1.0, 1.0, 0.2)).to_array()
+                self.border_color
+                    .unwrap_or(if self.border_width > 0.0 { Color::rgba(1.0, 1.0, 1.0, 0.2) } else { Color::TRANSPARENT })
+                    .to_array()
             };
             let border_w = if is_focused {
-                self.focus_border_width.unwrap_or(self.border_width.max(1.0))
+                self.focus_border_width.unwrap_or(if self.border_width > 0.0 { self.border_width.max(1.0) } else { 0.0 })
             } else {
                 self.border_width
             };

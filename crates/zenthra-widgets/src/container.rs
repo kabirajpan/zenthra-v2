@@ -931,7 +931,14 @@ impl<'u, 'a> ContainerBuilder<'u, 'a> {
         }
 
         // Background
-        if let Some(mut bg) = self.bg {
+        let base_bg = self.bg.or_else(|| {
+            if self.hover_bg.is_some() || self.active_bg.is_some() {
+                Some(Color::TRANSPARENT)
+            } else {
+                None
+            }
+        });
+        if let Some(mut bg) = base_bg {
             let mut bw = self.border_width;
             let mut bc = self.border_color.unwrap_or(Color::TRANSPARENT);
 
@@ -947,12 +954,14 @@ impl<'u, 'a> ContainerBuilder<'u, 'a> {
                 final_scale = self.hover_scale;
             }
 
-            let visual_w = w * final_scale;
-            let visual_h = h * final_scale;
-            let visual_ox = ox - (visual_w - w) / 2.0;
-            let visual_oy = oy - (visual_h - h) / 2.0;
+            let has_visible_draw = bg.a > 0.0 || bc.a > 0.0 || self.shadow_color.is_some();
+            if has_visible_draw {
+                let visual_w = w * final_scale;
+                let visual_h = h * final_scale;
+                let visual_ox = ox - (visual_w - w) / 2.0;
+                let visual_oy = oy - (visual_h - h) / 2.0;
 
-            if push_overlay {
+                if push_overlay {
                 self.ui.overlays.push(DrawCommand::Rect(RectDraw {
                     instance: RectInstance {
                         pos: [visual_ox, visual_oy],
@@ -1016,6 +1025,7 @@ impl<'u, 'a> ContainerBuilder<'u, 'a> {
                         },
                     }
                 }));
+            }
             }
         }
 

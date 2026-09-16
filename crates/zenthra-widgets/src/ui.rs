@@ -371,8 +371,11 @@ impl<'a> Ui<'a> {
             if other_id == id {
                 continue;
             }
-            // Only genuine active overlays from the current frame can occlude
-            if self.active_overlays.contains(&other_id) {
+            let overlay_key = Id::from_u64((other_id.raw() << 8) | 99);
+            let is_overlay = self.active_overlays.contains(&other_id)
+                || self.interaction_state.get(&overlay_key).map(|&v| v > 0.5).unwrap_or(false);
+
+            if is_overlay {
                 if x >= other_rect.origin.x && x <= other_rect.origin.x + other_rect.size.width &&
                    y >= other_rect.origin.y && y <= other_rect.origin.y + other_rect.size.height {
                     if !self.active_overlay_stack.contains(&other_id) {
