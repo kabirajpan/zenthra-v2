@@ -298,6 +298,16 @@ impl<'u, 'a> TextBuilder<'u, 'a> {
         self
     }
 
+    pub fn auto_wrap(mut self) -> Self {
+        self.options = self.options.wrap(TextWrap::Word);
+        self
+    }
+
+    pub fn no_wrap(mut self) -> Self {
+        self.options = self.options.wrap(TextWrap::None);
+        self
+    }
+
     pub fn ellipsis(mut self, enabled: bool) -> Self {
         self.options = self.options.ellipsis(enabled);
         self

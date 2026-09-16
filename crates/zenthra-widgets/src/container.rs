@@ -9,8 +9,10 @@ pub enum Direction {
     Stack,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq, Default)]
 pub enum Wrap {
+    #[default]
+    Auto,
     NoWrap,
     Wrap,
     WrapReverse,
@@ -85,7 +87,7 @@ impl<'u, 'a> ContainerBuilder<'u, 'a> {
             direction: Direction::Column,
             halign: Align::Left,
             valign: Align::Top,
-            wrap: Wrap::NoWrap,
+            wrap: Wrap::Auto,
             children_draws: Vec::new(),
             child_sizes: Vec::new(),
             child_ranges: Vec::new(),
@@ -274,6 +276,11 @@ impl<'u, 'a> ContainerBuilder<'u, 'a> {
 
     pub fn wrap(mut self, strategy: Wrap) -> Self {
         self.wrap = strategy;
+        self
+    }
+
+    pub fn auto_wrap(mut self) -> Self {
+        self.wrap = Wrap::Auto;
         self
     }
 
@@ -680,6 +687,25 @@ impl<'u, 'a> ContainerBuilder<'u, 'a> {
         let mut target_positions: Vec<(f32, f32)> = vec![(0.0, 0.0); n];
         let (content_w, content_h) = match self.wrap {
             Wrap::NoWrap => self.layout_no_wrap(ox, oy, avail_w, avail_h, &mut target_positions),
+            Wrap::Auto => {
+                // Auto wrapper: automatically wrap if direction is Row, not horizontally scrolling,
+                // not single-row distributed (SpaceBetween/SpaceAround), and children exceed available width.
+                let should_wrap = self.direction == Direction::Row
+                    && !self.scroll_x
+                    && self.halign != Align::SpaceBetween
+                    && self.halign != Align::SpaceAround
+                    && (avail_w > 0.0)
+                    && {
+                        let total_w: f32 = self.child_sizes.iter().map(|(w, _)| *w).sum::<f32>()
+                            + self.gap * (n.saturating_sub(1) as f32);
+                        total_w > avail_w
+                    };
+                if should_wrap {
+                    self.layout_wrap(ox, oy, avail_w, avail_h, &mut target_positions)
+                } else {
+                    self.layout_no_wrap(ox, oy, avail_w, avail_h, &mut target_positions)
+                }
+            }
             _ => self.layout_wrap(ox, oy, avail_w, avail_h, &mut target_positions),
         };
 
@@ -1347,7 +1373,7 @@ impl<'u, 'a> ContainerBuilder<'u, 'a> {
         if n == 0 { return (0.0, 0.0); }
 
         let (main_reversed, cross_reversed) = match self.wrap {
-            Wrap::Wrap => (false, false),
+            Wrap::Wrap | Wrap::Auto => (false, false),
             Wrap::WrapReverse => (false, true),
             Wrap::RightToLeft => (true, false),
             Wrap::RightToLeftReverse => (true, true),

@@ -116,7 +116,7 @@ impl<'u, 'a> LazyContainerBuilder<'u, 'a> {
 
         // Simulate the container's wrap algorithm exactly so items_per_row matches reality
         let items_per_row = match (self.direction, self.wrap_strategy) {
-            (Direction::Row, Wrap::Wrap) | (Direction::Row, Wrap::WrapReverse) => {
+            (Direction::Row, Wrap::Wrap) | (Direction::Row, Wrap::WrapReverse) | (Direction::Row, Wrap::Auto) => {
                 let mut count = 0usize;
                 let mut current_w = 0.0f32;
                 for _ in 0..self.count.min(1000) {
