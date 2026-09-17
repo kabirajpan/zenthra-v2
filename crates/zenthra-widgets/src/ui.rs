@@ -148,6 +148,40 @@ pub struct Ui<'a> {
     pub window_actions: Vec<zenthra_platform::app::WindowAction>,
     pub active_overlay_stack: Vec<Id>,
     pub active_overlays: Vec<Id>,
+    pub font_scale: f32,
+}
+
+pub fn copy_to_system_clipboard(text: &str) {
+    #[cfg(target_os = "linux")]
+    {
+        if std::env::var_os("WAYLAND_DISPLAY").is_some() {
+            use std::io::Write;
+            if let Ok(mut child) = std::process::Command::new("wl-copy")
+                .stdin(std::process::Stdio::piped())
+                .spawn()
+            {
+                if let Some(mut stdin) = child.stdin.take() {
+                    let _ = stdin.write_all(text.as_bytes());
+                }
+                let _ = child.wait();
+            }
+        }
+        use std::io::Write;
+        if let Ok(mut child) = std::process::Command::new("xclip")
+            .args(&["-selection", "clipboard"])
+            .stdin(std::process::Stdio::piped())
+            .spawn()
+        {
+            if let Some(mut stdin) = child.stdin.take() {
+                let _ = stdin.write_all(text.as_bytes());
+            }
+            let _ = child.wait();
+        }
+    }
+
+    if let Ok(mut cb) = arboard::Clipboard::new() {
+        let _ = cb.set_text(text.to_string());
+    }
 }
 
 impl<'a> Ui<'a> {
@@ -237,6 +271,7 @@ impl<'a> Ui<'a> {
             window_actions: Vec::new(),
             active_overlay_stack: Vec::new(),
             active_overlays: Vec::new(),
+            font_scale: 1.0,
         }
     }
 

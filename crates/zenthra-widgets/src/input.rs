@@ -317,7 +317,7 @@ impl<'u, 'a, 'b> InputBuilder<'u, 'a, 'b> {
             let t_padding = Padding::from(self.text_padding);
             adapter.set_layout_size(1000000.0, 10000.0);
             let options = TextOptions::new()
-                .font_size(self.font_size)
+                .font_size(self.font_size * self.ui.font_scale)
                 .line_height(self.line_height)
                 .wrap(zenthra_text::prelude::TextWrap::None);
             let buffer = adapter.shape(&self.buffer, &options);
@@ -438,7 +438,7 @@ impl<'u, 'a, 'b> InputBuilder<'u, 'a, 'b> {
                 let t_padding = Padding::from(self.text_padding);
                 adapter.set_layout_size(1000000.0, 10000.0);
                 let options = TextOptions::new()
-                    .font_size(self.font_size)
+                    .font_size(self.font_size * self.ui.font_scale)
                     .line_height(self.line_height)
                     .wrap(zenthra_text::prelude::TextWrap::None);
                 let buffer = adapter.shape(&self.buffer, &options);

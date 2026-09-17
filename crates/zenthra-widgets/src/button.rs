@@ -419,7 +419,7 @@ impl<'u, 'a> ButtonBuilder<'u, 'a> {
             let mut adapter =
                 zenthra_text::prelude::CosmicFontProvider::new_with_system(fs.clone());
             let mut options = zenthra_text::prelude::TextOptions::new()
-                .font_size(self.font_size)
+                .font_size(self.font_size * self.ui.font_scale)
                 .wrap(self.wrap);
             if let Some(ref family) = self.font_family {
                 options = options.font_family(family.clone());
@@ -485,7 +485,7 @@ impl<'u, 'a> ButtonBuilder<'u, 'a> {
         let ty = y + (final_h - text_h) / 2.0;
 
         let mut text_opts = zenthra_text::prelude::TextOptions::new()
-            .font_size(self.font_size)
+            .font_size(self.font_size * self.ui.font_scale)
             .color(current_text)
             .wrap(self.wrap)
             .at(tx, ty);

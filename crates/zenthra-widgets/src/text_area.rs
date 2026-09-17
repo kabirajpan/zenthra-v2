@@ -580,6 +580,7 @@ impl<'u, 'a, 'b> TextAreaBuilder<'u, 'a, 'b> {
         } else {
             self.width
         };
+        let effective_font_size = self.font_size * self.ui.font_scale;
 
         let (_content_w, mut h_content, mut shaped_buffer) = if let Some(fs) = self.ui.font_system.as_ref() {
             let mut adapter = CosmicFontProvider::new_with_system(fs.clone());
@@ -588,7 +589,7 @@ impl<'u, 'a, 'b> TextAreaBuilder<'u, 'a, 'b> {
             adapter.set_layout_size(layout_width, 10000.0);
             
             let options = TextOptions::new()
-                .font_size(self.font_size)
+                .font_size(effective_font_size)
                 .line_height(self.line_height)
                 .wrap(self.wrap)
                 .max_width(layout_width);
@@ -663,7 +664,7 @@ impl<'u, 'a, 'b> TextAreaBuilder<'u, 'a, 'b> {
                     self.ui.mouse_y - (self.y + self.padding.top + self.text_padding.top - scroll_y)
                 };
 
-                let row_threshold = (self.font_size * self.line_height).max(12.0);
+                let row_threshold = (effective_font_size * self.line_height).max(12.0);
                 let mut best_line = None;
                 let mut min_line_dist = f32::INFINITY;
                 for line in sb.lines() {
@@ -1171,7 +1172,7 @@ impl<'u, 'a, 'b> TextAreaBuilder<'u, 'a, 'b> {
                             let layout_width = actual_width - self.padding.horizontal() - t_padding.horizontal();
                             adapter.set_layout_size(layout_width, 10000.0);
                             
-                            let options = TextOptions::new().font_size(self.font_size).line_height(self.line_height).wrap(self.wrap).max_width(layout_width);
+                            let options = TextOptions::new().font_size(effective_font_size).line_height(self.line_height).wrap(self.wrap).max_width(layout_width);
                             let buffer_to_shape = if self.buffer.is_empty() {
                                 self.placeholder.as_deref().unwrap_or("")
                             } else {
@@ -1374,7 +1375,7 @@ impl<'u, 'a, 'b> TextAreaBuilder<'u, 'a, 'b> {
         // --- 7. Cursor & Selection Rendering ---
         if is_focused {
             self.ui.request_redraw_after(std::time::Duration::from_millis(250));
-            let font_size = self.font_size;
+            let font_size = effective_font_size;
             let lh = self.line_height;
             let visual_ascent = font_size * (0.8 + (lh - 1.0) / 2.0);
             let cursor_height = font_size * lh;

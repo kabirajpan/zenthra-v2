@@ -1,14 +1,16 @@
 use zenthra_text::prelude::*;
 pub use zenthra_text::prelude::{FontWeight, TextWrap, FontStyle};
 // use zenthra_text::traits::FontProvider;
-use crate::ui::{DrawCommand, TextDraw, Ui};
+use crate::ui::{DrawCommand, TextDraw, OverlayRectDraw, Ui};
 use zenthra_core::{Color, EdgeInsets, Role, SemanticNode, Rect, Align, Id};
+use zenthra_platform::event::PlatformEvent;
 
 pub struct TextBuilder<'u, 'a> {
     ui: &'u mut Ui<'a>,
     id: Id,
     content: String,
     options: TextOptions,
+    selectable: bool,
     
     // Container/Widget-level styling
     padding: Padding,
@@ -45,6 +47,7 @@ impl<'u, 'a> TextBuilder<'u, 'a> {
         let x = ui.cursor_x;
         let y = ui.cursor_y;
         let sf = ui.scale_factor;
+        let base_font_size = 16.0 * ui.font_scale;
         
         // --- STABLE DETERMINISTIC ID ---
         let mut hasher = std::collections::hash_map::DefaultHasher::new();
@@ -64,7 +67,9 @@ impl<'u, 'a> TextBuilder<'u, 'a> {
             content: content.to_string(),
             options: TextOptions::new()
                 .at(0.0, 0.0) // Relative to pos
-                .scale_factor(sf),
+                .scale_factor(sf)
+                .font_size(base_font_size),
+            selectable: false,
             padding: Padding::ZERO,
             bg_color: None,
             fill_x: false,
@@ -84,13 +89,18 @@ impl<'u, 'a> TextBuilder<'u, 'a> {
         }
     }
 
+    pub fn selectable(mut self, enabled: bool) -> Self {
+        self.selectable = enabled;
+        self
+    }
+
     pub fn min_width(mut self, w: f32) -> Self {
         self.options = self.options.min_width(w);
         self
     }
 
     pub fn size(mut self, s: f32) -> Self {
-        self.options = self.options.font_size(s);
+        self.options = self.options.font_size(s * self.ui.font_scale);
         self
     }
     pub fn color(mut self, c: Color) -> Self {
@@ -397,18 +407,130 @@ impl<'u, 'a> TextBuilder<'u, 'a> {
         let vert = self.margin.vertical();
         let (w, h, buffer, start) = self.draw_and_measure();
         
+        let (screen_x, screen_y, screen_w, screen_h) = if let Some(sr) = self.ui.screen_layout_cache.get(&self.id) {
+            (sr.origin.x, sr.origin.y, sr.size.width, sr.size.height)
+        } else {
+            (self.start_x + self.ui.offset_x, self.start_y + self.ui.offset_y, w, h)
+        };
+
+        let is_hovered = self.ui.is_hovered(self.id, screen_x, screen_y, screen_w, screen_h);
+        if self.selectable && is_hovered {
+            self.ui.cursor_icon = CursorIcon::Text;
+        }
+
+        if self.selectable {
+            let anchor_id = Id::from_u64(self.id.raw() ^ 0x5E1E_C710);
+            let cursor_id = Id::from_u64(self.id.raw() ^ 0xCAFE_BABE);
+            let active_id = Id::from_u64(self.id.raw() ^ 0xA011_E001);
+
+            if let Some(ref sb) = buffer {
+                let text_screen_x = screen_x + self.padding.left;
+                let text_screen_y = screen_y + self.padding.top;
+
+                if is_hovered && self.ui.clicked {
+                    let rel_x = self.ui.mouse_x - text_screen_x;
+                    let rel_y = self.ui.mouse_y - text_screen_y;
+                    let idx = sb.index_at(rel_x, rel_y);
+                    self.ui.cursor_state.insert(anchor_id, idx);
+                    self.ui.cursor_state.insert(cursor_id, idx);
+                    self.ui.interaction_state.insert(active_id, 1.0);
+                    self.ui.needs_redraw = true;
+                } else if self.ui.mouse_down && self.ui.interaction_state.get(&active_id).copied().unwrap_or(0.0) > 0.5 {
+                    let rel_x = self.ui.mouse_x - text_screen_x;
+                    let rel_y = self.ui.mouse_y - text_screen_y;
+                    let idx = sb.index_at(rel_x, rel_y);
+                    self.ui.cursor_state.insert(cursor_id, idx);
+                    self.ui.needs_redraw = true;
+                } else if !self.ui.mouse_down {
+                    self.ui.interaction_state.remove(&active_id);
+                }
+
+                // If user clicked outside, clear selection
+                if self.ui.clicked && !is_hovered {
+                    self.ui.cursor_state.remove(&anchor_id);
+                    self.ui.cursor_state.remove(&cursor_id);
+                    self.ui.interaction_state.remove(&active_id);
+                }
+
+                if let (Some(&anchor), Some(&cur_pos)) = (self.ui.cursor_state.get(&anchor_id), self.ui.cursor_state.get(&cursor_id)) {
+                    if anchor != cur_pos {
+                        let sel_start = anchor.min(cur_pos);
+                        let sel_end = anchor.max(cur_pos);
+                        let clip = self.options.clip_rect.unwrap_or([-100000.0, -100000.0, 2000000.0, 2000000.0]);
+                        let font_size = self.options.font_size;
+                        let line_height_factor = self.options.line_height;
+                        let cursor_height = font_size * line_height_factor;
+                        let visual_ascent = font_size * 0.8;
+                        let row_threshold = cursor_height * 0.6;
+
+                        for line in sb.lines() {
+                            let mut line_min_x: Option<f32> = None;
+                            let mut line_max_x: Option<f32> = None;
+
+                            for g in sb.glyphs() {
+                                if (g.y - line.y).abs() < row_threshold {
+                                    if g.cluster >= sel_start && g.cluster < sel_end {
+                                        let left = g.x;
+                                        let right = g.x + g.width;
+                                        line_min_x = Some(line_min_x.map_or(left, |m: f32| m.min(left)));
+                                        line_max_x = Some(line_max_x.map_or(right, |m: f32| m.max(right)));
+                                    }
+                                }
+                            }
+
+                            if line_min_x.is_none() && line.start_cluster >= sel_start && line.start_cluster < sel_end {
+                                line_min_x = Some(0.0);
+                                line_max_x = Some(font_size * 0.4);
+                            }
+
+                            if let (Some(x0), Some(x1)) = (line_min_x, line_max_x) {
+                                let sel_x = self.start_x + self.padding.left + x0;
+                                let sel_y = self.start_y + self.padding.top + (line.y - visual_ascent);
+                                let sel_w = (x1 - x0).max(3.0);
+                                let sel_h = cursor_height.max(14.0);
+
+                                self.ui.draws.push(DrawCommand::OverlayRect(OverlayRectDraw {
+                                    x: sel_x,
+                                    y: sel_y,
+                                    width: sel_w,
+                                    height: sel_h,
+                                    color: Color::rgba(0.25, 0.50, 0.95, 0.35),
+                                    clip,
+                                }));
+                            }
+                        }
+
+                        // Check Ctrl + C
+                        let is_ctrl_c = self.ui.input_events.iter().any(|e| matches!(e,
+                            PlatformEvent::KeyDown { key: winit::keyboard::KeyCode::KeyC }
+                        ));
+                        if is_ctrl_c && (is_hovered || self.ui.interaction_state.contains_key(&active_id)) {
+                            let safe_start = sel_start.min(self.content.len());
+                            let safe_end = sel_end.min(self.content.len());
+                            if safe_start < safe_end {
+                                if let Some(sub) = self.content.get(safe_start..safe_end) {
+                                    crate::ui::copy_to_system_clipboard(sub);
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
         self.ui.register_semantic(
             SemanticNode::new(self.id, Role::Label, Rect::new(self.start_x, self.start_y, w, h))
                 .with_label(self.content.clone())
         );
 
+        // Advance cursor and record draw range AFTER pushing OverlayRectDraw commands
+        // so that the parent container's layout translation and scrolling apply to both!
         self.ui.advance(w + horiz, h + vert, start);
         
         if self.render_mode.is_some() {
             self.ui.render_mode_stack.pop();
         }
 
-        let is_hovered = self.ui.mouse_in_rect(self.start_x + self.ui.offset_x, self.start_y + self.ui.offset_y, w, h);
         let response = zenthra_core::Response {
             clicked: self.ui.clicked && is_hovered,
             hovered: is_hovered,
