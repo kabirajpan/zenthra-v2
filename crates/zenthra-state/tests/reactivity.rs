@@ -220,3 +220,24 @@ fn test_reentrant_mutation_safe() {
     a.set(5);
     assert_eq!(b.get(), 50);
 }
+
+#[test]
+fn test_arc_signal_background_triggers_redraw_hook() {
+    let hook_calls = Arc::new(AtomicU32::new(0));
+    let hook_calls_clone = hook_calls.clone();
+
+    on_state_change(move || {
+        hook_calls_clone.fetch_add(1, Ordering::SeqCst);
+    });
+
+    let sig = ArcSignal::new("idle".to_string());
+    let sig_clone = sig.clone();
+
+    let worker = std::thread::spawn(move || {
+        sig_clone.set("working".to_string());
+    });
+    worker.join().unwrap();
+
+    assert_eq!(sig.get(), "working");
+    assert!(hook_calls.load(Ordering::SeqCst) >= 1);
+}

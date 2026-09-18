@@ -311,6 +311,12 @@ impl ApplicationHandler for AppRunner {
         }
     }
 
+    fn user_event(&mut self, _event_loop: &ActiveEventLoop, _event: ()) {
+        if let Some(w) = &mut self.window {
+            w.request_redraw();
+        }
+    }
+
     fn about_to_wait(&mut self, event_loop: &ActiveEventLoop) {
         if let Some(wakeup) = self.next_wakeup {
             if std::time::Instant::now() >= wakeup {

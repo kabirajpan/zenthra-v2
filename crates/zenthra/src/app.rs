@@ -959,10 +959,15 @@ impl App {
     }
 
     pub fn run(self) {
-        self.platform.run();
+        let event_loop = winit::event_loop::EventLoop::new().unwrap();
+        self.run_with_event_loop(event_loop);
     }
 
     pub fn run_with_event_loop(self, event_loop: winit::event_loop::EventLoop<()>) {
+        let proxy = event_loop.create_proxy();
+        zenthra_state::on_state_change(move || {
+            let _ = proxy.send_event(());
+        });
         self.platform.run_with_event_loop(event_loop);
     }
 }

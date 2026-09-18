@@ -8,11 +8,14 @@ pub trait Subscriber {
 pub type SubscriberRef = Rc<dyn Subscriber>;
 pub type WeakSubscriberRef = std::rc::Weak<dyn Subscriber>;
 
+use std::sync::{Arc, RwLock};
+
+static REDRAW_HOOK: RwLock<Option<Arc<dyn Fn() + Send + Sync>>> = RwLock::new(None);
+
 thread_local! {
     static SUBSCRIBER_STACK: RefCell<Vec<SubscriberRef>> = RefCell::new(Vec::new());
     static IS_BATCHING: RefCell<bool> = RefCell::new(false);
     static PENDING_NOTIFICATIONS: RefCell<Vec<SubscriberRef>> = RefCell::new(Vec::new());
-    static REDRAW_HOOK: RefCell<Option<Box<dyn Fn()>>> = RefCell::new(None);
 }
 
 /// Run a closure while tracking signal reads with `subscriber`.
@@ -36,18 +39,19 @@ pub fn current_subscriber() -> Option<SubscriberRef> {
 }
 
 /// Register a global hook called whenever state changes (e.g. to request a winit window redraw).
-pub fn on_state_change(hook: impl Fn() + 'static) {
-    REDRAW_HOOK.with(|h| {
-        *h.borrow_mut() = Some(Box::new(hook));
-    });
+pub fn on_state_change(hook: impl Fn() + Send + Sync + 'static) {
+    let mut h = REDRAW_HOOK.write().unwrap();
+    *h = Some(Arc::new(hook));
 }
 
 pub(crate) fn trigger_redraw_hook() {
-    REDRAW_HOOK.with(|h| {
-        if let Some(hook) = h.borrow().as_ref() {
-            hook();
-        }
-    });
+    let hook = {
+        let h = REDRAW_HOOK.read().unwrap();
+        h.clone()
+    };
+    if let Some(hook) = hook {
+        hook();
+    }
 }
 
 /// Run multiple state updates in a batch, notifying subscribers only once at the end.
