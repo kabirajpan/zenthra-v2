@@ -632,6 +632,8 @@ impl<'u, 'a, 'b> TextAreaBuilder<'u, 'a, 'b> {
         if !self.buffer.is_char_boundary(cursor_index) {
             cursor_index = self.buffer.len(); // Safety
         }
+        let initial_cursor_index = cursor_index;
+        let is_multiline = self.buffer.contains('\n') || h_content > self.font_size * self.line_height * 1.5;
 
         let selection_id = Id::from_u64(self.id.raw() ^ 0x5E1EC710);
         let mut selection_anchor: Option<usize> = self.ui.cursor_state.get(&selection_id).copied();
@@ -657,7 +659,7 @@ impl<'u, 'a, 'b> TextAreaBuilder<'u, 'a, 'b> {
                 self.ui.needs_redraw = true;
             } else if let Some(sb) = &shaped_buffer {
                 let rel_x = self.ui.mouse_x - (self.x + self.padding.left + self.text_padding.left);
-                let rel_y = if !effective_scrollable && h_box > h_content + self.padding.vertical() {
+                let rel_y = if !is_multiline && !effective_scrollable && h_box > h_content + self.padding.vertical() {
                     let y_offset = ((h_box - h_content) / 2.0).max(self.padding.top);
                     self.ui.mouse_y - (self.y + y_offset + self.text_padding.top)
                 } else {
@@ -1198,28 +1200,31 @@ impl<'u, 'a, 'b> TextAreaBuilder<'u, 'a, 'b> {
                         self.ui.cursor_state.insert(self.id, cursor_index);
                     }
                     
+                    let cursor_changed = changed || cursor_index != initial_cursor_index;
                     if effective_scrollable {
                         let usable_h = h_box - self.padding.vertical();
                         let max_scroll = (h_content - usable_h).max(0.0);
                         
-                        // Vertical Auto-scroll
-                        if let Some(sb) = &shaped_buffer {
-                            let mut ly = 0.0;
-                            let mut found = false;
-                            for line in sb.lines() {
-                                if line.start_cluster <= cursor_index {
-                                    ly = line.y;
-                                    found = true;
-                                } else { break; }
-                            }
-                            if found {
-                                let line_h = self.font_size * self.line_height;
-                                let cursor_y_v = ly + self.text_padding.top;
-                                
-                                if cursor_y_v > scroll_y + usable_h - line_h {
-                                    scroll_y = cursor_y_v - usable_h + line_h;
-                                } else if cursor_y_v < scroll_y {
-                                    scroll_y = cursor_y_v;
+                        // Vertical Auto-scroll: only when typing or moving cursor!
+                        if cursor_changed {
+                            if let Some(sb) = &shaped_buffer {
+                                let mut ly = 0.0;
+                                let mut found = false;
+                                for line in sb.lines() {
+                                    if line.start_cluster <= cursor_index {
+                                        ly = line.y;
+                                        found = true;
+                                    } else { break; }
+                                }
+                                if found {
+                                    let line_h = self.font_size * self.line_height;
+                                    let cursor_y_v = ly + self.text_padding.top;
+                                    
+                                    if cursor_y_v > scroll_y + usable_h - line_h {
+                                        scroll_y = cursor_y_v - usable_h + line_h;
+                                    } else if cursor_y_v < scroll_y {
+                                        scroll_y = cursor_y_v;
+                                    }
                                 }
                             }
                         }
@@ -1291,8 +1296,8 @@ impl<'u, 'a, 'b> TextAreaBuilder<'u, 'a, 'b> {
         }
 
         // --- 5. Render Text (ALWAYS CLIPPED TO BOX) ---
-        let pos_y = if !effective_scrollable && h_box > h_content + self.padding.vertical() {
-            // When box is taller than content (e.g. min_height > content), center vertically!
+        let pos_y = if !is_multiline && !effective_scrollable && h_box > h_content + self.padding.vertical() {
+            // When box is taller than content (only for single-line inputs), center vertically!
             self.y + ((h_box - h_content) / 2.0).max(self.padding.top)
         } else {
             self.y + self.padding.top - scroll_y
@@ -1337,20 +1342,18 @@ impl<'u, 'a, 'b> TextAreaBuilder<'u, 'a, 'b> {
         text_builder.draw_and_measure();
 
         // Update persistent scroll state
-        if self.scrollable {
+        if self.scrollable || effective_scrollable {
             self.ui.scroll_state.insert(self.id, (scroll_x, scroll_y));
 
             // --- 5.5 Render Scroll Bar ---
             if h_content > h_box - self.padding.vertical() {
                 let usable_h = h_box - self.padding.vertical();
-                let scroll_bar_w = 4.0;
-                let scroll_bar_x = self.x + actual_width - scroll_bar_w - 4.0;
+                let scroll_bar_w = 3.0;
+                let scroll_bar_x = self.x + actual_width - scroll_bar_w - 2.0;
                 
-                let thumb_h = (usable_h / h_content) * usable_h;
-                let thumb_h = thumb_h.clamp(20.0, usable_h);
-                
+                let thumb_h = ((usable_h / h_content) * usable_h).clamp(16.0, usable_h);
                 let max_scroll = (h_content - usable_h).max(1.0);
-                let scroll_percent = scroll_y / max_scroll;
+                let scroll_percent = (scroll_y / max_scroll).clamp(0.0, 1.0);
                 let thumb_y = self.y + self.padding.top + scroll_percent * (usable_h - thumb_h);
 
                 self.ui.draws.push(DrawCommand::OverlayRect(OverlayRectDraw {
@@ -1401,7 +1404,7 @@ impl<'u, 'a, 'b> TextAreaBuilder<'u, 'a, 'b> {
                     let sel_color = Color::rgba(0.26, 0.52, 0.96, 0.35);
                     let row_threshold = (font_size * lh) * 0.6;
                     for line in sb.lines() {
-                        let line_cy = if !effective_scrollable && h_box > h_content + self.padding.vertical() {
+                        let line_cy = if !is_multiline && !effective_scrollable && h_box > h_content + self.padding.vertical() {
                             let y_offset = ((h_box - h_content) / 2.0).max(self.padding.top);
                             line.y + self.y + y_offset + self.text_padding.top + v_shift - visual_ascent
                         } else {
@@ -1503,7 +1506,7 @@ impl<'u, 'a, 'b> TextAreaBuilder<'u, 'a, 'b> {
                 }
                 
                 let cx = lx + self.x + self.padding.left + self.text_padding.left;
-                let cy = if !effective_scrollable && h_box > h_content + self.padding.vertical() {
+                let cy = if !is_multiline && !effective_scrollable && h_box > h_content + self.padding.vertical() {
                     let y_offset = ((h_box - h_content) / 2.0).max(self.padding.top);
                     ly + self.y + y_offset + self.text_padding.top + v_shift - visual_ascent
                 } else {
