@@ -59,7 +59,7 @@ impl Zentype {
 
         // Embedded fallback for Moderniz font to guarantee branding availability anywhere
         if let Ok(mut fs) = font_system.lock() {
-            let _ = fs.db_mut().load_font_data(include_bytes!("../../../../assets/fonts/Moderniz.otf").to_vec());
+            let _ = fs.db_mut().load_font_data(include_bytes!("../../assets/fonts/Moderniz.otf").to_vec());
         }
 
         let font_system = shaper.font_system();
