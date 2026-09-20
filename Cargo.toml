@@ -19,6 +19,7 @@ resolver = "2"
 version    = "0.2.3"
 edition    = "2021"
 license    = "MIT"
+authors    = ["kabirajpan"]
 repository = "https://zenthralabs.dev"
 homepage   = "https://zenthralabs.dev"
 readme     = "README.md"
