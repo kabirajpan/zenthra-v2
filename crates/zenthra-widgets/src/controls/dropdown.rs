@@ -33,6 +33,9 @@ pub struct DropdownBuilder<'u, 'a, 'b, T: PartialEq + Clone + ToString> {
     shadow_blur: f32,
     shadow_opacity: f32,
     shadow_enabled: bool,
+
+    placement: zenthra_core::Placement,
+    gap: f32,
 }
 
 impl<'u, 'a, 'b, T: PartialEq + Clone + ToString> DropdownBuilder<'u, 'a, 'b, T> {
@@ -63,7 +66,20 @@ impl<'u, 'a, 'b, T: PartialEq + Clone + ToString> DropdownBuilder<'u, 'a, 'b, T>
             shadow_offset: [0.0, 4.0],
             shadow_blur: 20.0,
             shadow_opacity: 1.0,
+
+            placement: zenthra_core::Placement::Bottom,
+            gap: 4.0,
         }
+    }
+
+    pub fn placement(mut self, placement: zenthra_core::Placement) -> Self {
+        self.placement = placement;
+        self
+    }
+
+    pub fn gap(mut self, gap: f32) -> Self {
+        self.gap = gap;
+        self
     }
 
     pub fn id(mut self, id: impl std::hash::Hash) -> Self {
@@ -248,11 +264,20 @@ impl<'u, 'a, 'b, T: PartialEq + Clone + ToString> DropdownBuilder<'u, 'a, 'b, T>
 
         // 3. Draw Menu (Overlay)
         if is_open {
-            let menu_ox = actual_ox;
-            let menu_oy = actual_oy + self.height + 4.0;
-            
             let item_h = 28.0;
             let menu_h = (self.options.len() as f32 * item_h).min(self.menu_max_height);
+            let anchor_rect = Rect::new(actual_ox, actual_oy, actual_w, actual_h);
+            let (menu_ox, menu_oy) = crate::controls::popover::compute_placement_pos(
+                anchor_rect,
+                self.width,
+                menu_h,
+                self.placement,
+                zenthra_core::PopoverAlign::Start,
+                self.gap,
+                true,
+                self.ui.width,
+                self.ui.height,
+            );
             
             // Background catcher (to close menu)
             self.ui.overlays.push(DrawCommand::Rect(RectDraw {

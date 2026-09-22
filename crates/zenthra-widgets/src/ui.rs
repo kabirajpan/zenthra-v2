@@ -617,6 +617,10 @@ impl<'a> Ui<'a> {
         crate::controls::menu::MenuItemBuilder::new(self, label)
     }
 
+    pub fn popover(&mut self, anchor_id: zenthra_core::Id) -> crate::controls::popover::PopoverBuilder<'_, 'a> {
+        crate::controls::popover::PopoverBuilder::new(self, anchor_id)
+    }
+
     /// Registers a widget in the semantic tree.
     pub fn register_semantic(&mut self, node: zenthra_core::SemanticNode) {
         // If we are inside a container, add this node as a child of the current parent

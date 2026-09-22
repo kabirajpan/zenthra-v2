@@ -110,6 +110,26 @@ pub enum Align {
     SpaceAround,
 }
 
+/// Placement direction for popovers, menus, tooltips, and floating panels relative to an anchor.
+#[derive(Debug, Clone, Copy, PartialEq, Default)]
+pub enum Placement {
+    #[default]
+    Bottom,
+    Top,
+    Left,
+    Right,
+    Custom(f32, f32),
+}
+
+/// Alignment along the cross-axis of a placement.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum PopoverAlign {
+    #[default]
+    Start,
+    Center,
+    End,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum BorderAlignment {
     #[default]

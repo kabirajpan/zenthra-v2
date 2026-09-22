@@ -80,6 +80,10 @@ pub struct MenuBuilder<'u, 'a> {
     ui: &'u mut Ui<'a>,
     label: String,
     id: Id,
+    placement: zenthra_core::Placement,
+    align: zenthra_core::PopoverAlign,
+    gap: f32,
+    menu_width: f32,
 }
 
 impl<'u, 'a> MenuBuilder<'u, 'a> {
@@ -95,7 +99,31 @@ impl<'u, 'a> MenuBuilder<'u, 'a> {
             ui,
             label: label.to_string(),
             id,
+            placement: zenthra_core::Placement::Bottom,
+            align: zenthra_core::PopoverAlign::Start,
+            gap: 2.0,
+            menu_width: 270.0,
         }
+    }
+
+    pub fn placement(mut self, placement: zenthra_core::Placement) -> Self {
+        self.placement = placement;
+        self
+    }
+
+    pub fn align(mut self, align: zenthra_core::PopoverAlign) -> Self {
+        self.align = align;
+        self
+    }
+
+    pub fn gap(mut self, gap: f32) -> Self {
+        self.gap = gap;
+        self
+    }
+
+    pub fn width(mut self, width: f32) -> Self {
+        self.menu_width = width;
+        self
     }
 
     pub fn show<F>(self, f: F)
@@ -243,24 +271,27 @@ impl<'u, 'a> MenuBuilder<'u, 'a> {
                 theme_border
             };
 
-            let popup_x = if let Some((rect, _)) = self.ui.get_recorded_layout(self.id) {
-                rect.origin.x
-            } else {
-                x
-            };
-            let popup_y = if let Some((rect, _)) = self.ui.get_recorded_layout(self.id) {
-                rect.origin.y
-            } else {
-                y
-            };
+            let anchor_rect = Rect::new(actual_ox, actual_oy, actual_w, actual_h);
+            let estimated_h = self.ui.screen_layout_cache.get(&popup_id).map(|r| r.size.height).unwrap_or(200.0);
+            let (popup_x, popup_y) = crate::controls::popover::compute_placement_pos(
+                anchor_rect,
+                self.menu_width,
+                estimated_h,
+                self.placement,
+                self.align,
+                self.gap,
+                true,
+                self.ui.width,
+                self.ui.height,
+            );
 
             self.ui.overlay(|ui| {
                 let mut container = ui.container()
                     .raw_id(popup_id)
-                    .absolute(popup_x, popup_y + h + 2.0)
+                    .absolute(popup_x, popup_y)
                     .overlay()
                     .clip(false)
-                    .width(270.0)
+                    .width(self.menu_width)
                     .radius_all(4.0)
                     .padding(4.0, 4.0, 4.0, 4.0)
                     .column();
