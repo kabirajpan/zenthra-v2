@@ -77,6 +77,8 @@ impl<T: 'static> Signal<T> {
             active
         };
 
+        let had_subscribers = !active_subscribers.is_empty();
+
         for sub in active_subscribers {
             notify_subscriber(sub);
         }
@@ -88,7 +90,12 @@ impl<T: 'static> Signal<T> {
         }
         self.inner.borrow_mut().listeners = listeners;
 
-        trigger_redraw_hook();
+        // notify_subscriber() already calls trigger_redraw_hook() per subscriber.
+        // Only fire it here as a fallback for signals with no reactive subscribers,
+        // so listener-only or bare .set() calls still wake the event loop.
+        if !had_subscribers {
+            trigger_redraw_hook();
+        }
     }
 
     /// Returns the number of currently active subscribers registered to this signal.

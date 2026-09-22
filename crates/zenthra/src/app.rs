@@ -14,6 +14,14 @@ pub struct App {
     backdrop_filter: Option<zenthra_core::BackdropFilter>,
 }
 
+struct MouseMoveState {
+    screen_layout_cache: std::collections::HashMap<zenthra_core::Id, zenthra_core::Rect>,
+    last_rendered_mouse: Option<(f32, f32)>,
+    has_active_drag: bool,
+    is_mouse_down: bool,
+    scale_factor: f32,
+}
+
 impl App {
     pub fn new() -> Self {
         Self {
@@ -114,6 +122,36 @@ impl App {
     where
         F: FnMut(&mut Ui) + 'static,
     {
+        let mouse_move_state = std::rc::Rc::new(std::cell::RefCell::new(MouseMoveState {
+            screen_layout_cache: std::collections::HashMap::new(),
+            last_rendered_mouse: None,
+            has_active_drag: false,
+            is_mouse_down: false,
+            scale_factor: 1.0,
+        }));
+
+        let filter_state = mouse_move_state.clone();
+        self.platform = self.platform.with_cursor_filter(move |x, y| {
+            let s = filter_state.borrow();
+            if s.is_mouse_down || s.has_active_drag || s.screen_layout_cache.is_empty() {
+                return true;
+            }
+            let prev_mouse = match s.last_rendered_mouse {
+                Some((px, py)) => zenthra_core::Point::new(px, py),
+                None => return true,
+            };
+            let sf = s.scale_factor.max(0.1);
+            let new_mouse = zenthra_core::Point::new(x as f32 / sf, y as f32 / sf);
+            for rect in s.screen_layout_cache.values() {
+                let was_in = rect.contains(prev_mouse);
+                let is_in = rect.contains(new_mouse);
+                if was_in != is_in {
+                    return true;
+                }
+            }
+            false
+        });
+        let render_move_state = mouse_move_state;
         let mut rect_pipeline: Option<RectPipeline> = None;
         let mut image_pipeline: Option<zenthra_render::ImagePipeline> = None;
         let mut blur_pipeline:  Option<BlurPipeline> = None;
@@ -249,7 +287,9 @@ impl App {
                 match event {
                     zenthra_platform::event::PlatformEvent::MouseMoved { x, y } => {
                         mouse_pos = (*x as f32 / sf, *y as f32 / sf);
-                        needs_redraw = true;
+                        if active_drag.is_some() {
+                            needs_redraw = true;
+                        }
                     }
                     zenthra_platform::event::PlatformEvent::MouseWheel { .. } => {
                         needs_redraw = true;
@@ -945,14 +985,28 @@ impl App {
                 }
             }
 
-            if layout_changed {
-                needs_redraw = true;
-            }
+            // NOTE: layout_changed is intentionally NOT used to schedule a new frame here.
+            // Doing so creates an infinite loop: any transient widget change (e.g. cursor blink
+            // appearing → disappearing → layout_changed=true → needs_redraw=true → next frame →
+            // cursor blinks again → repeat at 100% CPU).
+            // Layout changes that require a redraw are already driven by the events that caused
+            // them (keypress, mouse click, blink timer, signal change, etc).
+            let _ = layout_changed;
 
             // Swap layout caches for next frame
             layout_cache = next_layout_cache;
             screen_layout_cache = next_screen_layout_cache;
             widget_window_map = next_widget_window_map;
+
+            {
+                let mut s = render_move_state.borrow_mut();
+                s.screen_layout_cache = screen_layout_cache.clone();
+                s.last_rendered_mouse = Some(mouse_pos);
+                s.has_active_drag = active_drag.is_some();
+                s.is_mouse_down = ui_mouse_down;
+                s.scale_factor = sf;
+            }
+
             needs_redraw
         });
         self

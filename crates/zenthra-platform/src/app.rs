@@ -42,6 +42,7 @@ pub struct App {
     transparent: bool,
     blur: bool,
     draw_fn: Option<Box<dyn FnMut(&mut Frame) -> bool + 'static>>,
+    cursor_filter: Option<Box<dyn FnMut(f64, f64) -> bool + 'static>>,
 }
 
 impl App {
@@ -54,6 +55,7 @@ impl App {
             transparent: false,
             blur: false,
             draw_fn: None,
+            cursor_filter: None,
         }
     }
 
@@ -99,6 +101,14 @@ impl App {
         self
     }
 
+    pub fn with_cursor_filter<F>(mut self, f: F) -> Self
+    where
+        F: FnMut(f64, f64) -> bool + 'static,
+    {
+        self.cursor_filter = Some(Box::new(f));
+        self
+    }
+
     pub fn run(self) {
         let event_loop = EventLoop::new().unwrap();
         self.run_with_event_loop(event_loop);
@@ -113,6 +123,7 @@ impl App {
             transparent: self.transparent,
             blur: self.blur,
             draw_fn: self.draw_fn,
+            cursor_filter: self.cursor_filter,
             window: None,
             pending_events: Vec::new(),
             next_wakeup: None,
@@ -140,6 +151,7 @@ struct AppRunner {
     transparent: bool,
     blur: bool,
     draw_fn: Option<Box<dyn FnMut(&mut Frame) -> bool + 'static>>,
+    cursor_filter: Option<Box<dyn FnMut(f64, f64) -> bool + 'static>>,
     window: Option<Window>,
     pending_events: Vec<PlatformEvent>,
     next_wakeup: Option<std::time::Instant>,
@@ -229,11 +241,23 @@ impl ApplicationHandler for AppRunner {
                 }
             }
             WindowEvent::CursorMoved { position, .. } => {
-                self.pending_events.push(PlatformEvent::MouseMoved {
-                    x: position.x,
-                    y: position.y,
-                });
-                if let Some(w) = &mut self.window { w.request_redraw(); }
+                if let Some(PlatformEvent::MouseMoved { x, y }) = self.pending_events.last_mut() {
+                    *x = position.x;
+                    *y = position.y;
+                } else {
+                    self.pending_events.push(PlatformEvent::MouseMoved {
+                        x: position.x,
+                        y: position.y,
+                    });
+                }
+                let needs_redraw = if let Some(filter) = &mut self.cursor_filter {
+                    filter(position.x, position.y)
+                } else {
+                    true
+                };
+                if needs_redraw {
+                    if let Some(w) = &mut self.window { w.request_redraw(); }
+                }
             }
             WindowEvent::MouseInput { button, state, .. } => {
                 self.pending_events.push(PlatformEvent::MouseButton { button, state });
