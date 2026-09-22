@@ -552,7 +552,8 @@ impl<'u, 'a> TextBuilder<'u, 'a> {
              
              self.options.max_width = Some(layout_width);
              
-             adapter.set_layout_size(layout_width, self.ui.height);
+             let layout_height = self.options.max_height.unwrap_or(100_000.0);
+             adapter.set_layout_size(layout_width, layout_height);
              
              let buffer = adapter.shape(&self.content, &self.options);
              let (cw, ch) = buffer.size();

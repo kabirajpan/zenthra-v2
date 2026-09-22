@@ -269,3 +269,28 @@ impl FontProvider for CosmicFontProvider {
         self.font_system.clone()
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::types::options::{TextOptions, TextWrap};
+
+    #[test]
+    fn test_shape_long_error_wrapping() {
+        let font_system = Arc::new(Mutex::new(FontSystem::new()));
+        let mut provider = CosmicFontProvider::new_with_system(font_system);
+        let error_text = r#"Agent error: Gemini api error: 429 Too Many Requests: { "error": { "code": 429, "message": "Resource has been exhausted (e.g. check quota).", "status": "RESOURCE_EXHAUSTED", "details": [ { "@type": "type.googleapis.com/google.rpc.QuotaFailure", "violations": [ { "subject": "project:12345", "description": "GenerateRequestsPerMinutePerProjectPerModel-FreeTier" } ] } ] } }"#;
+        
+        let mut opts = TextOptions::default();
+        opts.font_size = 11.0;
+        opts.line_height = 1.65;
+        opts.max_width = Some(300.0);
+        opts.wrap = TextWrap::Word;
+
+        provider.set_layout_size(300.0, 700.0);
+        let buffer = provider.shape(error_text, &opts);
+        println!("Lines: {}, size: {:?}", buffer.lines().len(), buffer.size());
+        assert!(buffer.lines().len() > 1);
+        assert!(buffer.size().1 > 30.0);
+    }
+}
