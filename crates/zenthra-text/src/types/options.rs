@@ -171,7 +171,6 @@ impl TextOptions {
 
         // Set metrics (font size and line height)
         buffer.set_metrics(
-            font_system,
             Metrics::new(self.font_size, self.font_size * self.line_height),
         );
 
@@ -182,9 +181,8 @@ impl TextOptions {
             TextWrap::None => cosmic_text::Wrap::None,
         };
 
-        
-        buffer.set_size(font_system, self.max_width, None);
-        buffer.set_wrap(font_system, wrap);
+        buffer.set_size(self.max_width, None);
+        buffer.set_wrap(wrap);
 
         // Shape first, THEN apply alignment once glyphs are measured
         buffer.shape_until_scroll(font_system, false);

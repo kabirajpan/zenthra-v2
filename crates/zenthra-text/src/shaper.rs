@@ -78,8 +78,8 @@ impl ShapedText {
             })
             .color(color);
 
-        buf.set_size(font_system, max_width, None);
-        buf.set_text(font_system, &props.text, &attrs, Shaping::Advanced, None);
+        buf.set_size(max_width, None);
+        buf.set_text(&props.text, &attrs, Shaping::Advanced, None);
         buf.shape_until_scroll(font_system, false);
 
         Self { buffer: buf }

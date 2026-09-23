@@ -507,6 +507,10 @@ impl<'a> Ui<'a> {
         self.window_actions.push(zenthra_platform::app::WindowAction::Drag);
     }
 
+    pub fn set_blur(&mut self, blur: bool) {
+        self.window_actions.push(zenthra_platform::app::WindowAction::SetBlur(blur));
+    }
+
     pub fn get_max_bounds(&self) -> (f32, f32) {
         (self.max_x, self.max_y)
     }

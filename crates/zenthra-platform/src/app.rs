@@ -13,6 +13,7 @@ pub enum WindowAction {
     Minimize,
     Maximize,
     Close,
+    SetBlur(bool),
 }
 
 pub struct Frame<'a> {
@@ -195,6 +196,9 @@ impl AppRunner {
                 }
                 WindowAction::Close => {
                     should_close = true;
+                }
+                WindowAction::SetBlur(blur) => {
+                    window.set_blur(blur);
                 }
             }
         }

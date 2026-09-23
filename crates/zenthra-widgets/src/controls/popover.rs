@@ -121,6 +121,7 @@ pub struct PopoverBuilder<'u, 'a> {
     shadow_offset: [f32; 2],
     padding: [f32; 4],
     backdrop_filter: Option<BackdropFilter>,
+    backdrop_blur: Option<f32>,
 }
 
 impl<'u, 'a> PopoverBuilder<'u, 'a> {
@@ -146,6 +147,7 @@ impl<'u, 'a> PopoverBuilder<'u, 'a> {
             shadow_offset: [0.0, 4.0],
             padding: [4.0, 4.0, 4.0, 4.0],
             backdrop_filter: None,
+            backdrop_blur: None,
         }
     }
 
@@ -218,6 +220,11 @@ impl<'u, 'a> PopoverBuilder<'u, 'a> {
         self
     }
 
+    pub fn backdrop_blur(mut self, radius: f32) -> Self {
+        self.backdrop_blur = Some(radius);
+        self
+    }
+
     /// Renders the popover overlay anchored to the trigger widget.
     pub fn show<F>(self, f: F) -> Response
     where
@@ -278,6 +285,7 @@ impl<'u, 'a> PopoverBuilder<'u, 'a> {
         let shadow_blur = self.shadow_blur;
         let padding = self.padding;
         let backdrop_filter = self.backdrop_filter;
+        let backdrop_blur = self.backdrop_blur;
         let popover_id = self.id;
         let has_explicit_h = self.height;
 
@@ -304,6 +312,10 @@ impl<'u, 'a> PopoverBuilder<'u, 'a> {
 
             if let Some(bf) = backdrop_filter {
                 container = container.backdrop_filter(bf);
+            }
+
+            if let Some(radius) = backdrop_blur {
+                container = container.backdrop_blur(radius);
             }
 
             let resp = container.show(|ui| {

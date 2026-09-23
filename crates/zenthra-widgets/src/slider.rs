@@ -317,7 +317,14 @@ impl<'u, 'a, 'b> SliderBuilder<'u, 'a, 'b> {
         });
 
         // 2. Hit-testing Bounds
-        let (actual_ox, actual_oy, actual_w, actual_h) = if let Some((rect, _)) = self.ui.get_recorded_layout(self.id) {
+        let (actual_ox, actual_oy, actual_w, actual_h) = if let Some(screen_rect) = self.ui.screen_layout_cache.get(&self.id) {
+            (
+                screen_rect.origin.x,
+                screen_rect.origin.y,
+                if screen_rect.size.width > 0.0 { screen_rect.size.width } else { w },
+                if screen_rect.size.height > 0.0 { screen_rect.size.height } else { h }
+            )
+        } else if let Some((rect, _)) = self.ui.get_recorded_layout(self.id) {
             (
                 rect.origin.x + self.ui.offset_x,
                 rect.origin.y + self.ui.offset_y,
@@ -338,6 +345,10 @@ impl<'u, 'a, 'b> SliderBuilder<'u, 'a, 'b> {
         let track_x_start_hit = actual_ox + self.padding.left;
         
         let is_active = self.ui.active_drag.as_ref().map(|d| d.id == self.id).unwrap_or(false);
+
+        if is_hovered || is_active {
+            self.ui.cursor_icon = crate::text::CursorIcon::Pointer;
+        }
 
         if (self.ui.clicked && is_hovered) || is_active {
             if track_w_hit > 0.0 {
@@ -452,7 +463,7 @@ impl<'u, 'a, 'b> SliderBuilder<'u, 'a, 'b> {
         Response {
             clicked,
             hovered: is_hovered,
-            pressed: is_active,
+            pressed: is_active || (self.ui.clicked && is_hovered),
             submitted: false,
         }
     }

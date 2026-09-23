@@ -187,7 +187,7 @@ impl<'u, 'a> MenuBuilder<'u, 'a> {
         let is_glassmorphism = self.ui.interaction_state.get(&Id::from_u64(999999998)).copied().unwrap_or(0.0) > 0.5;
 
         let theme_accent = get_theme_color(self.ui, 999999980, Color::rgb(255.0 / 255.0, 214.0 / 255.0, 0.0 / 255.0));
-        let theme_highlight = get_theme_color(self.ui, 999999970, Color::rgba(255.0 / 255.0, 255.0 / 255.0, 255.0 / 255.0, 0.08));
+        let theme_highlight = get_theme_color(self.ui, 999999970, Color::rgba(255.0 / 255.0, 255.0 / 255.0, 255.0 / 255.0, 0.04));
         let theme_text_primary = get_theme_color(self.ui, 999999960, Color::rgb(224.0 / 255.0, 224.0 / 255.0, 224.0 / 255.0));
         let theme_bg_panel = get_theme_color(self.ui, 999999940, Color::rgb(1.0 / 255.0, 1.0 / 255.0, 1.0 / 255.0));
         let theme_border = get_theme_color(self.ui, 999999930, Color::rgb(3.0 / 255.0, 3.0 / 255.0, 3.0 / 255.0));
@@ -401,7 +401,7 @@ impl<'u, 'a> SubMenuBuilder<'u, 'a> {
         let is_glassmorphism = self.ui.interaction_state.get(&Id::from_u64(999999998)).copied().unwrap_or(0.0) > 0.5;
 
         let theme_accent = get_theme_color(self.ui, 999999980, Color::rgb(255.0 / 255.0, 214.0 / 255.0, 0.0 / 255.0));
-        let theme_highlight = get_theme_color(self.ui, 999999970, Color::rgba(255.0 / 255.0, 255.0 / 255.0, 255.0 / 255.0, 0.08));
+        let theme_highlight = get_theme_color(self.ui, 999999970, Color::rgba(255.0 / 255.0, 255.0 / 255.0, 255.0 / 255.0, 0.04));
         let theme_text_primary = get_theme_color(self.ui, 999999960, Color::rgb(224.0 / 255.0, 224.0 / 255.0, 224.0 / 255.0));
         let theme_text_muted = get_theme_color(self.ui, 999999950, Color::rgb(136.0 / 255.0, 136.0 / 255.0, 136.0 / 255.0));
         let theme_bg_panel = get_theme_color(self.ui, 999999940, Color::rgb(1.0 / 255.0, 1.0 / 255.0, 1.0 / 255.0));
@@ -609,7 +609,7 @@ impl<'u, 'a> MenuItemBuilder<'u, 'a> {
         let is_light_theme = self.ui.interaction_state.get(&Id::from_u64(999999999)).copied().unwrap_or(0.0) > 0.5;
 
         let theme_accent = get_theme_color(self.ui, 999999980, Color::rgb(255.0 / 255.0, 214.0 / 255.0, 0.0 / 255.0));
-        let theme_highlight = get_theme_color(self.ui, 999999970, Color::rgba(255.0 / 255.0, 255.0 / 255.0, 255.0 / 255.0, 0.08));
+        let theme_highlight = get_theme_color(self.ui, 999999970, Color::rgba(255.0 / 255.0, 255.0 / 255.0, 255.0 / 255.0, 0.04));
         let theme_text_primary = get_theme_color(self.ui, 999999960, Color::rgb(224.0 / 255.0, 224.0 / 255.0, 224.0 / 255.0));
         let theme_text_muted = get_theme_color(self.ui, 999999950, Color::rgb(136.0 / 255.0, 136.0 / 255.0, 136.0 / 255.0));
 

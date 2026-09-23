@@ -54,7 +54,7 @@ impl CosmicFontProvider {
     }
 
     pub fn set_layout_size(&mut self, width: f32, height: f32) {
-        self.buffer.set_size(&mut self.font_system.lock().unwrap(), Some(width), Some(height));
+        self.buffer.set_size(Some(width), Some(height));
     }
 
     pub fn shape(&mut self, text: &str, options: &TextOptions) -> ShapedBuffer {
@@ -63,25 +63,25 @@ impl CosmicFontProvider {
         // Apply metrics and wrap mode from options
         let font_size = options.font_size;
         let line_height = font_size * options.line_height;
-        self.buffer.set_metrics(&mut fs, Metrics::new(font_size, line_height));
+        self.buffer.set_metrics(Metrics::new(font_size, line_height));
         
         let wrap = match options.wrap {
             crate::types::options::TextWrap::Word => cosmic_text::Wrap::WordOrGlyph,
             crate::types::options::TextWrap::Character => cosmic_text::Wrap::Glyph,
             crate::types::options::TextWrap::None => cosmic_text::Wrap::None,
         };
-        self.buffer.set_wrap(&mut fs, wrap);
+        self.buffer.set_wrap(wrap);
 
         // If max_width is specified in options, override current buffer width
         if let Some(mw) = options.max_width {
             let current_h = self.buffer.size().1.unwrap_or(10000.0);
-            self.buffer.set_size(&mut fs, Some(mw), Some(current_h));
+            self.buffer.set_size(Some(mw), Some(current_h));
         }
 
         let mut final_text = text.to_string();
         if options.ellipsis && options.max_width.is_some() && options.wrap == crate::types::options::TextWrap::None {
             let max_w = options.max_width.unwrap();
-            self.buffer.set_text(&mut fs, text, &options.as_attrs(), Shaping::Advanced, None);
+            self.buffer.set_text(text, &options.as_attrs(), Shaping::Advanced, None);
             self.buffer.shape_until_scroll(&mut fs, false);
             let mut original_w = 0.0f32;
             for run in self.buffer.layout_runs() {
@@ -97,7 +97,7 @@ impl CosmicFontProvider {
                 while low <= high {
                     let mid = (low + high) / 2;
                     let test_str = format!("{}...", &chars[0..mid].iter().collect::<String>());
-                    self.buffer.set_text(&mut fs, &test_str, &options.as_attrs(), Shaping::Advanced, None);
+                    self.buffer.set_text(&test_str, &options.as_attrs(), Shaping::Advanced, None);
                     self.buffer.shape_until_scroll(&mut fs, false);
                     let mut test_w = 0.0f32;
                     for run in self.buffer.layout_runs() {
@@ -123,7 +123,7 @@ impl CosmicFontProvider {
             }
         }
 
-        self.buffer.set_text(&mut fs, &final_text, &options.as_attrs(), Shaping::Advanced, None);
+        self.buffer.set_text(&final_text, &options.as_attrs(), Shaping::Advanced, None);
         
         // Apply alignment before final layout
         if let Some(alignment) = options.align {

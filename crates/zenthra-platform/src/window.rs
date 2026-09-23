@@ -25,6 +25,9 @@ impl Window {
             .with_blur(blur);
 
         let winit_window = Arc::new(event_loop.create_window(attrs).unwrap());
+        if blur {
+            winit_window.set_blur(true);
+        }
         let gpu = GpuContext::new(winit_window.clone()).await;
 
         Self {
@@ -52,5 +55,9 @@ impl Window {
     }
     pub fn height(&self) -> u32 {
         self.gpu.size.height
+    }
+
+    pub fn set_blur(&self, blur: bool) {
+        self.winit_window.set_blur(blur);
     }
 }
