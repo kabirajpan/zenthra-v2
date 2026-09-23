@@ -40,6 +40,8 @@ pub enum CursorIcon {
     Crosshair,
     ColResize,
     RowResize,
+    Grab,
+    Grabbing,
 }
 
 impl<'u, 'a> TextBuilder<'u, 'a> {

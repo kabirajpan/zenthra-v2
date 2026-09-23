@@ -444,6 +444,8 @@ impl App {
                         zenthra_widgets::text::CursorIcon::Crosshair => winit::window::CursorIcon::Crosshair,
                         zenthra_widgets::text::CursorIcon::ColResize => winit::window::CursorIcon::ColResize,
                         zenthra_widgets::text::CursorIcon::RowResize => winit::window::CursorIcon::RowResize,
+                        zenthra_widgets::text::CursorIcon::Grab => winit::window::CursorIcon::Grab,
+                        zenthra_widgets::text::CursorIcon::Grabbing => winit::window::CursorIcon::Grabbing,
                     };
                     frame.window.winit_window.set_cursor(winit_cursor);
                     
