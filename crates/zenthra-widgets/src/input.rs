@@ -27,6 +27,8 @@ pub struct InputBuilder<'u, 'a, 'b> {
     radius: [f32; 4],
     border_color: Option<Color>,
     border_width: f32,
+    focus_border_color: Option<Color>,
+    focus_border_width: Option<f32>,
     opacity: f32,
     shadow_color: Option<Color>,
     shadow_offset: [f32; 2],
@@ -62,6 +64,8 @@ impl<'u, 'a, 'b> InputBuilder<'u, 'a, 'b> {
             radius: [4.0; 4],
             border_color: None,
             border_width: 0.0,
+            focus_border_color: None,
+            focus_border_width: None,
             opacity: 1.0,
             shadow_color: None,
             shadow_offset: [0.0; 2],
@@ -248,6 +252,25 @@ impl<'u, 'a, 'b> InputBuilder<'u, 'a, 'b> {
     pub fn border(mut self, color: Color, width: f32) -> Self {
         self.border_color = Some(color);
         self.border_width = width;
+        self
+    }
+
+    pub fn no_border(mut self) -> Self {
+        self.border_color = Some(Color::TRANSPARENT);
+        self.border_width = 0.0;
+        self.focus_border_color = Some(Color::TRANSPARENT);
+        self.focus_border_width = Some(0.0);
+        self
+    }
+
+    pub fn no_bg(mut self) -> Self {
+        self.bg = None;
+        self
+    }
+
+    pub fn focus_border(mut self, color: Color, width: f32) -> Self {
+        self.focus_border_color = Some(color);
+        self.focus_border_width = Some(width);
         self
     }
 
@@ -533,8 +556,19 @@ impl<'u, 'a, 'b> InputBuilder<'u, 'a, 'b> {
                         self.radius[1],
                         self.radius[0],
                     ],
-                    border_width: if is_focused { self.border_width.max(1.0) } else { self.border_width },
-                    border_color: if is_focused { self.border_color.unwrap_or(Color::rgb(0.4, 0.7, 1.0)).to_array() } else { self.border_color.unwrap_or(Color::TRANSPARENT).to_array() },
+                    border_width: if is_focused {
+                        self.focus_border_width.unwrap_or_else(|| self.border_width.max(1.0))
+                    } else {
+                        self.border_width
+                    },
+                    border_color: if is_focused {
+                        self.focus_border_color
+                            .or(self.border_color)
+                            .unwrap_or(Color::rgb(0.4, 0.7, 1.0))
+                            .to_array()
+                    } else {
+                        self.border_color.unwrap_or(Color::TRANSPARENT).to_array()
+                    },
                     shadow_color: self.shadow_color.map(|mut c| { c.a *= self.shadow_opacity; c.to_array() }).unwrap_or([0.0; 4]),
                     shadow_offset: self.shadow_offset,
                     shadow_blur: self.shadow_blur,
