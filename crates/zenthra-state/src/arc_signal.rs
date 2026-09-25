@@ -37,6 +37,13 @@ impl<T: Send + Sync + 'static> ArcSignal<T> {
         res
     }
 
+    /// Modify the value in-place without triggering notifications or redraw hooks.
+    /// Useful for draining queues or consuming flags during an active render frame.
+    pub fn with_silent_mut<R>(&self, f: impl FnOnce(&mut T) -> R) -> R {
+        let mut guard = self.inner.write().unwrap();
+        f(&mut guard.value)
+    }
+
     /// Set a new value and notify listeners.
     pub fn set(&self, value: T) {
         {
