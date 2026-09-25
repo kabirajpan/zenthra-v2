@@ -5,6 +5,149 @@ use zenthra_platform::event::PlatformEvent;
 use zenthra_text::prelude::{TextOptions, CosmicFontProvider, Padding, ShapedGlyph};
 use zenthra_text::traits::FontProvider;
 
+const CTRL_STATE_KEY: Id = Id::from_u64(0xFEED_C071);
+const SHIFT_STATE_KEY: Id = Id::from_u64(0xFEED_581F);
+const ALT_STATE_KEY: Id = Id::from_u64(0xFEED_A170);
+
+fn get_selection_bounds(anchor: Option<usize>, cursor: usize, len: usize) -> (usize, usize, bool) {
+    if let Some(a) = anchor {
+        if a != cursor {
+            let s = a.min(cursor).min(len);
+            let e = a.max(cursor).min(len);
+            (s, e, s < e)
+        } else {
+            (cursor, cursor, false)
+        }
+    } else {
+        (cursor, cursor, false)
+    }
+}
+
+fn find_prev_word_boundary(text: &str, cursor: usize) -> usize {
+    let cursor = cursor.min(text.len());
+    if cursor == 0 {
+        return 0;
+    }
+    let sub = &text[..cursor];
+    let mut chars = sub.char_indices().rev().peekable();
+    let mut target = cursor;
+    while let Some(&(_, c)) = chars.peek() {
+        if c.is_whitespace() {
+            let (idx, _) = chars.next().unwrap();
+            target = idx;
+        } else {
+            break;
+        }
+    }
+    while let Some(&(idx, c)) = chars.peek() {
+        if c.is_whitespace() {
+            break;
+        }
+        chars.next();
+        target = idx;
+    }
+    target
+}
+
+fn find_next_word_boundary(text: &str, cursor: usize) -> usize {
+    let len = text.len();
+    if cursor >= len {
+        return len;
+    }
+    let sub = &text[cursor..];
+    let mut chars = sub.char_indices().peekable();
+    let mut skipped_non_ws = false;
+    let mut target = len;
+    while let Some(&(_, c)) = chars.peek() {
+        if !c.is_whitespace() {
+            chars.next();
+            skipped_non_ws = true;
+        } else {
+            break;
+        }
+    }
+    while let Some(&(idx, c)) = chars.peek() {
+        if c.is_whitespace() {
+            chars.next();
+        } else {
+            target = cursor + idx;
+            break;
+        }
+    }
+    if !skipped_non_ws && target == len {
+        target = cursor;
+    }
+    target
+}
+
+fn get_clipboard_text() -> Option<String> {
+    #[cfg(target_os = "linux")]
+    {
+        if std::env::var_os("WAYLAND_DISPLAY").is_some() {
+            if let Ok(output) = std::process::Command::new("wl-paste")
+                .args(&["--type", "text/plain;charset=utf-8", "-n"])
+                .output()
+            {
+                if output.status.success() {
+                    if let Ok(s) = String::from_utf8(output.stdout) {
+                        if !s.is_empty() {
+                            return Some(s);
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    if let Ok(mut cb) = arboard::Clipboard::new() {
+        if let Ok(text) = cb.get_text() {
+            if !text.is_empty() {
+                return Some(text);
+            }
+        }
+    }
+
+    #[cfg(target_os = "linux")]
+    {
+        if let Ok(output) = std::process::Command::new("xclip")
+            .args(&["-selection", "clipboard", "-o"])
+            .output()
+        {
+            if output.status.success() {
+                if let Ok(s) = String::from_utf8(output.stdout) {
+                    if !s.is_empty() {
+                        return Some(s);
+                    }
+                }
+            }
+        }
+    }
+
+    None
+}
+
+fn set_clipboard_text(text: &str) {
+    #[cfg(target_os = "linux")]
+    {
+        if std::env::var_os("WAYLAND_DISPLAY").is_some() {
+            use std::io::Write;
+            if let Ok(mut child) = std::process::Command::new("wl-copy")
+                .stdin(std::process::Stdio::piped())
+                .spawn()
+            {
+                if let Some(mut stdin) = child.stdin.take() {
+                    let _ = stdin.write_all(text.as_bytes());
+                }
+                let _ = child.wait();
+            }
+        }
+    }
+
+    if let Ok(mut cb) = arboard::Clipboard::new() {
+        let _ = cb.set_text(text);
+    }
+}
+
 pub struct InputBuilder<'u, 'a, 'b> {
     ui: &'u mut Ui<'a>,
     buffer: &'b mut String,
@@ -29,6 +172,8 @@ pub struct InputBuilder<'u, 'a, 'b> {
     border_width: f32,
     focus_border_color: Option<Color>,
     focus_border_width: Option<f32>,
+    placeholder: Option<String>,
+    placeholder_color: Option<Color>,
     opacity: f32,
     shadow_color: Option<Color>,
     shadow_offset: [f32; 2],
@@ -66,6 +211,8 @@ impl<'u, 'a, 'b> InputBuilder<'u, 'a, 'b> {
             border_width: 0.0,
             focus_border_color: None,
             focus_border_width: None,
+            placeholder: None,
+            placeholder_color: None,
             opacity: 1.0,
             shadow_color: None,
             shadow_offset: [0.0; 2],
@@ -296,6 +443,16 @@ impl<'u, 'a, 'b> InputBuilder<'u, 'a, 'b> {
         self
     }
 
+    pub fn placeholder(mut self, placeholder: impl Into<String>) -> Self {
+        self.placeholder = Some(placeholder.into());
+        self
+    }
+
+    pub fn placeholder_color(mut self, color: Color) -> Self {
+        self.placeholder_color = Some(color);
+        self
+    }
+
     pub fn on_change<F>(self, mut f: F) -> Self
     where
         F: FnMut(String) + 'a,
@@ -335,6 +492,11 @@ impl<'u, 'a, 'b> InputBuilder<'u, 'a, 'b> {
         let is_focused = self.ui.focused_id == Some(self.id);
         
         // --- 1. Initial Measure (for hit-testing and initial sizing) ---
+        let text_to_measure = if self.buffer.is_empty() {
+            self.placeholder.as_deref().unwrap_or("")
+        } else {
+            &self.buffer
+        };
         let (mut w_text_raw, h_content, mut shaped_buffer) = if let Some(fs) = self.ui.font_system.as_ref() {
             let mut adapter = CosmicFontProvider::new_with_system(fs.clone());
             let t_padding = Padding::from(self.text_padding);
@@ -343,7 +505,7 @@ impl<'u, 'a, 'b> InputBuilder<'u, 'a, 'b> {
                 .font_size(self.font_size * self.ui.font_scale)
                 .line_height(self.line_height)
                 .wrap(zenthra_text::prelude::TextWrap::None);
-            let buffer = adapter.shape(&self.buffer, &options);
+            let buffer = adapter.shape(text_to_measure, &options);
             let (cw, _ch) = buffer.content_size();
             let m = adapter.metrics(&options);
             (cw + t_padding.horizontal(), m.line_height() + t_padding.vertical(), Some(buffer))
@@ -363,6 +525,18 @@ impl<'u, 'a, 'b> InputBuilder<'u, 'a, 'b> {
             cursor_index = self.buffer.len();
         }
 
+        let sel_anchor_id = Id::from_u64(self.id.raw() ^ 0x5E1EC700);
+        let mut selection_anchor: Option<usize> = self.ui.cursor_state.get(&sel_anchor_id).copied();
+        if let Some(a) = selection_anchor {
+            if a > self.buffer.len() {
+                selection_anchor = Some(self.buffer.len());
+            }
+        }
+
+        let mut is_ctrl_down = self.ui.interaction_state.get(&CTRL_STATE_KEY).copied().unwrap_or(0.0) > 0.5;
+        let mut is_shift_down = self.ui.interaction_state.get(&SHIFT_STATE_KEY).copied().unwrap_or(0.0) > 0.5;
+        let mut is_alt_down = self.ui.interaction_state.get(&ALT_STATE_KEY).copied().unwrap_or(0.0) > 0.5;
+
         let (actual_x, actual_y) = if let Some((rect, _)) = self.ui.get_recorded_layout(self.id) {
             (rect.origin.x + self.ui.offset_x, rect.origin.y + self.ui.offset_y)
         } else {
@@ -380,19 +554,176 @@ impl<'u, 'a, 'b> InputBuilder<'u, 'a, 'b> {
             let events = std::mem::take(&mut self.ui.input_events);
             for event in &events {
                 match event {
+                    PlatformEvent::KeyUp { key } => {
+                        match key {
+                            winit::keyboard::KeyCode::ControlLeft | winit::keyboard::KeyCode::ControlRight |
+                            winit::keyboard::KeyCode::SuperLeft | winit::keyboard::KeyCode::SuperRight => {
+                                is_ctrl_down = false;
+                                self.ui.interaction_state.insert(CTRL_STATE_KEY, 0.0);
+                            }
+                            winit::keyboard::KeyCode::ShiftLeft | winit::keyboard::KeyCode::ShiftRight => {
+                                is_shift_down = false;
+                                self.ui.interaction_state.insert(SHIFT_STATE_KEY, 0.0);
+                            }
+                            winit::keyboard::KeyCode::AltLeft | winit::keyboard::KeyCode::AltRight => {
+                                is_alt_down = false;
+                                self.ui.interaction_state.insert(ALT_STATE_KEY, 0.0);
+                            }
+                            _ => {}
+                        }
+                    }
                     PlatformEvent::CharTyped(c) if is_focused => {
-                        if *c != '\r' && *c != '\n' {
-                             self.buffer.insert(cursor_index, *c);
-                             cursor_index += c.len_utf8();
-                             needs_auto_scroll = true;
-                             changed = true;
-                             self.ui.interaction_state.insert(self.id, self.ui.elapsed_time);
+                        match *c {
+                            '\u{1}' => {
+                                // Ctrl+A
+                                selection_anchor = Some(0);
+                                cursor_index = self.buffer.len();
+                                self.ui.interaction_state.insert(self.id, self.ui.elapsed_time);
+                                self.ui.needs_redraw = true;
+                            }
+                            '\u{3}' => {
+                                // Ctrl+C
+                                let (s, e, has_sel) = get_selection_bounds(selection_anchor, cursor_index, self.buffer.len());
+                                if has_sel {
+                                    set_clipboard_text(&self.buffer[s..e]);
+                                } else if !self.buffer.is_empty() {
+                                    set_clipboard_text(&self.buffer);
+                                }
+                            }
+                            '\u{18}' => {
+                                // Ctrl+X
+                                let (s, e, has_sel) = get_selection_bounds(selection_anchor, cursor_index, self.buffer.len());
+                                if has_sel {
+                                    set_clipboard_text(&self.buffer[s..e]);
+                                    self.buffer.drain(s..e);
+                                    cursor_index = s;
+                                    selection_anchor = None;
+                                    changed = true;
+                                    needs_auto_scroll = true;
+                                    self.ui.interaction_state.insert(self.id, self.ui.elapsed_time);
+                                }
+                            }
+                            '\u{16}' => {
+                                // Ctrl+V
+                                if let Some(text) = get_clipboard_text() {
+                                    let clean_text = text.replace(['\r', '\n'], "");
+                                    if !clean_text.is_empty() {
+                                        let (s, e, has_sel) = get_selection_bounds(selection_anchor, cursor_index, self.buffer.len());
+                                        if has_sel {
+                                            self.buffer.drain(s..e);
+                                            cursor_index = s;
+                                            selection_anchor = None;
+                                        }
+                                        self.buffer.insert_str(cursor_index, &clean_text);
+                                        cursor_index += clean_text.len();
+                                        changed = true;
+                                        needs_auto_scroll = true;
+                                        self.ui.interaction_state.insert(self.id, self.ui.elapsed_time);
+                                    }
+                                }
+                            }
+                            _ if !is_ctrl_down && !c.is_control() && *c != '\r' && *c != '\n' => {
+                                let (s, e, has_sel) = get_selection_bounds(selection_anchor, cursor_index, self.buffer.len());
+                                if has_sel {
+                                    self.buffer.drain(s..e);
+                                    cursor_index = s;
+                                    selection_anchor = None;
+                                }
+                                self.buffer.insert(cursor_index, *c);
+                                cursor_index += c.len_utf8();
+                                needs_auto_scroll = true;
+                                changed = true;
+                                self.ui.interaction_state.insert(self.id, self.ui.elapsed_time);
+                            }
+                            _ => {}
                         }
                     }
                     PlatformEvent::KeyDown { key } if is_focused => {
                         match key {
+                            winit::keyboard::KeyCode::ControlLeft | winit::keyboard::KeyCode::ControlRight |
+                            winit::keyboard::KeyCode::SuperLeft | winit::keyboard::KeyCode::SuperRight => {
+                                is_ctrl_down = true;
+                                self.ui.interaction_state.insert(CTRL_STATE_KEY, 1.0);
+                            }
+                            winit::keyboard::KeyCode::ShiftLeft | winit::keyboard::KeyCode::ShiftRight => {
+                                is_shift_down = true;
+                                self.ui.interaction_state.insert(SHIFT_STATE_KEY, 1.0);
+                            }
+                            winit::keyboard::KeyCode::AltLeft | winit::keyboard::KeyCode::AltRight => {
+                                is_alt_down = true;
+                                self.ui.interaction_state.insert(ALT_STATE_KEY, 1.0);
+                            }
+                            winit::keyboard::KeyCode::KeyA if is_ctrl_down => {
+                                selection_anchor = Some(0);
+                                cursor_index = self.buffer.len();
+                                self.ui.interaction_state.insert(self.id, self.ui.elapsed_time);
+                                self.ui.needs_redraw = true;
+                            }
+                            winit::keyboard::KeyCode::KeyC if is_ctrl_down => {
+                                let (s, e, has_sel) = get_selection_bounds(selection_anchor, cursor_index, self.buffer.len());
+                                if has_sel {
+                                    set_clipboard_text(&self.buffer[s..e]);
+                                } else if !self.buffer.is_empty() {
+                                    set_clipboard_text(&self.buffer);
+                                }
+                            }
+                            winit::keyboard::KeyCode::KeyX if is_ctrl_down => {
+                                let (s, e, has_sel) = get_selection_bounds(selection_anchor, cursor_index, self.buffer.len());
+                                if has_sel {
+                                    set_clipboard_text(&self.buffer[s..e]);
+                                    self.buffer.drain(s..e);
+                                    cursor_index = s;
+                                    selection_anchor = None;
+                                    changed = true;
+                                    needs_auto_scroll = true;
+                                    self.ui.interaction_state.insert(self.id, self.ui.elapsed_time);
+                                } else if !self.buffer.is_empty() {
+                                    set_clipboard_text(&self.buffer);
+                                    self.buffer.clear();
+                                    cursor_index = 0;
+                                    selection_anchor = None;
+                                    changed = true;
+                                    needs_auto_scroll = true;
+                                    self.ui.interaction_state.insert(self.id, self.ui.elapsed_time);
+                                }
+                            }
+                            winit::keyboard::KeyCode::KeyV if is_ctrl_down => {
+                                if let Some(text) = get_clipboard_text() {
+                                    let clean_text = text.replace(['\r', '\n'], "");
+                                    if !clean_text.is_empty() {
+                                        let (s, e, has_sel) = get_selection_bounds(selection_anchor, cursor_index, self.buffer.len());
+                                        if has_sel {
+                                            self.buffer.drain(s..e);
+                                            cursor_index = s;
+                                            selection_anchor = None;
+                                        }
+                                        self.buffer.insert_str(cursor_index, &clean_text);
+                                        cursor_index += clean_text.len();
+                                        changed = true;
+                                        needs_auto_scroll = true;
+                                        self.ui.interaction_state.insert(self.id, self.ui.elapsed_time);
+                                    }
+                                }
+                            }
                             winit::keyboard::KeyCode::Backspace => {
-                                if cursor_index > 0 {
+                                let (s, e, has_sel) = get_selection_bounds(selection_anchor, cursor_index, self.buffer.len());
+                                if has_sel {
+                                    self.buffer.drain(s..e);
+                                    cursor_index = s;
+                                    selection_anchor = None;
+                                    changed = true;
+                                    needs_auto_scroll = true;
+                                    self.ui.interaction_state.insert(self.id, self.ui.elapsed_time);
+                                } else if is_ctrl_down || is_alt_down {
+                                    let prev_word = find_prev_word_boundary(&self.buffer, cursor_index);
+                                    if prev_word < cursor_index {
+                                        self.buffer.drain(prev_word..cursor_index);
+                                        cursor_index = prev_word;
+                                        changed = true;
+                                        needs_auto_scroll = true;
+                                        self.ui.interaction_state.insert(self.id, self.ui.elapsed_time);
+                                    }
+                                } else if cursor_index > 0 {
                                     let mut chars = self.buffer[..cursor_index].chars();
                                     if let Some(c) = chars.next_back() {
                                         let len = c.len_utf8();
@@ -404,27 +735,106 @@ impl<'u, 'a, 'b> InputBuilder<'u, 'a, 'b> {
                                     }
                                 }
                             }
-                            winit::keyboard::KeyCode::ArrowLeft => {
-                                if cursor_index > 0 {
-                                    let mut chars = self.buffer[..cursor_index].chars();
-                                    if let Some(c) = chars.next_back() {
-                                        cursor_index -= c.len_utf8();
-                                        self.ui.interaction_state.insert(self.id, self.ui.elapsed_time);
-                                        self.ui.needs_redraw = true;
+                            winit::keyboard::KeyCode::Delete => {
+                                let (s, e, has_sel) = get_selection_bounds(selection_anchor, cursor_index, self.buffer.len());
+                                if has_sel {
+                                    self.buffer.drain(s..e);
+                                    cursor_index = s;
+                                    selection_anchor = None;
+                                    changed = true;
+                                    needs_auto_scroll = true;
+                                    self.ui.interaction_state.insert(self.id, self.ui.elapsed_time);
+                                } else if is_ctrl_down || is_alt_down {
+                                    let next_word = find_next_word_boundary(&self.buffer, cursor_index);
+                                    if next_word > cursor_index {
+                                        self.buffer.drain(cursor_index..next_word);
+                                        changed = true;
                                         needs_auto_scroll = true;
+                                        self.ui.interaction_state.insert(self.id, self.ui.elapsed_time);
+                                    }
+                                } else if cursor_index < self.buffer.len() {
+                                    let mut chars = self.buffer[cursor_index..].chars();
+                                    if let Some(_c) = chars.next() {
+                                        self.buffer.remove(cursor_index);
+                                        needs_auto_scroll = true;
+                                        changed = true;
+                                        self.ui.interaction_state.insert(self.id, self.ui.elapsed_time);
                                     }
                                 }
                             }
-                            winit::keyboard::KeyCode::ArrowRight => {
-                                if cursor_index < self.buffer.len() {
-                                    let mut chars = self.buffer[cursor_index..].chars();
-                                    if let Some(c) = chars.next() {
-                                        cursor_index += c.len_utf8();
-                                        self.ui.interaction_state.insert(self.id, self.ui.elapsed_time);
-                                        self.ui.needs_redraw = true;
-                                        needs_auto_scroll = true;
+                            winit::keyboard::KeyCode::ArrowLeft => {
+                                let (s, _e, has_sel) = get_selection_bounds(selection_anchor, cursor_index, self.buffer.len());
+                                if has_sel && !is_shift_down {
+                                    cursor_index = s;
+                                    selection_anchor = None;
+                                } else {
+                                    if is_shift_down && selection_anchor.is_none() {
+                                        selection_anchor = Some(cursor_index);
+                                    }
+                                    if is_ctrl_down || is_alt_down {
+                                        cursor_index = find_prev_word_boundary(&self.buffer, cursor_index);
+                                    } else if cursor_index > 0 {
+                                        let mut chars = self.buffer[..cursor_index].chars();
+                                        if let Some(c) = chars.next_back() {
+                                            cursor_index -= c.len_utf8();
+                                        }
+                                    }
+                                    if !is_shift_down {
+                                        selection_anchor = None;
                                     }
                                 }
+                                self.ui.interaction_state.insert(self.id, self.ui.elapsed_time);
+                                self.ui.needs_redraw = true;
+                                needs_auto_scroll = true;
+                            }
+                            winit::keyboard::KeyCode::ArrowRight => {
+                                let (_s, e, has_sel) = get_selection_bounds(selection_anchor, cursor_index, self.buffer.len());
+                                if has_sel && !is_shift_down {
+                                    cursor_index = e;
+                                    selection_anchor = None;
+                                } else {
+                                    if is_shift_down && selection_anchor.is_none() {
+                                        selection_anchor = Some(cursor_index);
+                                    }
+                                    if is_ctrl_down || is_alt_down {
+                                        cursor_index = find_next_word_boundary(&self.buffer, cursor_index);
+                                    } else if cursor_index < self.buffer.len() {
+                                        let mut chars = self.buffer[cursor_index..].chars();
+                                        if let Some(c) = chars.next() {
+                                            cursor_index += c.len_utf8();
+                                        }
+                                    }
+                                    if !is_shift_down {
+                                        selection_anchor = None;
+                                    }
+                                }
+                                self.ui.interaction_state.insert(self.id, self.ui.elapsed_time);
+                                self.ui.needs_redraw = true;
+                                needs_auto_scroll = true;
+                            }
+                            winit::keyboard::KeyCode::Home => {
+                                if is_shift_down && selection_anchor.is_none() {
+                                    selection_anchor = Some(cursor_index);
+                                }
+                                cursor_index = 0;
+                                if !is_shift_down {
+                                    selection_anchor = None;
+                                }
+                                self.ui.interaction_state.insert(self.id, self.ui.elapsed_time);
+                                self.ui.needs_redraw = true;
+                                needs_auto_scroll = true;
+                            }
+                            winit::keyboard::KeyCode::End => {
+                                if is_shift_down && selection_anchor.is_none() {
+                                    selection_anchor = Some(cursor_index);
+                                }
+                                cursor_index = self.buffer.len();
+                                if !is_shift_down {
+                                    selection_anchor = None;
+                                }
+                                self.ui.interaction_state.insert(self.id, self.ui.elapsed_time);
+                                self.ui.needs_redraw = true;
+                                needs_auto_scroll = true;
                             }
                             _ => {}
                         }
@@ -446,6 +856,11 @@ impl<'u, 'a, 'b> InputBuilder<'u, 'a, 'b> {
                 self.ui.dispatch_event(self.id, crate::ui::WidgetEvent::Click);
             }
             
+            if let Some(anchor) = selection_anchor {
+                self.ui.cursor_state.insert(sel_anchor_id, anchor);
+            } else {
+                self.ui.cursor_state.remove(&sel_anchor_id);
+            }
             self.ui.input_events = events;
             self.ui.cursor_state.insert(self.id, cursor_index);
 
@@ -464,7 +879,12 @@ impl<'u, 'a, 'b> InputBuilder<'u, 'a, 'b> {
                     .font_size(self.font_size * self.ui.font_scale)
                     .line_height(self.line_height)
                     .wrap(zenthra_text::prelude::TextWrap::None);
-                let buffer = adapter.shape(&self.buffer, &options);
+                let text_to_measure = if self.buffer.is_empty() {
+                    self.placeholder.as_deref().unwrap_or("")
+                } else {
+                    &self.buffer
+                };
+                let buffer = adapter.shape(text_to_measure, &options);
                 let (cw, _ch) = buffer.content_size();
                 w_text_raw = cw + t_padding.horizontal();
                 shaped_buffer = Some(buffer);
@@ -582,10 +1002,16 @@ impl<'u, 'a, 'b> InputBuilder<'u, 'a, 'b> {
         }
 
         // --- 5. Render Text ---
-        let mut text_builder = TextBuilder::new(self.ui, &self.buffer)
+        let (text_to_draw, draw_color) = if self.buffer.is_empty() && self.placeholder.is_some() {
+            (self.placeholder.as_deref().unwrap_or(""), self.placeholder_color.unwrap_or(self.color.with_alpha(0.4)))
+        } else {
+            (self.buffer.as_str(), self.color)
+        };
+
+        let mut text_builder = TextBuilder::new(self.ui, text_to_draw)
             .size(self.font_size)
             .line_height(self.line_height)
-            .color(self.color)
+            .color(draw_color)
             .fill_x(self.fill_x)
             .padding(self.text_padding.top, self.text_padding.right, self.text_padding.bottom, self.text_padding.left)
             .wrap(zenthra_text::prelude::TextWrap::None)
@@ -606,6 +1032,35 @@ impl<'u, 'a, 'b> InputBuilder<'u, 'a, 'b> {
         }
         
         let (_, _, final_sb, _) = text_builder.draw_and_measure();
+
+        // --- 5b. Render Selection Highlight ---
+        let (sel_start, sel_end, has_selection) = get_selection_bounds(selection_anchor, cursor_index, self.buffer.len());
+        if is_focused && has_selection && !self.buffer.is_empty() {
+            if let Some(sb) = &final_sb {
+                let mut min_x: Option<f32> = None;
+                let mut max_x: Option<f32> = None;
+                for g in sb.glyphs() {
+                    if g.cluster >= sel_start && g.cluster < sel_end {
+                        min_x = Some(min_x.map_or(g.x, |m| m.min(g.x)));
+                        max_x = Some(max_x.map_or(g.x + g.width, |m| m.max(g.x + g.width)));
+                    }
+                }
+                if let (Some(x0), Some(x1)) = (min_x, max_x) {
+                    let sel_x = self.x + self.padding.left + self.text_padding.left + x0 - scroll_x;
+                    let sel_y = self.y + self.padding.top + self.text_padding.top;
+                    let sel_w = (x1 - x0).max(2.0);
+                    let sel_color = self.highlight.unwrap_or(Color::rgba(0.2, 0.5, 0.9, 0.35));
+                    self.ui.draws.push(DrawCommand::OverlayRect(OverlayRectDraw {
+                        x: sel_x,
+                        y: sel_y,
+                        width: sel_w,
+                        height: self.font_size * self.line_height,
+                        color: sel_color,
+                        clip: [self.x, self.y, w_box, h_box],
+                    }));
+                }
+            }
+        }
         
         // --- 6. Cursor Rendering ---
         if is_focused {
@@ -616,16 +1071,18 @@ impl<'u, 'a, 'b> InputBuilder<'u, 'a, 'b> {
             if let Some(sb) = final_sb {
                 let mut lx = 0.0;
                 let mut found = false;
-                for g in sb.glyphs() {
-                    if g.cluster == cursor_index {
-                        lx = g.x;
-                        found = true;
-                        break;
+                if !self.buffer.is_empty() {
+                    for g in sb.glyphs() {
+                        if g.cluster == cursor_index {
+                            lx = g.x;
+                            found = true;
+                            break;
+                        }
                     }
-                }
 
-                if !found && cursor_index == self.buffer.len() {
-                    lx = sb.glyphs().last().map(|g: &ShapedGlyph| g.x + g.width).unwrap_or(0.0);
+                    if !found && cursor_index == self.buffer.len() {
+                        lx = sb.glyphs().last().map(|g: &ShapedGlyph| g.x + g.width).unwrap_or(0.0);
+                    }
                 }
 
                 let cx = lx + self.x + self.padding.left + self.text_padding.left - scroll_x;
