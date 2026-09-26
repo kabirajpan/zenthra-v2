@@ -55,7 +55,7 @@ impl ZentypePipeline {
         let vertical_shift = visual_ascent - first_line_y;
 
         let clip = options.clip_rect.unwrap_or([0.0, 0.0, 9999.0, 9999.0]);
-        let sf = options.scale_factor;
+        let sf = if options.scale_factor > 0.0 { options.scale_factor } else { 1.0 };
 
         // --- 2. HIGHLIGHT RENDERING ---
         if has_highlight {
@@ -65,10 +65,10 @@ impl ZentypePipeline {
                 if line.width > 0.0 {
                     instances.push(crate::types::glyph::GlyphInstance {
                         pos: [
-                            (pos[0] + line.x) * sf, 
-                            (pos[1] + line.y + vertical_shift - visual_ascent) * sf
+                            ((pos[0] + line.x) * sf).round(), 
+                            ((pos[1] + line.y + vertical_shift - visual_ascent) * sf).round()
                         ],
-                        size: [line.width * sf, (font_size * lh) * sf],
+                        size: [(line.width * sf).round(), ((font_size * lh) * sf).round()],
                         uv_pos: [0.0, 0.0],
                         uv_size: [0.0, 0.0],
                         color: [0.0, 0.0, 0.0, 0.0],
@@ -81,12 +81,17 @@ impl ZentypePipeline {
 
         // --- 3. GLYPH RENDERING ---
         let color = options.color;
+        let base_x = (pos[0] * sf).round();
         for glyph in buffer.glyphs() {
             if let Some(entry) = atlas.get(&glyph.key) {
+                if entry.pixel_size[0] <= 0.0 || entry.pixel_size[1] <= 0.0 {
+                    continue;
+                }
+                let base_y = ((pos[1] + glyph.y + vertical_shift) * sf).round();
                 instances.push(crate::types::glyph::GlyphInstance {
                     pos: [
-                        (pos[0] + glyph.x) * sf + entry.pixel_offset[0],
-                        (pos[1] + glyph.y + vertical_shift) * sf - entry.pixel_offset[1],
+                        base_x + (glyph.physical_x as f32) + entry.pixel_offset[0],
+                        base_y - entry.pixel_offset[1],
                     ],
                     size: entry.pixel_size,
                     uv_pos: entry.uv_pos,

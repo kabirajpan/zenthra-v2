@@ -758,7 +758,7 @@ impl<'u, 'a> ContainerBuilder<'u, 'a> {
         let (scroll_x, scroll_y) = if self.scroll_x || self.scroll_y {
             let (mut sx, mut sy) = *self.ui.scroll_state.get(&id).unwrap_or(&(0.0, 0.0));
             
-            if container_hover {
+            if container_hover && !self.ui.resize_active {
                 let mut events = std::mem::take(&mut self.ui.input_events);
                 events.retain(|event| {
                     let mut keep = true;
@@ -1115,18 +1115,21 @@ impl<'u, 'a> ContainerBuilder<'u, 'a> {
         // --- Visual Scrollbars & Dragging ---
         if self.scroll_x || self.scroll_y {
             let bar_thickness = 4.0;
-            let bar_margin = 0.0;
+            let bar_margin = 2.0;
 
             // Vertical Scrollbar
             if self.scroll_y && max_sy > 0.0 {
                 let thumb_h = (h / (content_h + self.padding_top + self.padding_bottom)) * h;
                 let thumb_h = thumb_h.max(20.0);
                 let scroll_ratio = scroll_y / max_sy;
-                let is_hover = self.ui.mouse_in_rect(actual_ox + w - bar_thickness - bar_margin - 2.0, actual_oy + (h - thumb_h) * scroll_ratio, bar_thickness + 4.0, thumb_h) && !self.ui.is_occluded(id, self.ui.mouse_x, self.ui.mouse_y);
-                let is_dragging = self.ui.active_drag.as_ref().map(|d| d.id == id && d.start_mouse <= -1000.0).unwrap_or(false); 
+                let is_hover = !self.ui.resize_active
+                    && self.ui.mouse_in_rect(actual_ox + w - bar_thickness - bar_margin - 2.0, actual_oy + (h - thumb_h) * scroll_ratio, bar_thickness + 4.0, thumb_h)
+                    && !self.ui.is_occluded(id, self.ui.mouse_x, self.ui.mouse_y);
+                let is_dragging = !self.ui.resize_active
+                    && self.ui.active_drag.as_ref().map(|d| d.id == id && d.start_mouse <= -1000.0).unwrap_or(false); 
 
                 // Handle Drag Y
-                if self.ui.clicked && is_hover {
+                if !self.ui.resize_active && self.ui.clicked && is_hover {
                     self.ui.active_drag = Some(crate::ui::ScrollDrag {
                         id,
                         start_mouse: -1000.0 - self.ui.mouse_y, 
@@ -1135,7 +1138,7 @@ impl<'u, 'a> ContainerBuilder<'u, 'a> {
                 }
                 
                 if let Some(drag) = &self.ui.active_drag {
-                    if drag.id == id && drag.start_mouse <= -1000.0 {
+                    if !self.ui.resize_active && drag.id == id && drag.start_mouse <= -1000.0 {
                         let current_marker = -1000.0 - self.ui.mouse_y;
                         let delta = drag.start_mouse - current_marker;
                         let scroll_range = h - thumb_h;
@@ -1150,7 +1153,7 @@ impl<'u, 'a> ContainerBuilder<'u, 'a> {
                 {
                     let color = if is_hover || is_dragging { 
                         Color::rgba(1.0, 1.0, 1.0, 0.5) 
-                    } else if container_hover {
+                    } else if container_hover && !self.ui.resize_active {
                         Color::rgba(1.0, 1.0, 1.0, 0.2)
                     } else {
                         Color::rgba(1.0, 1.0, 1.0, 0.1)
@@ -1178,10 +1181,13 @@ impl<'u, 'a> ContainerBuilder<'u, 'a> {
                 let thumb_w = (w / (content_w + self.padding_left + self.padding_right)) * w;
                 let thumb_w = thumb_w.max(20.0);
                 let scroll_ratio = scroll_x / max_sx;
-                let is_hover = self.ui.mouse_in_rect(actual_ox + (w - thumb_w) * scroll_ratio, actual_oy + h - bar_thickness - bar_margin - 2.0, thumb_w, bar_thickness + 4.0) && !self.ui.is_occluded(id, self.ui.mouse_x, self.ui.mouse_y);
-                let is_dragging = self.ui.active_drag.as_ref().map(|d| d.id == id && d.start_mouse > -1000.0).unwrap_or(false);
+                let is_hover = !self.ui.resize_active
+                    && self.ui.mouse_in_rect(actual_ox + (w - thumb_w) * scroll_ratio, actual_oy + h - bar_thickness - bar_margin - 2.0, thumb_w, bar_thickness + 4.0)
+                    && !self.ui.is_occluded(id, self.ui.mouse_x, self.ui.mouse_y);
+                let is_dragging = !self.ui.resize_active
+                    && self.ui.active_drag.as_ref().map(|d| d.id == id && d.start_mouse > -1000.0).unwrap_or(false);
 
-                if self.ui.clicked && is_hover {
+                if !self.ui.resize_active && self.ui.clicked && is_hover {
                     self.ui.active_drag = Some(crate::ui::ScrollDrag {
                         id,
                         start_mouse: self.ui.mouse_x,
@@ -1190,7 +1196,7 @@ impl<'u, 'a> ContainerBuilder<'u, 'a> {
                 }
 
                 if let Some(drag) = &self.ui.active_drag {
-                    if drag.id == id && drag.start_mouse > -1000.0 {
+                    if !self.ui.resize_active && drag.id == id && drag.start_mouse > -1000.0 {
                         let delta = self.ui.mouse_x - drag.start_mouse;
                         let scroll_range = w - thumb_w;
                         if scroll_range > 0.0 {
@@ -1205,7 +1211,7 @@ impl<'u, 'a> ContainerBuilder<'u, 'a> {
                 {
                     let color = if is_hover || is_dragging { 
                         Color::rgba(1.0, 1.0, 1.0, 0.5) 
-                    } else if container_hover {
+                    } else if container_hover && !self.ui.resize_active {
                         Color::rgba(1.0, 1.0, 1.0, 0.2)
                     } else {
                         Color::rgba(1.0, 1.0, 1.0, 0.1)

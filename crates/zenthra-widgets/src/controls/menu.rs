@@ -180,6 +180,7 @@ impl<'u, 'a> MenuBuilder<'u, 'a> {
                 self.ui.interaction_state.insert(active_menu_key, self.id.raw() as f32);
             }
             self.ui.interaction_state.remove(&active_submenu_key);
+            self.ui.consume_click();
             self.ui.needs_redraw = true;
         }
 
@@ -393,7 +394,7 @@ impl<'u, 'a> SubMenuBuilder<'u, 'a> {
             } else {
                 self.ui.interaction_state.insert(active_submenu_key, self.id.raw() as f32);
             }
-            self.ui.clicked = false;
+            self.ui.consume_click();
             self.ui.needs_redraw = true;
         }
 
@@ -688,7 +689,7 @@ impl<'u, 'a> MenuItemBuilder<'u, 'a> {
             let active_submenu_key = Id::from_u64(999999901);
             self.ui.interaction_state.insert(active_menu_key, 0.0);
             self.ui.interaction_state.insert(active_submenu_key, 0.0);
-            self.ui.clicked = false;
+            self.ui.consume_click();
             self.ui.needs_redraw = true;
         }
 

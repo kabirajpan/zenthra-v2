@@ -404,7 +404,7 @@ impl App {
                         let flag_type = raw & 0xFF;
                         if flag_type == 5 && val > 0.5 {
                             let win_id = zenthra_core::Id::from_u64(raw >> 8);
-                            if !shown_windows.contains(&win_id) {
+                            if !shown_windows.contains(&win_id) && !ui.active_overlays.contains(&win_id) && ui.modal_window_id != Some(win_id) && !ui.modal_active {
                                 keys_to_clear.push(key);
                             }
                         } else if flag_type == 99 && val > 0.5 {

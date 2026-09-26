@@ -368,6 +368,7 @@ impl<'u, 'a> ButtonBuilder<'u, 'a> {
 
         if self.ui.clicked && is_hovered {
             clicked = true;
+            self.ui.consume_click();
         }
 
         // Dispatch events

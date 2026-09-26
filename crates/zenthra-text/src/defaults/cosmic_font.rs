@@ -190,9 +190,10 @@ impl CosmicFontProvider {
                 start_cluster,
             });
 
+            let sf = if options.scale_factor > 0.0 { options.scale_factor } else { 1.0 };
             for glyph in run.glyphs {
                 max_width = max_width.max(glyph.x + glyph.w);
-                let physical = glyph.physical((0.0, 0.0), options.scale_factor);
+                let physical = glyph.physical((0.0, 0.0), sf);
                 shaped_glyphs.push(ShapedGlyph {
                     key: physical.cache_key,
                     cluster: paragraph_offset + glyph.start,
@@ -201,6 +202,7 @@ impl CosmicFontProvider {
                     y: grid_y + glyph.y, 
                     width: glyph.w,
                     height: 0.0,
+                    physical_x: physical.x,
                 });
             }
 

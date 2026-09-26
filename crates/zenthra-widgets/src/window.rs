@@ -128,11 +128,13 @@ impl<'u, 'a, 'b> FloatingWindowBuilder<'u, 'a, 'b> {
         let id = self.id;
         let z_key = Id::from_u64((id.raw() << 8) | 4);
         let modal_key = Id::from_u64((id.raw() << 8) | 5);
+        let overlay_key = Id::from_u64((id.raw() << 8) | 99);
         let opened_key = Id::from_u64((id.raw() << 8) | 6);
 
         if !*self.is_open {
             self.ui.interaction_state.remove(&z_key);
             self.ui.interaction_state.remove(&modal_key);
+            self.ui.interaction_state.remove(&overlay_key);
             self.ui.interaction_state.remove(&opened_key);
             return Response { clicked: false, hovered: false, pressed: false, submitted: false };
         }
@@ -149,8 +151,10 @@ impl<'u, 'a, 'b> FloatingWindowBuilder<'u, 'a, 'b> {
             self.ui.needs_redraw = true;
         }
 
-        // Store modal state
+        // Store modal & overlay state
         self.ui.interaction_state.insert(modal_key, if self.modal { 1.0 } else { 0.0 });
+        self.ui.interaction_state.insert(overlay_key, 1.0);
+        self.ui.active_overlays.push(id);
 
         let mut is_dragging = self.ui.interaction_state.get(&drag_id).map(|&v| v > 0.5).unwrap_or(false);
 
@@ -158,48 +162,35 @@ impl<'u, 'a, 'b> FloatingWindowBuilder<'u, 'a, 'b> {
         let win_x = self.pos[0];
         let win_y = self.pos[1];
 
+        // Register window bounding box so occlusion detection knows its bounds immediately
+        self.ui.record_layout(id, zenthra_core::Rect::new(win_x, win_y, self.width, self.height));
+
         // Is hovered check (uses occlusion detection internally)
         let is_hovered = self.ui.is_hovered(id, win_x, win_y, self.width, self.height);
 
         // Check if the window was already open in the previous frame
         let was_already_open = self.ui.interaction_state.insert(opened_key, 1.0).is_some();
 
-        {
-            use std::fs::OpenOptions;
-            use std::io::Write;
-            if let Ok(mut file) = OpenOptions::new().create(true).append(true).open("window_debug.log") {
-                let _ = writeln!(
-                    file,
-                    "WINDOW ID: {:?} | is_open: {} | clicked: {} | is_hovered: {} | was_already_open: {}",
-                    id, *self.is_open, self.ui.clicked, is_hovered, was_already_open
-                );
-            }
-        }
-
         // Light dismiss logic
         if self.light_dismiss && self.ui.clicked && !is_hovered && was_already_open {
             *self.is_open = false;
-            {
-                use std::fs::OpenOptions;
-                use std::io::Write;
-                if let Ok(mut file) = OpenOptions::new().create(true).append(true).open("window_debug.log") {
-                    let _ = writeln!(file, "   --> LIGHT DISMISS TRIGGERED! Setting is_open to false.");
-                }
-            }
+            self.ui.consume_click();
             self.ui.interaction_state.remove(&z_key);
             self.ui.interaction_state.remove(&modal_key);
+            self.ui.interaction_state.remove(&overlay_key);
             self.ui.interaction_state.remove(&opened_key);
             self.ui.needs_redraw = true;
             return Response { clicked: true, hovered: false, pressed: false, submitted: false };
         }
 
-        // Active focus z-order promotion logic
+        // Active focus z-order promotion logic & click consumption
         if self.ui.clicked && is_hovered {
             let max_z_key = Id::from_u64(999999999);
             let max_z = self.ui.interaction_state.get(&max_z_key).copied().unwrap_or(0.0);
             let new_z = max_z + 1.0;
             self.ui.interaction_state.insert(max_z_key, new_z);
             self.ui.interaction_state.insert(z_key, new_z);
+            self.ui.consume_click();
             self.ui.needs_redraw = true;
         }
 
@@ -252,6 +243,7 @@ impl<'u, 'a, 'b> FloatingWindowBuilder<'u, 'a, 'b> {
             }
 
             let mut container = ui.container()
+                .raw_id(id)
                 .absolute(win_x, win_y)
                 .width(width)
                 .height(height)

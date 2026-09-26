@@ -17,4 +17,6 @@ pub struct ShapedGlyph {
     pub width: f32,
     /// Height of the glyph.
     pub height: f32,
+    /// Physical integer X offset from line origin, calculated during shaping.
+    pub physical_x: i32,
 }

@@ -149,6 +149,9 @@ pub struct Ui<'a> {
     pub active_overlay_stack: Vec<Id>,
     pub active_overlays: Vec<Id>,
     pub font_scale: f32,
+    pub modal_active: bool,
+    pub modal_window_id: Option<Id>,
+    pub resize_active: bool,
 }
 
 pub fn copy_to_system_clipboard(text: &str) {
@@ -272,6 +275,9 @@ impl<'a> Ui<'a> {
             active_overlay_stack: Vec::new(),
             active_overlays: Vec::new(),
             font_scale: 1.0,
+            modal_active: false,
+            modal_window_id: None,
+            resize_active: false,
         }
     }
 
@@ -377,65 +383,167 @@ impl<'a> Ui<'a> {
         self.id_log.push(id);
     }
 
+    /// Consumes the primary click event for this frame so subsequent/underlying widgets do not trigger.
+    pub fn consume_click(&mut self) {
+        self.clicked = false;
+        self.input_events.retain(|event| {
+            !matches!(
+                event,
+                zenthra_platform::event::PlatformEvent::MouseButton {
+                    button: winit::event::MouseButton::Left,
+                    ..
+                }
+            )
+        });
+    }
+
+    /// Consumes the secondary (right) click event for this frame.
+    pub fn consume_right_click(&mut self) {
+        self.right_clicked = false;
+        self.input_events.retain(|event| {
+            !matches!(
+                event,
+                zenthra_platform::event::PlatformEvent::MouseButton {
+                    button: winit::event::MouseButton::Right,
+                    ..
+                }
+            )
+        });
+    }
+
+    /// Consumes all pointer events (click, right-click, mouse-down) for this frame.
+    pub fn consume_pointer(&mut self) {
+        self.clicked = false;
+        self.right_clicked = false;
+        self.mouse_down = false;
+        self.input_events.retain(|event| {
+            !matches!(
+                event,
+                zenthra_platform::event::PlatformEvent::MouseButton { .. }
+            )
+        });
+    }
+
+    /// Checks if any modal dialog or window is currently active.
+    pub fn has_active_modal(&self) -> bool {
+        for (&key, &val) in self.interaction_state.iter() {
+            if (key.raw() & 0xFF) == 5 && val > 0.5 {
+                return true;
+            }
+        }
+        false
+    }
+
     pub fn is_occluded(&self, id: Id, x: f32, y: f32) -> bool {
-        let our_win_id = self.widget_window_map.get(&id).copied().unwrap_or(id);
+        let our_win_id = self.widget_window_map.get(&id)
+            .or_else(|| self.next_widget_window_map.get(&id))
+            .copied()
+            .or(self.current_window_id)
+            .unwrap_or(id);
         let our_z = self.interaction_state
             .get(&Id::from_u64((our_win_id.raw() << 8) | 4))
             .copied()
             .unwrap_or(0.0);
 
-        // Check active modal blocking
-        for (&other_id, _) in self.screen_layout_cache {
-            if other_id == id {
-                continue;
-            }
-            let other_win_id = self.widget_window_map.get(&other_id).copied().unwrap_or(other_id);
-            let modal_key = Id::from_u64((other_win_id.raw() << 8) | 5);
-            let is_modal = self.interaction_state
-                .get(&modal_key)
-                .map(|&v| v > 0.5)
-                .unwrap_or(false);
-
-            if is_modal && other_win_id != our_win_id {
+        // 1. Check active modal blocking: if ANY modal is active, any widget not belonging
+        // to that modal is 100% occluded (non-interactive).
+        if self.modal_active {
+            if let Some(modal_id) = self.modal_window_id {
+                if our_win_id != modal_id {
+                    return true;
+                }
+            } else {
                 return true;
             }
         }
-
-        // Check active overlays occlusion (if mouse is inside an overlay, block background widgets)
-        for (&other_id, other_rect) in self.screen_layout_cache {
-            if other_id == id {
-                continue;
-            }
-            let overlay_key = Id::from_u64((other_id.raw() << 8) | 99);
-            let is_overlay = self.active_overlays.contains(&other_id)
-                || self.interaction_state.get(&overlay_key).map(|&v| v > 0.5).unwrap_or(false);
-
-            if is_overlay {
-                if x >= other_rect.origin.x && x <= other_rect.origin.x + other_rect.size.width &&
-                   y >= other_rect.origin.y && y <= other_rect.origin.y + other_rect.size.height {
-                    if !self.active_overlay_stack.contains(&other_id) {
-                        return true;
-                    }
+        for (&key, &val) in self.interaction_state.iter() {
+            if (key.raw() & 0xFF) == 5 && val > 0.5 {
+                let modal_win_id = Id::from_u64(key.raw() >> 8);
+                if our_win_id != modal_win_id {
+                    return true;
                 }
             }
         }
 
-        // Check z-order occlusion
-        for (&other_id, other_rect) in self.screen_layout_cache {
-            if other_id == id {
-                continue;
+        // 2. Check active overlays & floating windows occlusion:
+        // If mouse (x, y) is inside any active overlay or floating window rect,
+        // and current widget is NOT inside that overlay/window, it is occluded!
+        let check_overlay_rect = |other_id: Id, other_rect: &Rect| -> bool {
+            if other_id == id || other_id == our_win_id {
+                return false;
             }
-            let other_win_id = self.widget_window_map.get(&other_id).copied().unwrap_or(other_id);
+            let other_win_id = self.widget_window_map.get(&other_id)
+                .or_else(|| self.next_widget_window_map.get(&other_id))
+                .copied()
+                .unwrap_or(other_id);
+            if other_win_id == our_win_id {
+                return false;
+            }
+
+            let overlay_key = Id::from_u64((other_id.raw() << 8) | 99);
+            let win_overlay_key = Id::from_u64((other_win_id.raw() << 8) | 99);
+            let is_overlay = self.active_overlays.contains(&other_id)
+                || self.active_overlays.contains(&other_win_id)
+                || self.interaction_state.get(&overlay_key).map(|&v| v > 0.5).unwrap_or(false)
+                || self.interaction_state.get(&win_overlay_key).map(|&v| v > 0.5).unwrap_or(false);
+
+            if is_overlay {
+                if x >= other_rect.origin.x && x <= other_rect.origin.x + other_rect.size.width &&
+                   y >= other_rect.origin.y && y <= other_rect.origin.y + other_rect.size.height {
+                    if !self.active_overlay_stack.contains(&other_id) && !self.active_overlay_stack.contains(&other_win_id) {
+                        return true;
+                    }
+                }
+            }
+            false
+        };
+
+        for (&other_id, other_rect) in self.screen_layout_cache {
+            if check_overlay_rect(other_id, other_rect) {
+                return true;
+            }
+        }
+        for (&other_id, other_rect) in self.next_screen_layout_cache.iter() {
+            if check_overlay_rect(other_id, other_rect) {
+                return true;
+            }
+        }
+
+        // 3. Check z-order occlusion
+        let check_z_rect = |other_id: Id, other_rect: &Rect| -> bool {
+            if other_id == id || other_id == our_win_id {
+                return false;
+            }
+            let other_win_id = self.widget_window_map.get(&other_id)
+                .or_else(|| self.next_widget_window_map.get(&other_id))
+                .copied()
+                .unwrap_or(other_id);
+            if other_win_id == our_win_id {
+                return false;
+            }
             let other_z_key = Id::from_u64((other_win_id.raw() << 8) | 4);
             if let Some(&other_z) = self.interaction_state.get(&other_z_key) {
-                if other_win_id != our_win_id && other_z > our_z {
+                if other_z > our_z {
                     if x >= other_rect.origin.x && x <= other_rect.origin.x + other_rect.size.width &&
                        y >= other_rect.origin.y && y <= other_rect.origin.y + other_rect.size.height {
                         return true;
                     }
                 }
             }
+            false
+        };
+
+        for (&other_id, other_rect) in self.screen_layout_cache {
+            if check_z_rect(other_id, other_rect) {
+                return true;
+            }
         }
+        for (&other_id, other_rect) in self.next_screen_layout_cache.iter() {
+            if check_z_rect(other_id, other_rect) {
+                return true;
+            }
+        }
+
         false
     }
 
