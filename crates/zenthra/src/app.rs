@@ -639,6 +639,9 @@ impl App {
                                 let mut inst = rd.instance;
                                 inst.pos[0] *= sf; inst.pos[1] *= sf;
                                 inst.size[0] *= sf; inst.size[1] *= sf;
+                                inst.radius[0] *= sf; inst.radius[1] *= sf;
+                                inst.radius[2] *= sf; inst.radius[3] *= sf;
+                                inst.border_width *= sf;
                                 inst.shadow_offset[0] *= sf; inst.shadow_offset[1] *= sf;
                                 inst.shadow_blur *= sf;
                                 inst.clip_rect[0] *= sf; inst.clip_rect[1] *= sf;
@@ -794,33 +797,61 @@ impl App {
                                      &scratch.full_b_v
                                  };
 
-                                // ── Compile custom shader if needed ───────────
-                                let shader_src = custom_shaders_map.get(cp.shader_id).copied();
-                                if let Some(src) = shader_src {
-                                    let pipeline = custom_pipelines.entry(cp.shader_id).or_insert_with(|| {
-                                        let vs_module = device.create_shader_module(wgpu::ShaderModuleDescriptor {
+                                 // ── Compile custom shader if needed ───────────
+                                 let shader_src = custom_shaders_map.get(cp.shader_id).copied();
+                                 if let Some(src) = shader_src {
+                                     let pipeline = custom_pipelines.entry(cp.shader_id).or_insert_with(|| {
+                                         let vs_module = device.create_shader_module(wgpu::ShaderModuleDescriptor {
                                              label: Some("Custom PostProcess VS"),
                                              source: wgpu::ShaderSource::Wgsl(std::borrow::Cow::Borrowed(
                                                  r#"
-                                                 struct VsOut {
+                                                 struct BackdropUniforms {
+                                                     radius: vec4<f32>,
+                                                     rect_pos: vec2<f32>,
+                                                     rect_size: vec2<f32>,
+                                                     screen_size: vec2<f32>,
+                                                     time: f32,
+                                                     brightness: f32,
+                                                     saturation: f32,
+                                                     contrast: f32,
+                                                     blur_type: f32,
+                                                     opacity: f32,
+                                                     padding: vec2<f32>,
+                                                     _end_padding: vec2<f32>,
+                                                 }
+
+                                                 @group(1) @binding(0) var<uniform> u: BackdropUniforms;
+
+                                                 struct BackdropVsOut {
                                                      @builtin(position) pos: vec4<f32>,
                                                      @location(0)       uv:  vec2<f32>,
+                                                     @location(1)       local_pos: vec2<f32>,
+                                                     @location(2)       half_size: vec2<f32>,
+                                                     @location(3)       radius: vec4<f32>,
                                                  }
+
                                                  @vertex
-                                                 fn vs_main(@builtin(vertex_index) vi: u32) -> VsOut {
-                                                     var positions = array<vec2<f32>, 3>(
-                                                         vec2<f32>(-1.0, -1.0),
-                                                         vec2<f32>( 3.0, -1.0),
-                                                         vec2<f32>(-1.0,  3.0),
-                                                     );
-                                                     var uvs = array<vec2<f32>, 3>(
+                                                 fn vs_backdrop(@builtin(vertex_index) vi: u32) -> BackdropVsOut {
+                                                     var quad = array<vec2<f32>, 6>(
+                                                         vec2<f32>(0.0, 0.0),
+                                                         vec2<f32>(1.0, 0.0),
                                                          vec2<f32>(0.0, 1.0),
-                                                         vec2<f32>(2.0, 1.0),
-                                                         vec2<f32>(0.0, -1.0),
+                                                         vec2<f32>(0.0, 1.0),
+                                                         vec2<f32>(1.0, 0.0),
+                                                         vec2<f32>(1.0, 1.0),
                                                      );
-                                                     var out: VsOut;
-                                                     out.pos = vec4<f32>(positions[vi], 0.0, 1.0);
-                                                     out.uv  = uvs[vi];
+                                                     let corner = quad[vi];
+                                                     let pixel_pos = u.rect_pos + corner * u.rect_size;
+
+                                                     let clip_x = (pixel_pos.x / u.screen_size.x) * 2.0 - 1.0;
+                                                     let clip_y = 1.0 - (pixel_pos.y / u.screen_size.y) * 2.0;
+
+                                                     var out: BackdropVsOut;
+                                                     out.pos = vec4<f32>(clip_x, clip_y, 0.0, 1.0);
+                                                     out.uv  = pixel_pos / u.screen_size;
+                                                     out.half_size = u.rect_size * 0.5;
+                                                     out.local_pos = pixel_pos - (u.rect_pos + out.half_size);
+                                                     out.radius = u.radius;
                                                      return out;
                                                  }
                                                  "#
@@ -897,12 +928,14 @@ impl App {
                                          rect_size,
                                          screen_size: [scratch.width as f32, scratch.height as f32],
                                          time: elapsed,
-                                         brightness: 1.0,
-                                         saturation: 1.0,
-                                         contrast: 1.0,
-                                         blur_type: 0.0,
-                                         opacity: 1.0, padding: [cp.blur_radius, 0.0], _end_padding: [0.0; 2],
-                                     };
+                                         brightness: cp.params[1],
+                                         saturation: cp.params[2],
+                                         contrast: cp.params[3],
+                                         blur_type: cp.params[0],
+                                         opacity: cp.params[4],
+                                         padding: [cp.params[5], cp.params[6]],
+                                         _end_padding: [cp.params[7], 0.0],
+                                    };
 
                                     let uniform_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
                                         label: Some("Custom Blit Uniform Buffer"),

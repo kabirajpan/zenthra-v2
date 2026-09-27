@@ -27,6 +27,7 @@ pub struct BlitPipeline {
     pub bgl:               wgpu::BindGroupLayout,
     pub backdrop_bgl:      wgpu::BindGroupLayout,
     pub sampler:           wgpu::Sampler,
+    pub nearest_sampler:   wgpu::Sampler,
 }
 
 impl BlitPipeline {
@@ -144,7 +145,16 @@ impl BlitPipeline {
             ..Default::default()
         });
 
-        Self { pipeline, backdrop_pipeline, bgl, backdrop_bgl, sampler }
+        let nearest_sampler = device.create_sampler(&wgpu::SamplerDescriptor {
+            label: Some("Blit Nearest Sampler"),
+            address_mode_u: wgpu::AddressMode::ClampToEdge,
+            address_mode_v: wgpu::AddressMode::ClampToEdge,
+            mag_filter: wgpu::FilterMode::Nearest,
+            min_filter: wgpu::FilterMode::Nearest,
+            ..Default::default()
+        });
+
+        Self { pipeline, backdrop_pipeline, bgl, backdrop_bgl, sampler, nearest_sampler }
     }
 
     /// Blit `src_view` into the current render pass target.
@@ -165,7 +175,7 @@ impl BlitPipeline {
                 },
                 wgpu::BindGroupEntry {
                     binding: 1,
-                    resource: wgpu::BindingResource::Sampler(&self.sampler),
+                    resource: wgpu::BindingResource::Sampler(&self.nearest_sampler),
                 },
             ],
         });
@@ -193,7 +203,7 @@ impl BlitPipeline {
                 },
                 wgpu::BindGroupEntry {
                     binding: 1,
-                    resource: wgpu::BindingResource::Sampler(&self.sampler),
+                    resource: wgpu::BindingResource::Sampler(&self.nearest_sampler),
                 },
             ],
         });

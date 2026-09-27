@@ -421,6 +421,7 @@ impl<'u, 'a> ButtonBuilder<'u, 'a> {
                 zenthra_text::prelude::CosmicFontProvider::new_with_system(fs.clone());
             let mut options = zenthra_text::prelude::TextOptions::new()
                 .font_size(self.font_size * self.ui.font_scale)
+                .scale_factor(self.ui.scale_factor)
                 .wrap(self.wrap);
             if let Some(ref family) = self.font_family {
                 options = options.font_family(family.clone());
@@ -477,16 +478,17 @@ impl<'u, 'a> ButtonBuilder<'u, 'a> {
             },
         }));
 
-        // 2. Draw Text (aligned accordingly)
+        // 2. Draw Text (aligned accordingly and snapped to physical pixels)
         let tx = match self.align {
-            zenthra_core::Align::Left => x + self.padding.left,
-            zenthra_core::Align::Right => x + final_w - text_w - self.padding.right,
-            _ => x + (final_w - text_w) / 2.0,
+            zenthra_core::Align::Left => (x + self.padding.left).round(),
+            zenthra_core::Align::Right => (x + final_w - text_w - self.padding.right).round(),
+            _ => (x + (final_w - text_w) / 2.0).round(),
         };
-        let ty = y + (final_h - text_h) / 2.0;
+        let ty = (y + (final_h - text_h) / 2.0).round();
 
         let mut text_opts = zenthra_text::prelude::TextOptions::new()
             .font_size(self.font_size * self.ui.font_scale)
+            .scale_factor(self.ui.scale_factor)
             .color(current_text)
             .wrap(self.wrap)
             .at(tx, ty);

@@ -69,6 +69,7 @@ pub struct CustomPostProcessDraw {
     pub blur_radius: f32,
     pub shader_id: &'static str,
     pub clip_rect: [f32; 4],
+    pub params: [f32; 8],
 }
 
 pub enum DrawCommand {

@@ -74,6 +74,7 @@ pub struct ContainerBuilder<'u, 'a> {
     active_scale: f32,
     backdrop_blur: Option<f32>,
     post_process_shader: Option<&'static str>,
+    post_process_params: [f32; 8],
     backdrop_filter: Option<zenthra_core::BackdropFilter>,
     draggable_window: bool,
     pub role: Option<zenthra_core::Role>,
@@ -136,6 +137,7 @@ impl<'u, 'a> ContainerBuilder<'u, 'a> {
             active_scale: 1.0,
             backdrop_blur: None,
             post_process_shader: None,
+            post_process_params: [0.0, 1.0, 1.0, 1.0, 0.0, 1.0, 0.0, 0.0],
             backdrop_filter: None,
             draggable_window: false,
             role: None,
@@ -459,6 +461,12 @@ impl<'u, 'a> ContainerBuilder<'u, 'a> {
 
     pub fn post_process_shader(mut self, shader_id: &'static str) -> Self {
         self.post_process_shader = Some(shader_id);
+        self
+    }
+
+    pub fn post_process_shader_with_params(mut self, shader_id: &'static str, params: [f32; 8]) -> Self {
+        self.post_process_shader = Some(shader_id);
+        self.post_process_params = params;
         self
     }
 
@@ -917,6 +925,7 @@ impl<'u, 'a> ContainerBuilder<'u, 'a> {
                 blur_radius,
                 shader_id,
                 clip_rect: clip,
+                params: self.post_process_params,
             };
             if push_overlay {
                 self.ui.overlays.push(DrawCommand::CustomPostProcess(cp));
