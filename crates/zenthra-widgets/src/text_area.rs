@@ -246,6 +246,7 @@ pub struct TextAreaBuilder<'u, 'a, 'b> {
     y: f32,
     font_size: f32,
     color: Color,
+    cursor_color: Option<Color>,
     bg: Option<Color>,
     text_bg: Option<Color>,
     highlight: Option<Color>,
@@ -289,6 +290,7 @@ impl<'u, 'a, 'b> TextAreaBuilder<'u, 'a, 'b> {
             y,
             font_size: 18.0,
             color: Color::WHITE,
+            cursor_color: None,
             bg: Some(Color::rgb(0.2, 0.2, 0.2)),
             text_bg: None,
             padding: EdgeInsets::ZERO,
@@ -348,6 +350,11 @@ impl<'u, 'a, 'b> TextAreaBuilder<'u, 'a, 'b> {
 
     pub fn color(mut self, color: Color) -> Self {
         self.color = color;
+        self
+    }
+
+    pub fn cursor_color(mut self, color: Color) -> Self {
+        self.cursor_color = Some(color);
         self
     }
 
@@ -1532,7 +1539,7 @@ impl<'u, 'a, 'b> TextAreaBuilder<'u, 'a, 'b> {
                         y: cy,
                         width: 2.0,
                         height: cursor_height,
-                        color: Color::WHITE,
+                        color: self.cursor_color.unwrap_or(Color::WHITE),
                         clip: [self.x + 1.0, self.y + 1.0, (actual_width - 2.0).max(0.0), (h_box - 2.0).max(0.0)],
                     }));
                 }
@@ -1652,4 +1659,3 @@ mod tests {
         assert_eq!(buf, "ello");
     }
 }
-
