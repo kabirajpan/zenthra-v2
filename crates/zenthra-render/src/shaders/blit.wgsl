@@ -109,6 +109,9 @@ fn fs_backdrop(in: BackdropVsOut) -> @location(0) vec4<f32> {
     }
 
     var color = textureSample(t_src, s_src, in.uv);
+    if (color.a < 0.001) {
+        discard;
+    }
 
     // ── CSS Backdrop Filters ─────────────────────────────────────────────────
     // 1. Brightness
@@ -152,5 +155,10 @@ fn fs_backdrop(in: BackdropVsOut) -> @location(0) vec4<f32> {
         color = vec4<f32>(color.rgb + vec3<f32>(grain), color.a);
     }
 
-    return vec4<f32>(color.rgb * rect_alpha, color.a * rect_alpha);
+    let out_a = color.a * rect_alpha;
+    if (out_a < 0.001) {
+        discard;
+    }
+    let premul_rgb = clamp(color.rgb, vec3<f32>(0.0), vec3<f32>(1.0)) * out_a;
+    return vec4<f32>(premul_rgb, out_a);
 }

@@ -156,6 +156,7 @@ pub struct InputBuilder<'u, 'a, 'b> {
     y: f32,
     font_size: f32,
     color: Color,
+    cursor_color: Option<Color>,
     bg: Option<Color>,
     text_bg: Option<Color>,
     highlight: Option<Color>,
@@ -195,6 +196,7 @@ impl<'u, 'a, 'b> InputBuilder<'u, 'a, 'b> {
             y,
             font_size: 18.0,
             color: Color::WHITE,
+            cursor_color: None,
             bg: Some(Color::rgb(0.2, 0.2, 0.2)),
             text_bg: None,
             padding: EdgeInsets::ZERO,
@@ -237,6 +239,11 @@ impl<'u, 'a, 'b> InputBuilder<'u, 'a, 'b> {
 
     pub fn color(mut self, color: Color) -> Self {
         self.color = color;
+        self
+    }
+
+    pub fn cursor_color(mut self, color: Color) -> Self {
+        self.cursor_color = Some(color);
         self
     }
 
@@ -1106,7 +1113,7 @@ impl<'u, 'a, 'b> InputBuilder<'u, 'a, 'b> {
                         y: cy,
                         width: 2.0,
                         height: cursor_height,
-                        color: Color::WHITE,
+                        color: self.cursor_color.unwrap_or(self.color),
                         clip: [self.x, self.y, w_box, h_box],
                     }));
                 }

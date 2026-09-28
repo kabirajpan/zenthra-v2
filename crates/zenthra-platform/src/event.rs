@@ -10,4 +10,6 @@ pub enum PlatformEvent {
     KeyUp { key: KeyCode },
     CharTyped(char),
     Touch { id: u64, phase: TouchPhase, x: f64, y: f64 },
+    Focused(bool),
+    Occluded(bool),
 }

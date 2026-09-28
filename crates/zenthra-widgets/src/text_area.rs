@@ -1539,7 +1539,7 @@ impl<'u, 'a, 'b> TextAreaBuilder<'u, 'a, 'b> {
                         y: cy,
                         width: 2.0,
                         height: cursor_height,
-                        color: self.cursor_color.unwrap_or(Color::WHITE),
+                        color: self.cursor_color.unwrap_or(self.color),
                         clip: [self.x + 1.0, self.y + 1.0, (actual_width - 2.0).max(0.0), (h_box - 2.0).max(0.0)],
                     }));
                 }

@@ -620,6 +620,22 @@ impl<'a> Ui<'a> {
         self.window_actions.push(zenthra_platform::app::WindowAction::SetBlur(blur));
     }
 
+    pub fn set_always_on_top(&mut self, on_top: bool) {
+        self.window_actions.push(zenthra_platform::app::WindowAction::SetAlwaysOnTop(on_top));
+    }
+
+    pub fn set_window_size(&mut self, w: u32, h: u32) {
+        self.window_actions.push(zenthra_platform::app::WindowAction::SetSize(w, h));
+    }
+
+    pub fn set_window_position(&mut self, x: i32, y: i32) {
+        self.window_actions.push(zenthra_platform::app::WindowAction::SetPosition(x, y));
+    }
+
+    pub fn set_cursor_hittest(&mut self, hittest: bool) {
+        self.window_actions.push(zenthra_platform::app::WindowAction::SetCursorHitTest(hittest));
+    }
+
     pub fn get_max_bounds(&self) -> (f32, f32) {
         (self.max_x, self.max_y)
     }

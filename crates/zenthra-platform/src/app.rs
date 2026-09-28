@@ -14,6 +14,10 @@ pub enum WindowAction {
     Maximize,
     Close,
     SetBlur(bool),
+    SetAlwaysOnTop(bool),
+    SetSize(u32, u32),
+    SetPosition(i32, i32),
+    SetCursorHitTest(bool),
 }
 
 pub struct Frame<'a> {
@@ -200,6 +204,25 @@ impl AppRunner {
                 WindowAction::SetBlur(blur) => {
                     window.set_blur(blur);
                 }
+                WindowAction::SetAlwaysOnTop(on_top) => {
+                    let level = if on_top {
+                        winit::window::WindowLevel::AlwaysOnTop
+                    } else {
+                        winit::window::WindowLevel::Normal
+                    };
+                    window.winit_window.set_window_level(level);
+                }
+                WindowAction::SetSize(w, h) => {
+                    window.winit_window.set_fullscreen(None);
+                    window.winit_window.set_maximized(false);
+                    let _ = window.winit_window.request_inner_size(winit::dpi::LogicalSize::new(w, h));
+                }
+                WindowAction::SetPosition(x, y) => {
+                    window.winit_window.set_outer_position(winit::dpi::LogicalPosition::new(x, y));
+                }
+                WindowAction::SetCursorHitTest(hittest) => {
+                    let _ = window.winit_window.set_cursor_hittest(hittest);
+                }
             }
         }
         
@@ -330,6 +353,14 @@ impl ApplicationHandler for AppRunner {
                         }
                     }
                 }
+                if let Some(w) = &mut self.window { w.request_redraw(); }
+            }
+            WindowEvent::Focused(focused) => {
+                self.pending_events.push(PlatformEvent::Focused(focused));
+                if let Some(w) = &mut self.window { w.request_redraw(); }
+            }
+            WindowEvent::Occluded(occluded) => {
+                self.pending_events.push(PlatformEvent::Occluded(occluded));
                 if let Some(w) = &mut self.window { w.request_redraw(); }
             }
             WindowEvent::RedrawRequested => {
