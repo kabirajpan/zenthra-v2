@@ -289,6 +289,15 @@ impl<'u, 'a> PopoverBuilder<'u, 'a> {
         let popover_id = self.id;
         let has_explicit_h = self.height;
 
+        let anchor_win = self.ui.widget_window_map.get(&self.anchor_id)
+            .or_else(|| self.ui.next_widget_window_map.get(&self.anchor_id))
+            .copied()
+            .or(self.ui.modal_window_id);
+        let prev_win_id = self.ui.current_window_id;
+        if let Some(win) = anchor_win {
+            self.ui.current_window_id = Some(win);
+        }
+
         self.ui.overlay(|ui| {
             let mut container = ui
                 .container()
@@ -323,6 +332,8 @@ impl<'u, 'a> PopoverBuilder<'u, 'a> {
             });
             clicked_inside = resp.clicked;
         });
+
+        self.ui.current_window_id = prev_win_id;
 
         Response {
             hovered: is_hovered,

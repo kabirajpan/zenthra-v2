@@ -448,20 +448,24 @@ impl<'a> Ui<'a> {
 
         // 1. Check active modal blocking: if ANY modal is active, any widget not belonging
         // to that modal is 100% occluded (non-interactive).
-        if self.modal_active {
-            if let Some(modal_id) = self.modal_window_id {
-                if our_win_id != modal_id {
+        // Overlays and widgets inside an active overlay are on top of modals and are not blocked.
+        let is_in_active_overlay = !self.active_overlay_stack.is_empty() || self.active_overlays.contains(&id);
+        if !is_in_active_overlay {
+            if self.modal_active {
+                if let Some(modal_id) = self.modal_window_id {
+                    if our_win_id != modal_id {
+                        return true;
+                    }
+                } else {
                     return true;
                 }
-            } else {
-                return true;
             }
-        }
-        for (&key, &val) in self.interaction_state.iter() {
-            if (key.raw() & 0xFF) == 5 && val > 0.5 {
-                let modal_win_id = Id::from_u64(key.raw() >> 8);
-                if our_win_id != modal_win_id {
-                    return true;
+            for (&key, &val) in self.interaction_state.iter() {
+                if (key.raw() & 0xFF) == 5 && val > 0.5 {
+                    let modal_win_id = Id::from_u64(key.raw() >> 8);
+                    if our_win_id != modal_win_id {
+                        return true;
+                    }
                 }
             }
         }
@@ -469,17 +473,22 @@ impl<'a> Ui<'a> {
         // 2. Check active overlays & floating windows occlusion:
         // If mouse (x, y) is inside any active overlay or floating window rect,
         // and current widget is NOT inside that overlay/window, it is occluded!
+        let effective_our_overlay = self.active_overlay_stack.last().copied()
+            .or_else(|| if self.active_overlays.contains(&id) { Some(id) } else { None });
+
         let check_overlay_rect = |other_id: Id, other_rect: &Rect| -> bool {
             if other_id == id || other_id == our_win_id {
                 return false;
             }
+            // If current widget is inside other_id's active overlay stack, it is NOT occluded by it
+            if self.active_overlay_stack.contains(&other_id) {
+                return false;
+            }
+
             let other_win_id = self.widget_window_map.get(&other_id)
                 .or_else(|| self.next_widget_window_map.get(&other_id))
                 .copied()
                 .unwrap_or(other_id);
-            if other_win_id == our_win_id {
-                return false;
-            }
 
             let overlay_key = Id::from_u64((other_id.raw() << 8) | 99);
             let win_overlay_key = Id::from_u64((other_win_id.raw() << 8) | 99);
@@ -489,12 +498,27 @@ impl<'a> Ui<'a> {
                 || self.interaction_state.get(&win_overlay_key).map(|&v| v > 0.5).unwrap_or(false);
 
             if is_overlay {
-                if x >= other_rect.origin.x && x <= other_rect.origin.x + other_rect.size.width &&
-                   y >= other_rect.origin.y && y <= other_rect.origin.y + other_rect.size.height {
-                    if !self.active_overlay_stack.contains(&other_id) && !self.active_overlay_stack.contains(&other_win_id) {
-                        return true;
+                // If current widget belongs to an active overlay, check relative stack order:
+                // An overlay is only occluded by overlays that appear AFTER it in active_overlays
+                if let Some(our_overlay_id) = effective_our_overlay {
+                    if our_overlay_id == other_id || our_overlay_id == other_win_id {
+                        return false;
+                    }
+                    let our_pos = self.active_overlays.iter().rposition(|&oid| oid == our_overlay_id);
+                    let other_pos = self.active_overlays.iter().rposition(|&oid| oid == other_id || oid == other_win_id);
+                    if let (Some(our_idx), Some(other_idx)) = (our_pos, other_pos) {
+                        if our_idx >= other_idx {
+                            return false;
+                        }
                     }
                 }
+
+                if x >= other_rect.origin.x && x <= other_rect.origin.x + other_rect.size.width &&
+                   y >= other_rect.origin.y && y <= other_rect.origin.y + other_rect.size.height {
+                    return true;
+                }
+            } else if other_win_id == our_win_id {
+                return false;
             }
             false
         };

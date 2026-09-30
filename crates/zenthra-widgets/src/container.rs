@@ -779,16 +779,16 @@ impl<'u, 'a> ContainerBuilder<'u, 'a> {
                             let can_down = sy < max_sy && *delta_y < 0.0;
                             if can_up || can_down {
                                 sy -= step_y;
-                                consumed = true;
                             }
+                            consumed = true;
                         }
                         if self.scroll_x && *delta_x != 0.0 {
                             let can_left = sx > 0.0 && *delta_x > 0.0;
                             let can_right = sx < max_sx && *delta_x < 0.0;
                             if can_left || can_right {
                                 sx -= step_x;
-                                consumed = true;
                             }
+                            consumed = true;
                         }
                         // Fallback: standard vertical wheel scrolls horizontal-only viewports
                         if self.scroll_x && !self.scroll_y && *delta_y != 0.0 && *delta_x == 0.0 {
@@ -796,8 +796,8 @@ impl<'u, 'a> ContainerBuilder<'u, 'a> {
                             let can_right = sx < max_sx && *delta_y < 0.0;
                             if can_left || can_right {
                                 sx -= step_y;
-                                consumed = true;
                             }
+                            consumed = true;
                         }
                         if consumed {
                             keep = false;
