@@ -646,6 +646,50 @@ impl App {
                                 inst.shadow_blur *= sf;
                                 inst.clip_rect[0] *= sf; inst.clip_rect[1] *= sf;
                                 inst.clip_rect[2] *= sf; inst.clip_rect[3] *= sf;
+
+                                let is_visible = inst.color[3] > 0.001
+                                    || (inst.border_width > 0.0 && inst.border_color[3] > 0.001)
+                                    || (inst.shadow_blur > 0.0 && inst.shadow_color[3] > 0.001);
+
+                                if is_visible && !pending_texts.is_empty() {
+                                    let rx = inst.pos[0];
+                                    let ry = inst.pos[1];
+                                    let rw = inst.size[0];
+                                    let rh = inst.size[1];
+
+                                    let overlaps_text = pending_texts.iter().any(|td| {
+                                        let cx = td.clip[0] * sf;
+                                        let cy = td.clip[1] * sf;
+                                        let cw = td.clip[2] * sf;
+                                        let ch = td.clip[3] * sf;
+
+                                        let tx = td.pos[0] * sf;
+                                        let ty = td.pos[1] * sf;
+
+                                        let font_sz = td.options.font_size * sf;
+                                        let text_w = (td.text.len() as f32 * font_sz * 0.8).min(cw.max(font_sz));
+                                        let text_h = (font_sz * 1.5).min(ch.max(font_sz));
+
+                                        let text_min_x = tx.max(cx);
+                                        let text_min_y = ty.max(cy);
+                                        let text_max_x = (tx + text_w).min(cx + cw);
+                                        let text_max_y = (ty + text_h).min(cy + ch);
+
+                                        if text_max_x <= text_min_x || text_max_y <= text_min_y {
+                                            return false;
+                                        }
+
+                                        rx < text_max_x && (rx + rw) > text_min_x && ry < text_max_y && (ry + rh) > text_min_y
+                                    });
+
+                                    if overlaps_text {
+                                        flush_all(encoder,
+                                            &mut pending_rects, &mut pending_images,
+                                            &mut pending_texts, &mut pending_overlay_rects,
+                                            temp_bufs);
+                                    }
+                                }
+
                                 pending_rects.push(inst);
                             }
                             DrawCommand::Image(id_cmd) => {
@@ -680,24 +724,64 @@ impl App {
                                 } else {
                                     if let Some(pos) = texture_lru.iter().position(|x| *x == id_cmd.source) {
                                         texture_lru.remove(pos);
-                                    }
-                                    texture_lru.push_back(id_cmd.source.clone());
-                                    if texture_cache.contains_key(&id_cmd.source) {
-                                        let mut inst = id_cmd.instance;
-                                        inst.pos[0] *= sf; inst.pos[1] *= sf;
-                                        inst.size[0] *= sf; inst.size[1] *= sf;
-                                        inst.clip_rect[0] *= sf; inst.clip_rect[1] *= sf;
-                                        inst.clip_rect[2] *= sf; inst.clip_rect[3] *= sf;
-                                        use wgpu::util::DeviceExt;
-                                        let buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                                            label: Some("Image Instance"),
-                                            contents: bytemuck::bytes_of(&inst),
-                                            usage: wgpu::BufferUsages::VERTEX,
-                                        });
-                                        pending_images.push((id_cmd, buf));
-                                    }
-                                }
-                            }
+                                     }
+                                     texture_lru.push_back(id_cmd.source.clone());
+                                     if texture_cache.contains_key(&id_cmd.source) {
+                                         let mut inst = id_cmd.instance;
+                                         inst.pos[0] *= sf; inst.pos[1] *= sf;
+                                         inst.size[0] *= sf; inst.size[1] *= sf;
+                                         inst.clip_rect[0] *= sf; inst.clip_rect[1] *= sf;
+                                         inst.clip_rect[2] *= sf; inst.clip_rect[3] *= sf;
+
+                                         if !pending_texts.is_empty() {
+                                             let rx = inst.pos[0];
+                                             let ry = inst.pos[1];
+                                             let rw = inst.size[0];
+                                             let rh = inst.size[1];
+
+                                             let overlaps_text = pending_texts.iter().any(|td| {
+                                                 let cx = td.clip[0] * sf;
+                                                 let cy = td.clip[1] * sf;
+                                                 let cw = td.clip[2] * sf;
+                                                 let ch = td.clip[3] * sf;
+
+                                                 let tx = td.pos[0] * sf;
+                                                 let ty = td.pos[1] * sf;
+
+                                                 let font_sz = td.options.font_size * sf;
+                                                 let text_w = (td.text.len() as f32 * font_sz * 0.8).min(cw.max(font_sz));
+                                                 let text_h = (font_sz * 1.5).min(ch.max(font_sz));
+
+                                                 let text_min_x = tx.max(cx);
+                                                 let text_min_y = ty.max(cy);
+                                                 let text_max_x = (tx + text_w).min(cx + cw);
+                                                 let text_max_y = (ty + text_h).min(cy + ch);
+
+                                                 if text_max_x <= text_min_x || text_max_y <= text_min_y {
+                                                     return false;
+                                                 }
+
+                                                 rx < text_max_x && (rx + rw) > text_min_x && ry < text_max_y && (ry + rh) > text_min_y
+                                             });
+
+                                             if overlaps_text {
+                                                 flush_all(encoder,
+                                                     &mut pending_rects, &mut pending_images,
+                                                     &mut pending_texts, &mut pending_overlay_rects,
+                                                     temp_bufs);
+                                             }
+                                         }
+
+                                         use wgpu::util::DeviceExt;
+                                         let buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                                             label: Some("Image Instance"),
+                                             contents: bytemuck::bytes_of(&inst),
+                                             usage: wgpu::BufferUsages::VERTEX,
+                                         });
+                                         pending_images.push((id_cmd, buf));
+                                     }
+                                 }
+                             }
                             DrawCommand::Text(td) => {
                                 pending_texts.push(td);
                             }
