@@ -106,9 +106,34 @@ impl<'u, 'a, 'b, T: PartialEq + Clone + ToString> DropdownBuilder<'u, 'a, 'b, T>
         self
     }
 
+    pub fn height(mut self, height: f32) -> Self {
+        self.height = height;
+        self
+    }
+
     pub fn size(mut self, w: f32, h: f32) -> Self {
         self.width = w;
         self.height = h;
+        self
+    }
+
+    pub fn menu_bg(mut self, color: Color) -> Self {
+        self.menu_bg = color;
+        self
+    }
+
+    pub fn menu_max_height(mut self, max_h: f32) -> Self {
+        self.menu_max_height = max_h;
+        self
+    }
+
+    pub fn text_color(mut self, color: Color) -> Self {
+        self.text_color = color;
+        self
+    }
+
+    pub fn hover_bg(mut self, color: Color) -> Self {
+        self.hover_bg = color;
         self
     }
 
