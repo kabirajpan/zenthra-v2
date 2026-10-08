@@ -43,7 +43,8 @@ pub struct ContainerBuilder<'u, 'a> {
     padding_left: f32,
     padding_right: f32,
     gap: f32,
-    bg: Option<Color>,
+    bg: Option<zenthra_core::Background>,
+    pub bg_gradient: Option<(Color, Color, zenthra_core::GradientDirection)>,
     border_color: Option<Color>,
     border_width: f32,
     shadow_blur: f32,
@@ -64,11 +65,11 @@ pub struct ContainerBuilder<'u, 'a> {
     border_alignment: BorderAlignment,
     is_absolute: bool,
     is_overlay: bool,
-    hover_bg: Option<Color>,
+    hover_bg: Option<zenthra_core::Background>,
     hover_border_color: Option<Color>,
     hover_border_width: Option<f32>,
     hover_scale: f32,
-    active_bg: Option<Color>,
+    active_bg: Option<zenthra_core::Background>,
     active_border_color: Option<Color>,
     active_border_width: Option<f32>,
     active_scale: f32,
@@ -107,6 +108,7 @@ impl<'u, 'a> ContainerBuilder<'u, 'a> {
             padding_right: 0.0,
             gap: 0.0,
             bg: None,
+            bg_gradient: None,
             border_color: None,
             border_width: 0.0,
             shadow_blur: 0.0,
@@ -276,6 +278,11 @@ impl<'u, 'a> ContainerBuilder<'u, 'a> {
         self
     }
 
+    pub fn stack(mut self) -> Self {
+        self.direction = Direction::Stack;
+        self
+    }
+
     pub fn wrap(mut self, strategy: Wrap) -> Self {
         self.wrap = strategy;
         self
@@ -363,8 +370,8 @@ impl<'u, 'a> ContainerBuilder<'u, 'a> {
         self
     }
 
-    pub fn active_bg(mut self, color: Color) -> Self {
-        self.active_bg = Some(color);
+    pub fn active_bg(mut self, color: impl Into<zenthra_core::Background>) -> Self {
+        self.active_bg = Some(color.into());
         self
     }
 
@@ -383,13 +390,43 @@ impl<'u, 'a> ContainerBuilder<'u, 'a> {
         self.gap = g;
         self
     }
-    pub fn bg(mut self, c: Color) -> Self {
-        self.bg = Some(c);
+    pub fn bg(mut self, b: impl Into<zenthra_core::Background>) -> Self {
+        self.bg = Some(b.into());
         self
     }
+    pub fn bg_gradient(mut self, start: Color, end: Color, direction: zenthra_core::GradientDirection) -> Self {
+        let (dir_type, angle) = direction.to_type_and_angle();
+        if dir_type == 2.0 {
+            self.bg = Some(zenthra_core::Background::Gradient(zenthra_core::Gradient::radial(
+                zenthra_core::Align::Center,
+                [start, end],
+            )));
+        } else {
+            self.bg = Some(zenthra_core::Background::Gradient(zenthra_core::Gradient::linear(
+                angle.to_degrees(),
+                [start, end],
+            )));
+        }
+        self.bg_gradient = Some((start, end, direction));
+        self
+    }
+
     pub fn bg_opacity(mut self, opacity: f32) -> Self {
         if let Some(ref mut bg) = self.bg {
-            bg.a = opacity;
+            match bg {
+                zenthra_core::Background::Solid(ref mut c) => c.a = opacity,
+                zenthra_core::Background::Gradient(ref mut g) => match g {
+                    zenthra_core::Gradient::Linear { ref mut stops, .. } => {
+                        for s in stops.iter_mut() { s.color.a *= opacity; }
+                    }
+                    zenthra_core::Gradient::Radial { ref mut stops, .. } => {
+                        for s in stops.iter_mut() { s.color.a *= opacity; }
+                    }
+                    zenthra_core::Gradient::Mesh { ref mut points } => {
+                        for p in points.iter_mut() { p.1.a *= opacity; }
+                    }
+                }
+            }
         }
         self
     }
@@ -430,8 +467,8 @@ impl<'u, 'a> ContainerBuilder<'u, 'a> {
         self
     }
 
-    pub fn hover_bg(mut self, color: Color) -> Self {
-        self.hover_bg = Some(color);
+    pub fn hover_bg(mut self, color: impl Into<zenthra_core::Background>) -> Self {
+        self.hover_bg = Some(color.into());
         self
     }
 
@@ -941,101 +978,79 @@ impl<'u, 'a> ContainerBuilder<'u, 'a> {
         }
 
         // Background
-        let base_bg = self.bg.or_else(|| {
+        let base_bg = self.bg.clone().or_else(|| {
             if self.hover_bg.is_some() || self.active_bg.is_some() {
-                Some(Color::TRANSPARENT)
+                Some(zenthra_core::Background::Solid(Color::TRANSPARENT))
             } else {
                 None
             }
         });
-        if let Some(mut bg) = base_bg {
+        if let Some(mut bg_style) = base_bg {
             let mut bw = self.border_width;
             let mut bc = self.border_color.unwrap_or(Color::TRANSPARENT);
 
             if container_active {
-                bg = self.active_bg.or(self.hover_bg).unwrap_or(bg);
+                bg_style = self.active_bg.clone().or_else(|| self.hover_bg.clone()).unwrap_or(bg_style);
                 bw = self.active_border_width.or(self.hover_border_width).unwrap_or(bw);
                 bc = self.active_border_color.or(self.hover_border_color).unwrap_or(bc);
                 final_scale = self.active_scale;
             } else if container_hover {
-                bg = self.hover_bg.unwrap_or(bg);
+                bg_style = self.hover_bg.clone().unwrap_or(bg_style);
                 bw = self.hover_border_width.unwrap_or(bw);
                 bc = self.hover_border_color.unwrap_or(bc);
                 final_scale = self.hover_scale;
             }
 
-            let has_visible_draw = bg.a > 0.0 || bc.a > 0.0 || self.shadow_color.is_some();
+            let (c1, c2, c3, c4, gradient_params, gradient_stops, is_bg_visible) =
+                resolve_background(&Some(bg_style));
+
+            let has_visible_draw = is_bg_visible || bc.a > 0.0 || self.shadow_color.is_some();
             if has_visible_draw {
                 let visual_w = w * final_scale;
                 let visual_h = h * final_scale;
                 let visual_ox = ox - (visual_w - w) / 2.0;
                 let visual_oy = oy - (visual_h - h) / 2.0;
 
+                let rect_inst = RectInstance {
+                    pos: [visual_ox, visual_oy],
+                    size: [visual_w, visual_h],
+                    color: c1,
+                    radius: [
+                        self.radius[3], // Bottom-Left -> Top-Left
+                        self.radius[2], // Bottom-Right -> Top-Right
+                        self.radius[1], // Top-Right -> Bottom-Right
+                        self.radius[0], // Top-Left -> Bottom-Left
+                    ],
+                    border_width: bw,
+                    border_color: bc.to_array(),
+                    shadow_color: self.shadow_color.map(|c| {
+                        let mut a = c.to_array();
+                        a[3] *= self.shadow_opacity;
+                        a
+                    }).unwrap_or([0.0, 0.0, 0.0, 0.0]),
+                    shadow_offset: self.shadow_offset,
+                    shadow_blur: self.shadow_blur,
+                    clip_rect: [-100000.0, -100000.0, 2000000.0, 2000000.0],
+                    grayscale: 0.0,
+                    brightness: 1.0,
+                    opacity: self.opacity,
+                    border_alignment: match self.border_alignment {
+                        BorderAlignment::Inside => 0.0,
+                        BorderAlignment::Center => 0.5,
+                        BorderAlignment::Outside => 1.0,
+                    },
+                    color2: c2,
+                    color3: c3,
+                    color4: c4,
+                    gradient_params,
+                    gradient_stops,
+                };
+
                 if push_overlay {
-                self.ui.overlays.push(DrawCommand::Rect(RectDraw {
-                    instance: RectInstance {
-                        pos: [visual_ox, visual_oy],
-                        size: [visual_w, visual_h],
-                        color: bg.to_array(),
-                        radius: [
-                            self.radius[3], // Bottom-Left -> Top-Left
-                            self.radius[2], // Bottom-Right -> Top-Right
-                            self.radius[1], // Top-Right -> Bottom-Right
-                            self.radius[0], // Top-Left -> Bottom-Left
-                        ],
-                        border_width: bw,
-                        border_color: bc.to_array(),
-                        shadow_color: self.shadow_color.map(|c| {
-                            let mut a = c.to_array();
-                            a[3] *= self.shadow_opacity;
-                            a
-                        }).unwrap_or([0.0, 0.0, 0.0, 0.0]),
-                        shadow_offset: self.shadow_offset,
-                        shadow_blur: self.shadow_blur,
-                        clip_rect: [-100000.0, -100000.0, 2000000.0, 2000000.0],
-                        grayscale: 0.0,
-                        brightness: 1.0,
-                        opacity: self.opacity,
-                        border_alignment: match self.border_alignment {
-                            BorderAlignment::Inside => 0.0,
-                            BorderAlignment::Center => 0.5,
-                            BorderAlignment::Outside => 1.0,
-                        },
-                    }
-                }));
-            } else {
-                self.ui.draws.push(DrawCommand::Rect(RectDraw {
-                    instance: RectInstance {
-                        pos: [visual_ox, visual_oy],
-                        size: [visual_w, visual_h],
-                        color: bg.to_array(),
-                        radius: [
-                            self.radius[3], // Bottom-Left -> Top-Left
-                            self.radius[2], // Bottom-Right -> Top-Right
-                            self.radius[1], // Top-Right -> Bottom-Right
-                            self.radius[0], // Top-Left -> Bottom-Left
-                        ],
-                        border_width: bw,
-                        border_color: bc.to_array(),
-                        shadow_color: self.shadow_color.map(|c| {
-                            let mut a = c.to_array();
-                            a[3] *= self.shadow_opacity;
-                            a
-                        }).unwrap_or([0.0, 0.0, 0.0, 0.0]),
-                        shadow_offset: self.shadow_offset,
-                        shadow_blur: self.shadow_blur,
-                        clip_rect: [-100000.0, -100000.0, 2000000.0, 2000000.0],
-                        grayscale: 0.0,
-                        brightness: 1.0,
-                        opacity: self.opacity,
-                        border_alignment: match self.border_alignment {
-                            BorderAlignment::Inside => 0.0,
-                            BorderAlignment::Center => 0.5,
-                            BorderAlignment::Outside => 1.0,
-                        },
-                    }
-                }));
-            }
+                    self.ui.overlays.push(DrawCommand::Rect(RectDraw { instance: rect_inst }));
+                } else {
+                    self.ui.draws.push(DrawCommand::Rect(RectDraw { instance: rect_inst }));
+                }
             }
         }
 
@@ -1685,3 +1700,84 @@ fn intersect_rects(a: [f32; 4], b: [f32; 4]) -> [f32; 4] {
     
     [x1, y1, w, h]
 }
+
+pub(crate) fn resolve_background(bg: &Option<zenthra_core::Background>) -> (
+    [f32; 4], // color
+    [f32; 4], // color2
+    [f32; 4], // color3
+    [f32; 4], // color4
+    [f32; 4], // gradient_params
+    [f32; 4], // gradient_stops
+    bool,     // is_visible
+) {
+    match bg {
+        Some(zenthra_core::Background::Solid(c)) => (
+            c.to_array(),
+            [1.0, 1.0, 1.0, 1.0],
+            [1.0, 1.0, 1.0, 1.0],
+            [1.0, 1.0, 1.0, 1.0],
+            [0.0, 0.0, 0.5, 0.5],
+            [0.0, 0.333, 0.667, 1.0],
+            c.a > 0.0,
+        ),
+        Some(zenthra_core::Background::Gradient(g)) => match g {
+            zenthra_core::Gradient::Linear { direction, stops } => {
+                let angle_rad = direction.to_radians();
+                let count = stops.len().clamp(2, 4);
+                let c1 = stops.get(0).map(|s| s.color.to_array()).unwrap_or([0.0; 4]);
+                let c2 = stops.get(1).map(|s| s.color.to_array()).unwrap_or(c1);
+                let c3 = stops.get(2).map(|s| s.color.to_array()).unwrap_or(c2);
+                let c4 = stops.get(3).map(|s| s.color.to_array()).unwrap_or(c3);
+                let s0 = stops.get(0).map(|s| s.position).unwrap_or(0.0);
+                let s1 = stops.get(1).map(|s| s.position).unwrap_or(if count == 2 { 1.0 } else { 0.5 });
+                let s2 = stops.get(2).map(|s| s.position).unwrap_or(if count == 3 { 1.0 } else { 0.667 });
+                let s3 = stops.get(3).map(|s| s.position).unwrap_or(1.0);
+                (
+                    c1, c2, c3, c4,
+                    [1.0, angle_rad, count as f32, 0.0],
+                    [s0, s1, s2, s3],
+                    true,
+                )
+            }
+            zenthra_core::Gradient::Radial { anchor, radius, stops } => {
+                let count = stops.len().clamp(2, 4);
+                let c1 = stops.get(0).map(|s| s.color.to_array()).unwrap_or([0.0; 4]);
+                let c2 = stops.get(1).map(|s| s.color.to_array()).unwrap_or(c1);
+                let c3 = stops.get(2).map(|s| s.color.to_array()).unwrap_or(c2);
+                let c4 = stops.get(3).map(|s| s.color.to_array()).unwrap_or(c3);
+                let s0 = stops.get(0).map(|s| s.position).unwrap_or(0.0);
+                let s1 = stops.get(1).map(|s| s.position).unwrap_or(0.333);
+                let s2 = stops.get(2).map(|s| s.position).unwrap_or(0.667);
+                let _s3 = stops.get(3).map(|s| s.position).unwrap_or(1.0);
+                (
+                    c1, c2, c3, c4,
+                    [2.0, count as f32, anchor.0, anchor.1],
+                    [s0, s1, s2, *radius],
+                    true,
+                )
+            }
+            zenthra_core::Gradient::Mesh { points } => {
+                let c1 = points.get(0).map(|p| p.1.to_array()).unwrap_or([1.0; 4]);
+                let c2 = points.get(1).map(|p| p.1.to_array()).unwrap_or(c1);
+                let c3 = points.get(2).map(|p| p.1.to_array()).unwrap_or(c1);
+                let c4 = points.get(3).map(|p| p.1.to_array()).unwrap_or(c2);
+                (
+                    c1, c2, c3, c4,
+                    [3.0, points.len() as f32, 0.5, 0.5],
+                    [0.0, 0.333, 0.667, 1.0],
+                    true,
+                )
+            }
+        },
+        None => (
+            [0.0, 0.0, 0.0, 0.0],
+            [1.0, 1.0, 1.0, 1.0],
+            [1.0, 1.0, 1.0, 1.0],
+            [1.0, 1.0, 1.0, 1.0],
+            [0.0, 0.0, 0.5, 0.5],
+            [0.0, 0.333, 0.667, 1.0],
+            false,
+        ),
+    }
+}
+

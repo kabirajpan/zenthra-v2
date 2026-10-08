@@ -31,6 +31,9 @@ pub struct PanelBuilder<'u, 'a, 'b> {
     shadow_offset: [f32; 2],
     shadow_blur: f32,
     shadow_opacity: f32,
+
+    bg_gradient: Option<(Color, Color, zenthra_core::GradientDirection)>,
+    header_bg_gradient: Option<(Color, Color, zenthra_core::GradientDirection)>,
 }
 
 impl<'u, 'a, 'b> PanelBuilder<'u, 'a, 'b> {
@@ -56,6 +59,8 @@ impl<'u, 'a, 'b> PanelBuilder<'u, 'a, 'b> {
             shadow_offset: [0.0, 0.0],
             shadow_blur: 0.0,
             shadow_opacity: 0.0,
+            bg_gradient: None,
+            header_bg_gradient: None,
         }
     }
 
@@ -129,6 +134,16 @@ impl<'u, 'a, 'b> PanelBuilder<'u, 'a, 'b> {
         self
     }
 
+    pub fn bg_gradient(mut self, start: Color, end: Color, direction: zenthra_core::GradientDirection) -> Self {
+        self.bg_gradient = Some((start, end, direction));
+        self
+    }
+
+    pub fn header_bg_gradient(mut self, start: Color, end: Color, direction: zenthra_core::GradientDirection) -> Self {
+        self.header_bg_gradient = Some((start, end, direction));
+        self
+    }
+
     pub fn shadow(mut self, color: Color, x: f32, y: f32, blur: f32) -> Self {
         self.shadow_color = Some(color);
         self.shadow_offset = [x, y];
@@ -154,6 +169,9 @@ impl<'u, 'a, 'b> PanelBuilder<'u, 'a, 'b> {
 
         if let Some(bg) = self.bg {
             panel_container = panel_container.bg(bg);
+        }
+        if let Some((start, end, dir)) = self.bg_gradient {
+            panel_container = panel_container.bg_gradient(start, end, dir);
         }
         if let Some(bc) = self.border_color {
             panel_container = panel_container.border(bc, self.border_width);
@@ -189,6 +207,9 @@ impl<'u, 'a, 'b> PanelBuilder<'u, 'a, 'b> {
 
                 if let Some(hbg) = self.header_bg {
                     header_container = header_container.bg(hbg);
+                }
+                if let Some((start, end, dir)) = self.header_bg_gradient {
+                    header_container = header_container.bg_gradient(start, end, dir);
                 }
 
                 // If expanded, only round top corners. If collapsed, round all corners to match outer container.

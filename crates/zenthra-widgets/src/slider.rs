@@ -43,6 +43,10 @@ pub struct SliderBuilder<'u, 'a, 'b> {
     thumb_shadow_offset: [f32; 2],
     thumb_shadow_blur: f32,
     thumb_shadow_opacity: f32,
+
+    bg_gradient: Option<(Color, Color, zenthra_core::GradientDirection)>,
+    track_gradient: Option<(Color, Color, zenthra_core::GradientDirection)>,
+    thumb_gradient: Option<(Color, Color, zenthra_core::GradientDirection)>,
 }
 
 impl<'u, 'a, 'b> SliderBuilder<'u, 'a, 'b> {
@@ -89,6 +93,9 @@ impl<'u, 'a, 'b> SliderBuilder<'u, 'a, 'b> {
             thumb_shadow_offset: [0.0; 2],
             thumb_shadow_blur: 0.0,
             thumb_shadow_opacity: 1.0,
+            bg_gradient: None,
+            track_gradient: None,
+            thumb_gradient: None,
         }
     }
 
@@ -188,6 +195,11 @@ impl<'u, 'a, 'b> SliderBuilder<'u, 'a, 'b> {
         self
     }
 
+    pub fn bg_gradient(mut self, start: Color, end: Color, direction: zenthra_core::GradientDirection) -> Self {
+        self.bg_gradient = Some((start, end, direction));
+        self
+    }
+
     pub fn border(mut self, color: Color, width: f32) -> Self {
         self.border_color = Some(color);
         self.border_width = width;
@@ -233,6 +245,11 @@ impl<'u, 'a, 'b> SliderBuilder<'u, 'a, 'b> {
         self
     }
 
+    pub fn track_gradient(mut self, start: Color, end: Color, direction: zenthra_core::GradientDirection) -> Self {
+        self.track_gradient = Some((start, end, direction));
+        self
+    }
+
     pub fn track_shadow(mut self, color: Color, ox: f32, oy: f32, blur: f32) -> Self {
         self.track_shadow_color = Some(color);
         self.track_shadow_offset = [ox, oy];
@@ -259,6 +276,11 @@ impl<'u, 'a, 'b> SliderBuilder<'u, 'a, 'b> {
 
     pub fn thumb_color(mut self, color: Color) -> Self {
         self.thumb_color = color;
+        self
+    }
+
+    pub fn thumb_gradient(mut self, start: Color, end: Color, direction: zenthra_core::GradientDirection) -> Self {
+        self.thumb_gradient = Some((start, end, direction));
         self
     }
 
@@ -389,11 +411,20 @@ impl<'u, 'a, 'b> SliderBuilder<'u, 'a, 'b> {
 
         // 0. Background
         if let Some(bg) = self.bg {
+            let (bg_c1, bg_c2, bg_params) = if let Some((s, e, d)) = self.bg_gradient {
+                let (t, a) = d.to_type_and_angle();
+                (s.to_array(), e.to_array(), [t, a, 0.0, 0.0])
+            } else {
+                (bg.to_array(), [0.0; 4], [0.0; 4])
+            };
+
             self.ui.draws.push(DrawCommand::Rect(RectDraw {
                 instance: RectInstance {
                     pos: [x, y],
                     size: [w, h],
-                    color: bg.to_array(),
+                    color: bg_c1,
+                    color2: bg_c2,
+                    gradient_params: bg_params,
                     radius: self.radius,
                     border_width: self.border_width,
                     border_color: self.border_color.map(|c| c.to_array()).unwrap_or([0.0; 4]),
@@ -408,11 +439,20 @@ impl<'u, 'a, 'b> SliderBuilder<'u, 'a, 'b> {
 
         // 1. Track
         let ty = y + (h - self.track_h) / 2.0;
+        let (track_c1, track_c2, track_params) = if let Some((s, e, d)) = self.track_gradient {
+            let (t, a) = d.to_type_and_angle();
+            (s.to_array(), e.to_array(), [t, a, 0.0, 0.0])
+        } else {
+            (self.track_color.to_array(), [0.0; 4], [0.0; 4])
+        };
+
         self.ui.draws.push(DrawCommand::Rect(RectDraw {
             instance: RectInstance {
                 pos: [track_x_start, ty],
                 size: [track_w, self.track_h],
-                color: self.track_color.to_array(),
+                color: track_c1,
+                color2: track_c2,
+                gradient_params: track_params,
                 radius: self.track_radius,
                 shadow_color: self.track_shadow_color.map(|mut c| { c.a *= self.track_shadow_opacity; c.to_array() }).unwrap_or([0.0; 4]),
                 shadow_offset: self.track_shadow_offset,
@@ -434,11 +474,20 @@ impl<'u, 'a, 'b> SliderBuilder<'u, 'a, 'b> {
             brightness = 1.1;
         }
 
+        let (thumb_c1, thumb_c2, thumb_params) = if let Some((s, e, d)) = self.thumb_gradient {
+            let (t, a) = d.to_type_and_angle();
+            (s.to_array(), e.to_array(), [t, a, 0.0, 0.0])
+        } else {
+            (self.thumb_color.to_array(), [0.0; 4], [0.0; 4])
+        };
+
         self.ui.draws.push(DrawCommand::Rect(RectDraw {
             instance: RectInstance {
                 pos: [thumb_x, thumb_y],
                 size: [self.thumb_w, self.thumb_h],
-                color: self.thumb_color.to_array(),
+                color: thumb_c1,
+                color2: thumb_c2,
+                gradient_params: thumb_params,
                 radius: self.thumb_radius,
                 brightness,
                 shadow_color: self.thumb_shadow_color.map(|mut c| { c.a *= self.thumb_shadow_opacity; c.to_array() }).unwrap_or([0.0; 4]),

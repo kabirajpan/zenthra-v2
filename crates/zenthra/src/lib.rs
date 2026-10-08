@@ -4,14 +4,15 @@ pub mod app;
 pub use app::App;
 pub use zenthra_core::{
     Color, EdgeInsets, Event, Id, Point, Rect, RenderMode, Response, Role, Size, Align, BorderAlignment,
-    ImageSource, ObjectFit, BackdropFilter, Filter, style, Placement, PopoverAlign,
+    ImageSource, ObjectFit, BackdropFilter, Filter, style, Placement, PopoverAlign, GradientDirection,
+    Gradient, Background, ColorStop, Direction, IntoStops, IntoAnchor, IntoMeshPoints,
 };
-pub use zenthra_widgets::container::{Direction, Wrap};
+pub use zenthra_widgets::container::{Direction as LayoutDirection, Wrap};
 pub use zenthra_widgets::text::{FontWeight, CursorIcon, TextWrap, FontStyle};
 pub use zenthra_widgets::{
     Ui, ButtonBuilder, ContainerBuilder, InputBuilder, SliderBuilder, TextBuilder,
     TextAreaBuilder, FloatingWindowBuilder, ImageBuilder, CardBuilder, PanelBuilder,
-    StackBuilder, CheckboxBuilder, ToggleBuilder, RadioBuilder, DropdownBuilder,
+    StackBuilder, ProgressBarBuilder, CheckboxBuilder, ToggleBuilder, RadioBuilder, DropdownBuilder,
     MenuBarBuilder, MenuBuilder, SubMenuBuilder, MenuItemBuilder, PopoverBuilder, icons,
 };
 pub use zenthra_platform::app::WindowAction;
@@ -27,14 +28,15 @@ pub mod prelude {
     pub use crate::App;
     pub use zenthra_core::{
         Color, EdgeInsets, RenderMode, Response, Role, Align, BorderAlignment, ImageSource, ObjectFit,
-        BackdropFilter, Filter, style, Placement, PopoverAlign,
+        BackdropFilter, Filter, style, Placement, PopoverAlign, GradientDirection,
+        Gradient, Background, ColorStop, Direction, IntoStops, IntoAnchor, IntoMeshPoints,
     };
-    pub use zenthra_widgets::container::{Direction, Wrap};
+    pub use zenthra_widgets::container::{Direction as LayoutDirection, Wrap};
     pub use zenthra_widgets::text::{FontWeight, CursorIcon, TextWrap, FontStyle};
     pub use zenthra_widgets::{
         Ui, ButtonBuilder, ContainerBuilder, InputBuilder, SliderBuilder, TextBuilder,
         TextAreaBuilder, FloatingWindowBuilder, ImageBuilder, CardBuilder, PanelBuilder,
-        StackBuilder, CheckboxBuilder, ToggleBuilder, RadioBuilder, DropdownBuilder,
+        StackBuilder, ProgressBarBuilder, CheckboxBuilder, ToggleBuilder, RadioBuilder, DropdownBuilder,
         MenuBarBuilder, MenuBuilder, SubMenuBuilder, MenuItemBuilder, PopoverBuilder, icons,
     };
     pub use zenthra_platform::app::WindowAction;

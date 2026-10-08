@@ -37,6 +37,11 @@ pub struct ProgressBarBuilder<'u, 'a> {
 
     // 5. Effects
     shimmer: bool,
+
+    // 6. Gradients
+    bg_gradient: Option<(Color, Color, zenthra_core::GradientDirection)>,
+    track_gradient: Option<(Color, Color, zenthra_core::GradientDirection)>,
+    fill_gradient: Option<(Color, Color, zenthra_core::GradientDirection)>,
 }
 
 impl<'u, 'a> ProgressBarBuilder<'u, 'a> {
@@ -72,6 +77,9 @@ impl<'u, 'a> ProgressBarBuilder<'u, 'a> {
             fill_shadow_opacity: 0.4,
             
             shimmer: false,
+            bg_gradient: None,
+            track_gradient: None,
+            fill_gradient: None,
         }
     }
 
@@ -165,6 +173,11 @@ impl<'u, 'a> ProgressBarBuilder<'u, 'a> {
         self
     }
 
+    pub fn bg_gradient(mut self, start: Color, end: Color, direction: zenthra_core::GradientDirection) -> Self {
+        self.bg_gradient = Some((start, end, direction));
+        self
+    }
+
     pub fn border(mut self, color: Color, width: f32) -> Self {
         self.border_color = Some(color);
         self.border_width = width;
@@ -192,9 +205,19 @@ impl<'u, 'a> ProgressBarBuilder<'u, 'a> {
         self
     }
 
+    pub fn track_gradient(mut self, start: Color, end: Color, direction: zenthra_core::GradientDirection) -> Self {
+        self.track_gradient = Some((start, end, direction));
+        self
+    }
+
     // --- 3. Fill Methods ---
     pub fn fill_color(mut self, color: Color) -> Self {
         self.fill_color = color;
+        self
+    }
+
+    pub fn fill_gradient(mut self, start: Color, end: Color, direction: zenthra_core::GradientDirection) -> Self {
+        self.fill_gradient = Some((start, end, direction));
         self
     }
 
@@ -242,11 +265,20 @@ impl<'u, 'a> ProgressBarBuilder<'u, 'a> {
 
         // 0. Background
         if let Some(bg) = self.bg {
+            let (bg_c1, bg_c2, bg_params) = if let Some((s, e, d)) = self.bg_gradient {
+                let (t, a) = d.to_type_and_angle();
+                (s.to_array(), e.to_array(), [t, a, 0.0, 0.0])
+            } else {
+                (bg.to_array(), [0.0; 4], [0.0; 4])
+            };
+
             self.ui.draws.push(DrawCommand::Rect(RectDraw {
                 instance: RectInstance {
                     pos: [x, y],
                     size: [w, h],
-                    color: bg.to_array(),
+                    color: bg_c1,
+                    color2: bg_c2,
+                    gradient_params: bg_params,
                     radius: self.radius,
                     border_width: self.border_width,
                     border_color: self.border_color.map(|c| c.to_array()).unwrap_or([0.0; 4]),
@@ -267,11 +299,20 @@ impl<'u, 'a> ProgressBarBuilder<'u, 'a> {
             track_shadow_color[3] *= self.shadow_opacity;
         }
 
+        let (track_c1, track_c2, track_params) = if let Some((s, e, d)) = self.track_gradient {
+            let (t, a) = d.to_type_and_angle();
+            (s.to_array(), e.to_array(), [t, a, 0.0, 0.0])
+        } else {
+            (self.track_color.to_array(), [0.0; 4], [0.0; 4])
+        };
+
         self.ui.draws.push(DrawCommand::Rect(RectDraw {
             instance: RectInstance {
                 pos: [track_x, ty],
                 size: [track_w, self.track_h],
-                color: self.track_color.to_array(),
+                color: track_c1,
+                color2: track_c2,
+                gradient_params: track_params,
                 radius: self.radius,
                 opacity: self.opacity,
                 shadow_color: track_shadow_color,
@@ -290,11 +331,20 @@ impl<'u, 'a> ProgressBarBuilder<'u, 'a> {
                 fill_shadow_color[3] *= self.fill_shadow_opacity;
             }
 
+            let (fill_c1, fill_c2, fill_params) = if let Some((s, e, d)) = self.fill_gradient {
+                let (t, a) = d.to_type_and_angle();
+                (s.to_array(), e.to_array(), [t, a, 0.0, 0.0])
+            } else {
+                (self.fill_color.to_array(), [0.0; 4], [0.0; 4])
+            };
+
             self.ui.draws.push(DrawCommand::Rect(RectDraw {
                 instance: RectInstance {
                     pos: [track_x, ty],
                     size: [fill_w, self.track_h],
-                    color: self.fill_color.to_array(),
+                    color: fill_c1,
+                    color2: fill_c2,
+                    gradient_params: fill_params,
                     radius: self.radius,
                     opacity: self.opacity,
                     shadow_color: fill_shadow_color,

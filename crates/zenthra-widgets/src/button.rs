@@ -17,7 +17,7 @@ pub struct ButtonBuilder<'u, 'a> {
     padding: EdgeInsets,
 
     // Visuals (Idle)
-    bg: Color,
+    bg: zenthra_core::Background,
     text_color: Color,
     radius: [f32; 4],
     font_size: f32,
@@ -31,8 +31,8 @@ pub struct ButtonBuilder<'u, 'a> {
     shadow_opacity: f32,
 
     // States
-    hover_bg: Option<Color>,
-    active_bg: Option<Color>,
+    hover_bg: Option<zenthra_core::Background>,
+    active_bg: Option<zenthra_core::Background>,
 
     // Other
     opacity: f32,
@@ -60,7 +60,7 @@ impl<'u, 'a> ButtonBuilder<'u, 'a> {
             width: None,
             height: None,
             padding: EdgeInsets::symmetric(6.0, 12.0),
-            bg: Color::rgb(0.2, 0.2, 0.25),
+            bg: zenthra_core::Background::Solid(Color::rgb(0.2, 0.2, 0.25)),
             text_color: Color::WHITE,
             radius: [4.0; 4],
             font_size: 14.0,
@@ -110,8 +110,8 @@ impl<'u, 'a> ButtonBuilder<'u, 'a> {
         self
     }
 
-    pub fn bg(mut self, color: Color) -> Self {
-        self.bg = color;
+    pub fn bg(mut self, bg: impl Into<zenthra_core::Background>) -> Self {
+        self.bg = bg.into();
         self
     }
 
@@ -120,13 +120,28 @@ impl<'u, 'a> ButtonBuilder<'u, 'a> {
         self
     }
 
-    pub fn hover_bg(mut self, color: Color) -> Self {
-        self.hover_bg = Some(color);
+    pub fn hover_bg(mut self, bg: impl Into<zenthra_core::Background>) -> Self {
+        self.hover_bg = Some(bg.into());
         self
     }
 
-    pub fn active_bg(mut self, color: Color) -> Self {
-        self.active_bg = Some(color);
+    pub fn active_bg(mut self, bg: impl Into<zenthra_core::Background>) -> Self {
+        self.active_bg = Some(bg.into());
+        self
+    }
+
+    pub fn bg_gradient(mut self, start: Color, end: Color, direction: zenthra_core::GradientDirection) -> Self {
+        self.bg = zenthra_core::Gradient::linear(direction, [start, end]).into();
+        self
+    }
+
+    pub fn hover_bg_gradient(mut self, start: Color, end: Color, direction: zenthra_core::GradientDirection) -> Self {
+        self.hover_bg = Some(zenthra_core::Gradient::linear(direction, [start, end]).into());
+        self
+    }
+
+    pub fn active_bg_gradient(mut self, start: Color, end: Color, direction: zenthra_core::GradientDirection) -> Self {
+        self.active_bg = Some(zenthra_core::Gradient::linear(direction, [start, end]).into());
         self
     }
 
@@ -388,16 +403,21 @@ impl<'u, 'a> ButtonBuilder<'u, 'a> {
         }
         self.ui.input_events = events;
 
-        // Determine effective colors based on state
-        let mut current_bg = self.bg;
+        // Determine effective background based on state
+        let effective_bg = if is_pressed && self.active_bg.is_some() {
+            &self.active_bg
+        } else if is_hovered && self.hover_bg.is_some() {
+            &self.hover_bg
+        } else {
+            &Some(self.bg.clone())
+        };
+
         let current_text = self.text_color;
         let mut current_brightness = 1.0;
 
         if is_pressed {
-            current_bg = self.active_bg.unwrap_or(self.bg);
             current_brightness = 0.8;
         } else if is_hovered {
-            current_bg = self.hover_bg.unwrap_or(self.bg);
             current_brightness = self.hover_brightness;
         }
 
@@ -450,11 +470,19 @@ impl<'u, 'a> ButtonBuilder<'u, 'a> {
         let start_draw = self.ui.draws.len();
 
         // 1. Draw Background
+        let (bg_c1, bg_c2, bg_c3, bg_c4, bg_grad_params, bg_grad_stops, _) =
+            crate::container::resolve_background(effective_bg);
+
         self.ui.draws.push(DrawCommand::Rect(RectDraw {
             instance: RectInstance {
                 pos: [x, y],
                 size: [final_w, final_h],
-                color: current_bg.to_array(),
+                color: bg_c1,
+                color2: bg_c2,
+                color3: bg_c3,
+                color4: bg_c4,
+                gradient_params: bg_grad_params,
+                gradient_stops: bg_grad_stops,
                 radius: [
                     self.radius[3],
                     self.radius[2],

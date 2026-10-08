@@ -76,31 +76,31 @@ impl ShapedBuffer {
 
         let best_line = &self.lines[best_line_idx];
 
-        // 2. Find the glyph on that line with the closest X coordinate
-        let mut best_cluster = 0;
-        let mut min_dist_x = f32::MAX;
+        // 2. Find the glyph on that line with the closest X coordinate using character midpoints
+        let line_glyphs: Vec<&crate::types::shaped_glyph::ShapedGlyph> = self.glyphs.iter()
+            .filter(|glyph| (glyph.y - best_line.y).abs() < 2.0)
+            .collect();
 
-        // Note: For now we assume glyphs on a line share the same Y.
-        // In a complex multi-font line, Y might vary slightly, so we use a threshold.
-        let mut found_glyph = false;
-        for glyph in &self.glyphs {
-            if (glyph.y - best_line.y).abs() < 1.0 {
-                let center_x = glyph.x + glyph.width / 2.0;
-                let dist = (x - center_x).abs();
-                if dist < min_dist_x {
-                    min_dist_x = dist;
-                    best_cluster = glyph.cluster;
-                    found_glyph = true;
-                }
-            }
-        }
-
-        if !found_glyph {
-            // Fallback to first/last cluster if no glyphs on the "best" line were found
+        if line_glyphs.is_empty() {
             return self.glyphs.first().map(|g| g.cluster).unwrap_or(0);
         }
 
-        best_cluster
+        for (i, glyph) in line_glyphs.iter().enumerate() {
+            let midpoint = glyph.x + glyph.width * 0.5;
+            if x < midpoint {
+                return glyph.cluster;
+            }
+            let is_last = i + 1 >= line_glyphs.len();
+            if is_last {
+                return glyph.cluster + 1;
+            }
+            let next_midpoint = line_glyphs[i + 1].x + line_glyphs[i + 1].width * 0.5;
+            if x < next_midpoint {
+                return line_glyphs[i + 1].cluster;
+            }
+        }
+
+        line_glyphs.last().map(|g| g.cluster + 1).unwrap_or(0)
     }
 
     /// Returns the (x, y) coordinates for a given character byte index.

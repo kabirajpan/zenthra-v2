@@ -24,6 +24,7 @@ pub struct StackBuilder<'u, 'a> {
 
     // Styling
     bg: Option<Color>,
+    bg_gradient: Option<(Color, Color, zenthra_core::GradientDirection)>,
     border_color: Option<Color>,
     border_width: f32,
     radius: [f32; 4],
@@ -56,6 +57,7 @@ impl<'u, 'a> StackBuilder<'u, 'a> {
             halign: Align::Left,
             valign: Align::Top,
             bg: None,
+            bg_gradient: None,
             border_color: None,
             border_width: 0.0,
             radius: [0.0; 4],
@@ -141,6 +143,12 @@ impl<'u, 'a> StackBuilder<'u, 'a> {
 
     pub fn bg(mut self, bg: Color) -> Self {
         self.bg = Some(bg);
+        self
+    }
+
+    pub fn bg_gradient(mut self, start: Color, end: Color, direction: zenthra_core::GradientDirection) -> Self {
+        self.bg = Some(start);
+        self.bg_gradient = Some((start, end, direction));
         self
     }
 
@@ -349,6 +357,13 @@ impl<'u, 'a> StackBuilder<'u, 'a> {
             let bw = self.border_width;
             let bc = self.border_color.unwrap_or(Color::TRANSPARENT);
 
+            let (color2, gradient_params) = if let Some((_, end, dir)) = self.bg_gradient {
+                let (g_type, g_angle) = dir.to_type_and_angle();
+                (end.to_array(), [g_type, g_angle, 0.0, 0.0])
+            } else {
+                ([1.0, 1.0, 1.0, 1.0], [0.0; 4])
+            };
+
             target_draws.push(DrawCommand::Rect(RectDraw {
                 instance: RectInstance {
                     pos: [ox, oy],
@@ -378,6 +393,9 @@ impl<'u, 'a> StackBuilder<'u, 'a> {
                         BorderAlignment::Center => 0.5,
                         BorderAlignment::Outside => 1.0,
                     },
+                    color2,
+                    gradient_params,
+                    ..Default::default()
                 }
             }));
         }

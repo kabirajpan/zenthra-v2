@@ -11,11 +11,16 @@ pub struct CardBuilder<'u, 'a> {
     width: Option<f32>,
     height: Option<f32>,
     padding: f32,
-    bg: Option<Color>,
+    bg: Option<zenthra_core::Background>,
     border_color: Option<Color>,
     border_width: f32,
     radius: f32,
     
+    // Layout
+    is_row: bool,
+    halign: Option<zenthra_core::Align>,
+    valign: Option<zenthra_core::Align>,
+
     // Shadows
     shadow_color: Option<Color>,
     shadow_offset: [f32; 2],
@@ -24,13 +29,14 @@ pub struct CardBuilder<'u, 'a> {
 
     // Premium Animations
     hover_scale: f32,
-    hover_bg: Option<Color>,
+    hover_bg: Option<zenthra_core::Background>,
     hover_border_color: Option<Color>,
     
     // Backdrop Filter
     backdrop_filter: Option<zenthra_core::BackdropFilter>,
     opacity: Option<f32>,
     bg_opacity: Option<f32>,
+    bg_gradient: Option<(Color, Color, zenthra_core::GradientDirection)>,
 }
 
 impl<'u, 'a> CardBuilder<'u, 'a> {
@@ -46,6 +52,9 @@ impl<'u, 'a> CardBuilder<'u, 'a> {
             border_color: None,
             border_width: 0.0,
             radius: 0.0,
+            is_row: false,
+            halign: None,
+            valign: None,
             shadow_color: None,
             shadow_offset: [0.0, 0.0],
             shadow_blur: 0.0,
@@ -56,6 +65,7 @@ impl<'u, 'a> CardBuilder<'u, 'a> {
             backdrop_filter: None,
             opacity: None,
             bg_opacity: None,
+            bg_gradient: None,
         }
     }
 
@@ -69,6 +79,16 @@ impl<'u, 'a> CardBuilder<'u, 'a> {
 
     pub fn width(mut self, w: f32) -> Self {
         self.width = Some(w);
+        self
+    }
+
+    pub fn full_width(mut self) -> Self {
+        self.width = Some(self.ui.available_width);
+        self
+    }
+
+    pub fn full_height(mut self) -> Self {
+        self.height = Some(self.ui.height);
         self
     }
 
@@ -88,8 +108,33 @@ impl<'u, 'a> CardBuilder<'u, 'a> {
         self
     }
 
-    pub fn bg(mut self, bg: Color) -> Self {
-        self.bg = Some(bg);
+    pub fn bg(mut self, bg: impl Into<zenthra_core::Background>) -> Self {
+        self.bg = Some(bg.into());
+        self
+    }
+
+    pub fn bg_gradient(mut self, start: Color, end: Color, direction: zenthra_core::GradientDirection) -> Self {
+        self.bg = Some(zenthra_core::Gradient::linear(direction, [start, end]).into());
+        self
+    }
+
+    pub fn row(mut self) -> Self {
+        self.is_row = true;
+        self
+    }
+
+    pub fn column(mut self) -> Self {
+        self.is_row = false;
+        self
+    }
+
+    pub fn halign(mut self, align: zenthra_core::Align) -> Self {
+        self.halign = Some(align);
+        self
+    }
+
+    pub fn valign(mut self, align: zenthra_core::Align) -> Self {
+        self.valign = Some(align);
         self
     }
 
@@ -121,8 +166,8 @@ impl<'u, 'a> CardBuilder<'u, 'a> {
         self
     }
 
-    pub fn hover_bg(mut self, bg: Color) -> Self {
-        self.hover_bg = Some(bg);
+    pub fn hover_bg(mut self, bg: impl Into<zenthra_core::Background>) -> Self {
+        self.hover_bg = Some(bg.into());
         self
     }
 
@@ -150,11 +195,26 @@ impl<'u, 'a> CardBuilder<'u, 'a> {
     where F: FnOnce(&mut Ui) {
         let mut container = self.ui.container()
             .id(self.id)
-            .column()
             .padding_all(self.padding);
+
+        if self.is_row {
+            container = container.row();
+        } else {
+            container = container.column();
+        }
+
+        if let Some(ha) = self.halign {
+            container = container.halign(ha);
+        }
+        if let Some(va) = self.valign {
+            container = container.valign(va);
+        }
 
         if let Some(bg) = self.bg {
             container = container.bg(bg);
+        }
+        if let Some((start, end, dir)) = self.bg_gradient {
+            container = container.bg_gradient(start, end, dir);
         }
         if let Some(bgo) = self.bg_opacity {
             container = container.bg_opacity(bgo);

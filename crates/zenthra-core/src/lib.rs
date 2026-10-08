@@ -11,6 +11,7 @@ pub mod response;
 pub mod style;
 pub mod widget;
 pub mod image;
+pub mod gradient;
 
 pub use color::Color;
 pub use element::{Role, SemanticNode};
@@ -20,6 +21,7 @@ pub use id::Id;
 pub use rect::{Point, Rect, Size};
 pub use render_mode::RenderMode;
 pub use response::Response;
-pub use style::{BorderRadius, EdgeInsets, Align, BorderAlignment, BackdropFilter, Filter, blur, Placement, PopoverAlign};
+pub use style::{BorderRadius, EdgeInsets, Align, BorderAlignment, BackdropFilter, Filter, blur, Placement, PopoverAlign, GradientDirection};
 pub use widget::Widget;
 pub use image::{ImageSource, ObjectFit};
+pub use gradient::{Gradient, Direction, ColorStop, Background, IntoStops, IntoAnchor, IntoMeshPoints};

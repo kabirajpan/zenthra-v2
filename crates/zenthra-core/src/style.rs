@@ -106,6 +106,10 @@ pub enum Align {
     Left,
     Right,
     Center,
+    TopLeft,
+    TopRight,
+    BottomLeft,
+    BottomRight,
     SpaceBetween,
     SpaceAround,
 }
@@ -193,3 +197,29 @@ impl BackdropFilter {
         self
     }
 }
+
+/// Direction / mode for rendering GPU gradients
+#[derive(Debug, Clone, Copy, PartialEq, Default)]
+pub enum GradientDirection {
+    #[default]
+    Horizontal,
+    Vertical,
+    Diagonal,
+    Angle(f32),
+    Radial,
+    HorizontalFade(f32),
+}
+
+impl GradientDirection {
+    pub fn to_type_and_angle(&self) -> (f32, f32) {
+        match self {
+            GradientDirection::Horizontal => (1.0, 0.0),
+            GradientDirection::Vertical => (1.0, std::f32::consts::FRAC_PI_2),
+            GradientDirection::Diagonal => (1.0, std::f32::consts::FRAC_PI_4),
+            GradientDirection::Angle(deg) => (1.0, deg.to_radians()),
+            GradientDirection::Radial => (2.0, 0.0),
+            GradientDirection::HorizontalFade(px) => (3.0, *px),
+        }
+    }
+}
+

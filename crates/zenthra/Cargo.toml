@@ -179,3 +179,19 @@ path = "../../examples/simple_window.rs"
 [[example]]
 name = "reactive_state_demo"
 path = "../../examples/reactive_state_demo.rs"
+
+[[example]]
+name = "gradient_showcase"
+path = "../../examples/gradient_showcase.rs"
+
+[[example]]
+name = "gradient_timeline_clips"
+path = "../../examples/gradient_timeline_clips.rs"
+
+[[example]]
+name = "gradient_box"
+path = "../../examples/gradient_box.rs"
+
+[[example]]
+name = "gradient_mesh_card"
+path = "../../examples/gradient_mesh_card.rs"

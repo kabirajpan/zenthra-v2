@@ -31,6 +31,8 @@ pub struct FloatingWindowBuilder<'u, 'a, 'b> {
     modal: bool,
     light_dismiss: bool,
     backdrop_filter: Option<zenthra_core::BackdropFilter>,
+    bg_gradient: Option<(Color, Color, zenthra_core::GradientDirection)>,
+    header_bg_gradient: Option<(Color, Color, zenthra_core::GradientDirection)>,
 }
 
 impl<'u, 'a, 'b> FloatingWindowBuilder<'u, 'a, 'b> {
@@ -62,6 +64,8 @@ impl<'u, 'a, 'b> FloatingWindowBuilder<'u, 'a, 'b> {
             modal: false,
             light_dismiss: false,
             backdrop_filter: None,
+            bg_gradient: None,
+            header_bg_gradient: None,
         }
     }
 
@@ -91,6 +95,11 @@ impl<'u, 'a, 'b> FloatingWindowBuilder<'u, 'a, 'b> {
         self
     }
 
+    pub fn bg_gradient(mut self, start: Color, end: Color, direction: zenthra_core::GradientDirection) -> Self {
+        self.bg_gradient = Some((start, end, direction));
+        self
+    }
+
     pub fn backdrop_filter(mut self, filter: zenthra_core::BackdropFilter) -> Self {
         self.backdrop_filter = Some(filter);
         self
@@ -109,6 +118,11 @@ impl<'u, 'a, 'b> FloatingWindowBuilder<'u, 'a, 'b> {
 
     pub fn header_bg(mut self, bg: Color) -> Self {
         self.header_bg = bg;
+        self
+    }
+
+    pub fn header_bg_gradient(mut self, start: Color, end: Color, direction: zenthra_core::GradientDirection) -> Self {
+        self.header_bg_gradient = Some((start, end, direction));
         self
     }
 
@@ -253,20 +267,26 @@ impl<'u, 'a, 'b> FloatingWindowBuilder<'u, 'a, 'b> {
                 .shadow(shadow_color, shadow_offset[0], shadow_offset[1], shadow_blur)
                 .shadow_opacity(shadow_opacity)
                 .clip(true);
+            if let Some((start, end, dir)) = self.bg_gradient {
+                container = container.bg_gradient(start, end, dir);
+            }
             if let Some(ref filter) = self.backdrop_filter {
                 container = container.backdrop_filter(filter.clone());
             }
             container.show(|ui| {
                     let mut close_clicked = false;
-                    let header_res = ui.container()
+                    let mut header_c = ui.container()
                         .full_width()
                         .height(header_height)
                         .bg(header_bg)
                         .padding_x(15.0)
                         .row()
                         .halign(Align::SpaceBetween)
-                        .valign(Align::Center)
-                        .show(|ui| {
+                        .valign(Align::Center);
+                    if let Some((start, end, dir)) = self.header_bg_gradient {
+                        header_c = header_c.bg_gradient(start, end, dir);
+                    }
+                    let header_res = header_c.show(|ui| {
                             // Left spacer to balance close button width for centering
                             ui.spacing(20.0);
 
