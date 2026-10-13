@@ -55,3 +55,23 @@ path = "../../examples/input.rs"
 [[example]]
 name = "text_area"
 path = "../../examples/text_area.rs"
+
+[[example]]
+name = "toggle"
+path = "../../examples/toggle.rs"
+
+[[example]]
+name = "checkbox"
+path = "../../examples/checkbox.rs"
+
+[[example]]
+name = "radio"
+path = "../../examples/radio.rs"
+
+[[example]]
+name = "progress_bar"
+path = "../../examples/progress_bar.rs"
+
+[[example]]
+name = "slider"
+path = "../../examples/slider.rs"

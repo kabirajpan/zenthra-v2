@@ -248,6 +248,11 @@ impl<'u, 'a, 'b> SliderBuilder<'u, 'a, 'b> {
         self
     }
 
+    pub fn track_height(mut self, h: f32) -> Self {
+        self.track_h = h;
+        self
+    }
+
     pub fn track_radius(mut self, tl: f32, tr: f32, br: f32, bl: f32) -> Self {
         self.track_radius = [tl, tr, br, bl];
         self
