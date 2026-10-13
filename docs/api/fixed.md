@@ -40,18 +40,14 @@ It lists:
 | `impl_radius` | Individual corner setters (`radius_top_left`, etc.) | **Keep** | 🔒 Locked | Canonical individual corner setters. |
 | `impl_visuals` | `.style(BoxStyle)` | **Keep** | 🔒 Locked | Canonical raw `BoxStyle` replacement. |
 | `impl_visuals` | `.bg(impl Into<Background>)` | **Keep** | 🔒 Locked | Unified background setter (`Solid`, `Gradient`, `None`). |
-| `impl_visuals` | `.bg_gradient(start, end, dir)` | **Remove** | Pending | Legacy Duplicate: `.bg(Gradient::linear(...))` handles this cleanly. |
-| `impl_visuals` | `.bg_opacity(opacity: f32)` | **Keep** | 🔒 Locked | Direct alpha adjustment for background. |
 | `impl_visuals` | `.border(impl Into<Border>)` | **Keep** | 🔒 Locked | Unified border setter (`(Color, width)`, `Border::Solid`, `Border::None`). |
-| `impl_visuals` | `.border_alignment(alignment)` | **Keep** | Review | Border inside/center/outside positioning. |
 | `impl_visuals` | `.shadow(color, x, y, blur)` | **Keep** | 🔒 Locked | Canonical drop shadow setter. |
 | `impl_visuals` | `.shadow_opacity(opacity)` | **Keep** | 🔒 Locked | Canonical shadow alpha setter. |
 | `impl_visuals` | `.opacity(o: f32)` | **Keep** | 🔒 Locked | Composite opacity factor. |
 | `impl_font_style_methods` | **`.size(size: f32)`** | **Keep** | 🔒 **Locked** | Canonical font size in points. Prefix-free, no collision. |
 | `impl_font_style_methods` | **`.color(Color)`** | **Keep** | 🔒 **Locked** | Canonical text glyph color. Canonical single method. |
-| `impl_font_style_methods` | `.font(&str)` / `.font_family(&str)` | **Keep** | Review | Font family specification. |
-| `impl_font_style_methods` | `.weight(...)` / `.bold()` | **Keep** | Review | Weight specification. |
-| `impl_font_style_methods` | `.line_height(lh: f32)` | **Keep** | Review | Multiplier for line box height. |
+| `impl_font_style_methods` | **`.font_family(impl Into<String>)`** | **Keep** | 🔒 **Locked** | Canonical font family specification. |
+| `impl_font_style_methods` | **`.font_weight(impl Into<FontWeight>)`** | **Keep** | 🔒 **Locked** | Canonical numeric/enum font weight specification. |
 | `impl_text_wrap_methods` | `.wrap(TextWrap)` | **Keep** | 🔒 Locked | Canonical text wrap strategy. |
 | `impl_text_decorations` | `.ellipsis(bool)` | **Keep** | 🔒 Locked | Truncation with trailing dots. |
 | `impl_text_decorations` | `.decoration(TextDecoration)` | **Keep** | Review | Unified text decoration (Italic, Underline, Strikethrough, Highlight). |
@@ -78,8 +74,6 @@ It lists:
 | `pub fn halign(self, align: Align) -> Self` | Alignment | **Keep** | Sets horizontal child alignment. |
 | `pub fn valign(self, align: Align) -> Self` | Alignment | **Keep** | Sets vertical child alignment. |
 | `pub fn wrap(self, strategy: Wrap) -> Self` | Wrapping | **Keep** | Sets flex wrapping strategy. |
-| `pub fn auto_wrap(self) -> Self` | Wrapping | **Keep** | Shorthand for `Wrap::Auto`. |
-| `pub fn no_wrap(self) -> Self` | Wrapping | **Keep** | Shorthand for `Wrap::NoWrap`. |
 | `pub fn scroll_x(self, enabled: bool) -> Self` | Scrolling | **Keep** | Enables horizontal scroll clamping. |
 | `pub fn scroll_y(self, enabled: bool) -> Self` | Scrolling | **Keep** | Enables vertical scroll clamping. |
 | `pub fn scroll(self, enabled: bool) -> Self` | Scrolling | **Keep** | Enables dual-axis scrolling. |

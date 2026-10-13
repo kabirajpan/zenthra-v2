@@ -23,7 +23,6 @@ ui.checkbox(&mut auto_save, "Auto-save changes")
 | Method | Description |
 |---|---|
 | `.style(BoxStyle)` | Reusable BoxStyle for checkbox box |
-| `.text_style(TextStyle)` | Reusable TextStyle for label |
 | `.size(f32)` | Width & height of checkbox box |
 | `.gap(f32)` | Spacing between box and label |
 | `.bg(Color)` | Unchecked box background |
@@ -31,8 +30,7 @@ ui.checkbox(&mut auto_save, "Auto-save changes")
 | `.check_bg(Color)` | Checked box background |
 | `.check_color(Color)` | Checkmark glyph color |
 | `.radius(f32)` / `.radius_all(f32)` | Corner radii |
-| `.label_size(f32)` / `.font_size(f32)` | Typography size |
-| `.label_color(Color)` / `.text_color(Color)` | Typography color |
+| `.color(Color)` | Label typography color |
 | `.active_label(Color)` | Label color transition when checked |
 | `.glow(bool)` | Neon accent aura when checked |
 | `.shadow(Color, x, y, blur)` | Box drop shadow |

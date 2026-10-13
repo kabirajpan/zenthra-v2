@@ -14,7 +14,7 @@ It details:
 ## 1. Architecture & Design Philosophy
 
 ### The Single-Source Principle
-In UI frameworks, widget styling methods (such as `.width()`, `.padding()`, `.radius()`, `.bg()`, `.border()`, `.font_size()`) frequently duplicate code across builders. Without centralization, widgets develop subtle inconsistencies—missing lifetimes, mismatched method names, diverging default values, or accidental aliases.
+In UI frameworks, widget styling methods (such as `.width()`, `.padding()`, `.radius()`, `.bg()`, `.border()`, `.size()`) frequently duplicate code across builders. Without centralization, widgets develop subtle inconsistencies—missing lifetimes, mismatched method names, diverging default values, or accidental aliases.
 
 Zenthra solves this via declarative, single-source code-generation macros in `macros.rs`:
 - Every widget that implements `zenthra_core::Styleable` and holds a `pub style: BoxStyle` field gains the **exact same** box-styling methods via `impl_box_style_methods!`.
@@ -46,11 +46,12 @@ Zenthra solves this via declarative, single-source code-generation macros in `ma
 `macros.rs` exposes fine-grained modular macros and high-level composite macros:
 
 ### Box Styling Macros
-- **`impl_dimensions!`**: Layout box sizing (`width`, `height`, `fill_x`, `fill_y`, `fill`, `min_width`, `max_width`, etc.).
+- **`impl_dimensions!`**: Layout box sizing (`width`, `height`, `fill_x`, `fill_y`, `fill`, `min_width`, `max_width`, `min_height`, `max_height`).
 - **`impl_padding!`**: Inner box padding edge setters (`padding`, `padding_all`, `padding_x`, `padding_y`, etc.).
+- **`impl_margin!`**: Outer box margin edge setters (`margin`, `margin_all`, `margin_x`, `margin_y`, etc.).
 - **`impl_radius!`**: Corner rounding setters (`radius`, `radius_all`, `radius_top`, `radius_left`, etc.).
 - **`impl_visuals!`**: Backgrounds, borders, drop shadows, and opacity (`bg`, `border`, `shadow`, etc.).
-- **`impl_box_style_methods!`** *(Composite)*: Bundles `impl_dimensions!`, `impl_padding!`, `impl_radius!`, and `impl_visuals!`.
+- **`impl_box_style_methods!`** *(Composite)*: Bundles `impl_dimensions!`, `impl_padding!`, `impl_margin!`, `impl_radius!`, and `impl_visuals!`.
 
 ### Typography Styling Macros
 - **`impl_font_style_methods!`**: Core typography (`size`, `color`, `font_family`, `font_weight`).
@@ -97,7 +98,24 @@ Target field: `self.style.padding` (`EdgeInsets`).
 
 ---
 
-### 3.3 Corner Radius (`impl_radius!`)
+### 3.3 Margin (`impl_margin!`)
+
+Target field: `self.style.margin` (`EdgeInsets`).
+
+| Method Signature | Parameters | Default | Lock | Description |
+| :--- | :--- | :--- | :---: | :--- |
+| `pub fn margin(mut self, t: f32, r: f32, b: f32, l: f32) -> Self` | `t, r, b, l: f32` | `EdgeInsets::ZERO` | 🔒 Locked | Sets all 4 outer margin edges independently (CSS order: top, right, bottom, left). |
+| `pub fn margin_all(mut self, m: f32) -> Self` | `m: f32` | `EdgeInsets::ZERO` | 🔒 Locked | Sets uniform outer margin on all 4 edges. |
+| `pub fn margin_x(mut self, m: f32) -> Self` | `m: f32` | `0.0` | 🔒 Locked | Sets horizontal outer margin (`left` and `right`). |
+| `pub fn margin_y(mut self, m: f32) -> Self` | `m: f32` | `0.0` | 🔒 Locked | Sets vertical outer margin (`top` and `bottom`). |
+| `pub fn margin_top(mut self, m: f32) -> Self` | `m: f32` | `0.0` | 🔒 Locked | Sets top edge outer margin only. |
+| `pub fn margin_bottom(mut self, m: f32) -> Self` | `m: f32` | `0.0` | 🔒 Locked | Sets bottom edge outer margin only. |
+| `pub fn margin_left(mut self, m: f32) -> Self` | `m: f32` | `0.0` | 🔒 Locked | Sets left edge outer margin only. |
+| `pub fn margin_right(mut self, m: f32) -> Self` | `m: f32` | `0.0` | 🔒 Locked | Sets right edge outer margin only. |
+
+---
+
+### 3.4 Corner Radius (`impl_radius!`)
 
 Target field: `self.style.radius` (`[f32; 4]` representing `[top_left, top_right, bottom_right, bottom_left]`).
 
@@ -116,7 +134,7 @@ Target field: `self.style.radius` (`[f32; 4]` representing `[top_left, top_right
 
 ---
 
-### 3.4 Visuals, Borders & Shadows (`impl_visuals!`)
+### 3.5 Visuals, Borders & Shadows (`impl_visuals!`)
 
 Target field: `self.style` (`BoxStyle`).
 
@@ -129,7 +147,7 @@ Target field: `self.style` (`BoxStyle`).
 
 ---
 
-### 3.5 Typography & Decoration (`impl_text_style_methods!`)
+### 3.6 Typography & Decoration (`impl_text_style_methods!`)
 
 Target field: `self.text_style` (`TextStyle`).
 
@@ -155,69 +173,96 @@ Application developers consume these macro-generated methods through fluent buil
 
 The table below catalogs every primary user-facing endpoint on `Ui`, which macros it implements, what methods become available, and how the endpoint terminates.
 
-| User Endpoint (`Ui` Method) | Builder Struct | Macro Packages Applied | Macro Methods Exposed | Terminal Execution Method | Return Type |
+| User Endpoint (`Ui` Method) | Builder Struct | Macro Packages Applied | Macro & Builder Methods Exposed | Terminal Execution Method | Return Type |
 | :--- | :--- | :--- | :--- | :--- | :--- |
-| **`ui.container()`** | `ContainerBuilder` | `impl_box_style_methods!` | `.width()`, `.height()`, `.fill_x()`, `.fill_y()`, `.fill()`, `.min/max_width()`, `.min/max_height()`, `.padding()`, `.padding_all()`, `.padding_x/y()`, `.radius()`, `.radius_all()`, `.radius_top/bottom/left/right()`, `.bg()`, `.border()`, `.shadow()` | `.show(\|ui\| { ... })` | `Response` |
-| **`ui.row()`** | `ContainerBuilder` | `impl_box_style_methods!` | Same as `ui.container()` (pre-configured with `Direction::Row`) | `.show(\|ui\| { ... })` | `Response` |
-| **`ui.column()`** | `ContainerBuilder` | `impl_box_style_methods!` | Same as `ui.container()` (pre-configured with `Direction::Column`) | `.show(\|ui\| { ... })` | `Response` |
-| **`ui.stack()`** | `ContainerBuilder` | `impl_box_style_methods!` | Same as `ui.container()` (pre-configured with `Direction::Stack`) | `.show(\|ui\| { ... })` | `Response` |
-| **`ui.button(label)`** | `ButtonBuilder` | `impl_box_style_methods!`<br>`impl_text_style_methods!` | **Box**: `.width()`, `.height()`, `.fill_x()`, `.padding()`, `.radius()`, `.bg()`, `.border()`, `.shadow()`<br>**Text**: `.size()`, `.color()`, `.font_family()`, `.font_weight()`, `.decoration()`, `.wrap()` | `.show()` | `Response` |
-| **`ui.text(content)`** | `TextBuilder` | `impl_box_style_methods!`<br>`impl_text_style_methods!` | **Box (Badges)**: `.padding()`, `.radius()`, `.bg()`, `.border()`, `.shadow()`<br>**Text**: `.size()`, `.color()`, `.font_family()`, `.font_weight()`, `.decoration()`, `.wrap()`, `.ellipsis()` | `.show()` | `(Response, Option<ShapedBuffer>)` |
-| **`ui.h1(title)` .. `ui.h4`** | `TextBuilder` | `impl_box_style_methods!`<br>`impl_text_style_methods!` | Same as `ui.text()`, initialized with pre-scaled typographic sizing (h1: 28pt, h2: 22pt, h3: 18pt, h4: 16pt) | `.show()` | `(Response, Option<ShapedBuffer>)` |
-| **`ui.input(&mut buf)`** | `InputBuilder` | `impl_box_style_methods!`<br>`impl_font_style_methods!` | **Box**: `.width()`, `.height()`, `.fill_x()`, `.padding()`, `.radius()`, `.bg()`, `.border()`, `.shadow()`<br>**Font**: `.size()`, `.color()`, `.font_family()`, `.font_weight()` | `.show()` | `Response` |
-| **`ui.text_area(&mut buf)`** | `TextAreaBuilder` | `impl_box_style_methods!`<br>`impl_font_style_methods!` | **Box**: `.width()`, `.height()`, `.fill_x()`, `.padding()`, `.radius()`, `.bg()`, `.border()`, `.shadow()`<br>**Font**: `.size()`, `.color()`, `.font_family()`, `.font_weight()` | `.show()` | `Response` |
+| **`ui.container()`** | `ContainerBuilder` | `impl_box_style_methods!` | **Box**: `.width()`, `.height()`, `.fill_x()`, `.fill_y()`, `.fill()`, `.min/max_width()`, `.min/max_height()`, `.padding()`, `.padding_all()`, `.padding_x/y()`, `.margin()`, `.margin_all()`, `.margin_x/y()`, `.radius()`, `.radius_all()`, `.radius_top/bottom/left/right()`, `.bg()`, `.border()`, `.shadow()`<br>**Layout**: `.align()`, `.halign()`, `.valign()`, `.gap()`, `.wrap(Wrap)` | `.show(\|ui\| { ... })` | `Response` |
+| **`ui.row()`** | `ContainerBuilder` | `impl_box_style_methods!` | Same as `ui.container()` (pre-configured with `Direction::Row`, supports `.halign()`, `.valign()`, `.align()`) | `.show(\|ui\| { ... })` | `Response` |
+| **`ui.column()`** | `ContainerBuilder` | `impl_box_style_methods!` | Same as `ui.container()` (pre-configured with `Direction::Column`, supports `.halign()`, `.valign()`, `.align()`) | `.show(\|ui\| { ... })` | `Response` |
+| **`ui.stack()`** | `ContainerBuilder` | `impl_box_style_methods!` | Same as `ui.container()` (pre-configured with `Direction::Stack`, supports `.halign()`, `.valign()`, `.align()`) | `.show(\|ui\| { ... })` | `Response` |
+| **`ui.button(label)`** | `ButtonBuilder` | `impl_box_style_methods!`<br>`impl_text_style_methods!` | **Box**: `.width()`, `.height()`, `.fill_x()`, `.padding()`, `.margin()`, `.radius()`, `.bg()`, `.border()`, `.shadow()`<br>**Text**: `.size()`, `.color()`, `.font_family()`, `.font_weight()`, `.decoration()`, `.wrap()`<br>**Layout**: `.align(Align)` (label alignment) | `.show()` | `Response` |
+| **`ui.text(content)`** | `TextBuilder` | `impl_box_style_methods!`<br>`impl_text_style_methods!` | **Box (Badges)**: `.padding()`, `.margin()`, `.radius()`, `.bg()`, `.border()`, `.shadow()`<br>**Text**: `.size()`, `.color()`, `.font_family()`, `.font_weight()`, `.decoration()`, `.wrap()`, `.ellipsis()`<br>**Alignment**: `.align(Align)`, `.valign(Align)` | `.show()` | `(Response, Option<ShapedBuffer>)` |
+| **`ui.h1(title)` .. `ui.h4`** | `TextBuilder` | `impl_box_style_methods!`<br>`impl_text_style_methods!` | Same as `ui.text()`, initialized with pre-scaled typographic sizing (h1: 28pt, h2: 22pt, h3: 18pt, h4: 16pt), supports `.align()`, `.valign()` | `.show()` | `(Response, Option<ShapedBuffer>)` |
+| **`ui.input(&mut buf)`** | `InputBuilder` | `impl_box_style_methods!`<br>`impl_font_style_methods!` | **Box**: `.width()`, `.height()`, `.fill_x()`, `.padding()`, `.margin()`, `.radius()`, `.bg()`, `.border()`, `.shadow()`<br>**Font**: `.size()`, `.color()`, `.font_family()`, `.font_weight()` | `.show()` | `Response` |
+| **`ui.text_area(&mut buf)`** | `TextAreaBuilder` | `impl_box_style_methods!`<br>`impl_font_style_methods!` | **Box**: `.width()`, `.height()`, `.fill_x()`, `.padding()`, `.margin()`, `.radius()`, `.bg()`, `.border()`, `.shadow()`<br>**Font**: `.size()`, `.color()`, `.font_family()`, `.font_weight()` | `.show()` | `Response` |
 
 ---
 
 ### 4.2 Cross-Endpoint Method Availability Matrix
 
-This table maps every user-callable macro method to each user endpoint:
+This table maps every user-callable styling and layout method to each user endpoint:
 
 | User-Callable Method | `ui.container()` | `ui.button()` | `ui.text()` | `ui.input()` | `ui.text_area()` | Lock | Category |
 | :--- | :---: | :---: | :---: | :---: | :---: | :---: | :--- |
-| `.width(w: f32)` | ✅ | ✅ | ✅ | ✅ | ✅ | 🔒 Locked | Dimensions |
-| `.height(h: f32)` | ✅ | ✅ | ✅ | ✅ | ✅ | 🔒 Locked | Dimensions |
-| `.fill_x()` | ✅ | ✅ | ✅ | ✅ | ✅ | 🔒 Locked | Dimensions |
-| `.fill_y()` | ✅ | ✅ | ✅ | ✅ | ✅ | 🔒 Locked | Dimensions |
-| `.fill()` | ✅ | ✅ | ✅ | ✅ | ✅ | 🔒 Locked | Dimensions |
-| `.min_width(w)` / `.max_width(w)` | ✅ | ✅ | ✅ | ✅ | ✅ | 🔒 Locked | Dimensions |
-| `.min_height(h)` / `.max_height(h)` | ✅ | ✅ | ✅ | ✅ | ✅ | 🔒 Locked | Dimensions |
-| `.padding(t, r, b, l)` | ✅ | ✅ | ✅ | ✅ | ✅ | 🔒 Locked | Padding |
-| `.padding_all(p: f32)` | ✅ | ✅ | ✅ | ✅ | ✅ | 🔒 Locked | Padding |
-| `.padding_x(p)` / `.padding_y(p)` | ✅ | ✅ | ✅ | ✅ | ✅ | 🔒 Locked | Padding |
-| `.padding_top/bottom/left/right(p)` | ✅ | ✅ | ✅ | ✅ | ✅ | 🔒 Locked | Padding |
-| `.radius(tl, tr, br, bl)` | ✅ | ✅ | ✅ | ✅ | ✅ | 🔒 Locked | Radius |
-| `.radius_all(r: f32)` | ✅ | ✅ | ✅ | ✅ | ✅ | 🔒 Locked | Radius |
-| `.radius_top/bottom/left/right(r)` | ✅ | ✅ | ✅ | ✅ | ✅ | 🔒 Locked | Radius |
-| `.radius_top_left/right/etc.(r)` | ✅ | ✅ | ✅ | ✅ | ✅ | 🔒 Locked | Radius |
-| `.style(BoxStyle)` | ✅ | ✅ | ✅ | ✅ | ✅ | 🔒 Locked | Visuals |
-| `.bg(impl Into<Background>)` | ✅ | ✅ | ✅ | ✅ | ✅ | 🔒 Locked | Visuals |
-| **`.border(...)`** | ✅ | ✅ | ✅ | ✅ | ✅ | 🔒 **Locked** | Visuals (Color, width, optional alignment) |
-| `.shadow(color, x, y, blur)` | ✅ | ✅ | ✅ | ✅ | ✅ | 🔒 Locked | Visuals |
-| **`.size(size: f32)`** | — | ✅ | ✅ | ✅ | ✅ | 🔒 **Locked** | Typography |
-| **`.color(Color)`** | — | ✅ | ✅ | ✅ | ✅ | 🔒 **Locked** | Typography |
-| **`.font_family(...)`** | — | ✅ | ✅ | ✅ | ✅ | 🔒 **Locked** | Typography |
-| **`.font_weight(...)`** | — | ✅ | ✅ | ✅ | ✅ | 🔒 **Locked** | Typography |
-| **`.decoration(...)`** | — | ✅ | ✅ | — | — | 🔒 **Locked** | Typography (Underline, Strikethrough, Italic, Highlight, LineHeight) |
-| **`.wrap(TextWrap)`** | — | ✅ | ✅ | — | — | 🔒 **Locked** | Wrap Flow |
-| **`.ellipsis(bool)`** | — | — | ✅ | — | — | 🔒 **Locked** | Text Decoration |
+| `.width(w: f32)` | ✅ | ✅ | ✅ | ✅ | ✅ | 🔒 Locked | Dimensions (Macro) |
+| `.height(h: f32)` | ✅ | ✅ | ✅ | ✅ | ✅ | 🔒 Locked | Dimensions (Macro) |
+| `.fill_x()` | ✅ | ✅ | ✅ | ✅ | ✅ | 🔒 Locked | Dimensions (Macro) |
+| `.fill_y()` | ✅ | ✅ | ✅ | ✅ | ✅ | 🔒 Locked | Dimensions (Macro) |
+| `.fill()` | ✅ | ✅ | ✅ | ✅ | ✅ | 🔒 Locked | Dimensions (Macro) |
+| `.min_width(w)` / `.max_width(w)` | ✅ | ✅ | ✅ | ✅ | ✅ | 🔒 Locked | Dimensions (Macro) |
+| `.min_height(h)` / `.max_height(h)` | ✅ | ✅ | ✅ | ✅ | ✅ | 🔒 Locked | Dimensions (Macro) |
+| `.padding(t, r, b, l)` | ✅ | ✅ | ✅ | ✅ | ✅ | 🔒 Locked | Padding (Macro) |
+| `.padding_all(p: f32)` | ✅ | ✅ | ✅ | ✅ | ✅ | 🔒 Locked | Padding (Macro) |
+| `.padding_x(p)` / `.padding_y(p)` | ✅ | ✅ | ✅ | ✅ | ✅ | 🔒 Locked | Padding (Macro) |
+| `.padding_top/bottom/left/right(p)` | ✅ | ✅ | ✅ | ✅ | ✅ | 🔒 Locked | Padding (Macro) |
+| `.margin(t, r, b, l)` | ✅ | ✅ | ✅ | ✅ | ✅ | 🔒 Locked | Margin (Macro) |
+| `.margin_all(m: f32)` | ✅ | ✅ | ✅ | ✅ | ✅ | 🔒 Locked | Margin (Macro) |
+| `.margin_x(m)` / `.margin_y(m)` | ✅ | ✅ | ✅ | ✅ | ✅ | 🔒 Locked | Margin (Macro) |
+| `.margin_top/bottom/left/right(m)` | ✅ | ✅ | ✅ | ✅ | ✅ | 🔒 Locked | Margin (Macro) |
+| `.radius(tl, tr, br, bl)` | ✅ | ✅ | ✅ | ✅ | ✅ | 🔒 Locked | Radius (Macro) |
+| `.radius_all(r: f32)` | ✅ | ✅ | ✅ | ✅ | ✅ | 🔒 Locked | Radius (Macro) |
+| `.radius_top/bottom/left/right(r)` | ✅ | ✅ | ✅ | ✅ | ✅ | 🔒 Locked | Radius (Macro) |
+| `.radius_top_left/right/etc.(r)` | ✅ | ✅ | ✅ | ✅ | ✅ | 🔒 Locked | Radius (Macro) |
+| `.style(BoxStyle)` | ✅ | ✅ | ✅ | ✅ | ✅ | 🔒 Locked | Visuals (Macro) |
+| `.bg(impl Into<Background>)` | ✅ | ✅ | ✅ | ✅ | ✅ | 🔒 Locked | Visuals (Macro) |
+| **`.border(...)`** | ✅ | ✅ | ✅ | ✅ | ✅ | 🔒 **Locked** | Visuals (Color, width, optional `BorderAlignment`) (Macro) |
+| `.shadow(color, x, y, blur)` | ✅ | ✅ | ✅ | ✅ | ✅ | 🔒 Locked | Visuals (Macro) |
+| **`.size(size: f32)`** | — | ✅ | ✅ | ✅ | ✅ | 🔒 **Locked** | Typography (Macro) |
+| **`.color(Color)`** | — | ✅ | ✅ | ✅ | ✅ | 🔒 **Locked** | Typography (Macro) |
+| **`.font_family(...)`** | — | ✅ | ✅ | ✅ | ✅ | 🔒 **Locked** | Typography (Macro) |
+| **`.font_weight(...)`** | — | ✅ | ✅ | ✅ | ✅ | 🔒 **Locked** | Typography (Macro) |
+| **`.decoration(...)`** | — | ✅ | ✅ | — | — | 🔒 **Locked** | Typography (Underline, Strikethrough, Italic, Highlight, LineHeight) (Macro) |
+| **`.wrap(TextWrap)`** | — | ✅ | ✅ | — | — | 🔒 **Locked** | Wrap Flow (Macro) |
+| **`.ellipsis(bool)`** | — | — | ✅ | — | — | 🔒 **Locked** | Text Decoration (Macro) |
+| **`.align(Align)`** | ✅ | ✅ | ✅ | — | — | 🔒 **Locked** | Layout / Text Alignment (Builder) |
+| **`.halign(Align)`** | ✅ | — | — | — | — | 🔒 **Locked** | Horizontal Layout Alignment (Builder) |
+| **`.valign(Align)`** | ✅ | — | ✅ | — | — | 🔒 **Locked** | Vertical Layout / Text Alignment (Builder) |
+
+> [!NOTE]
+> **Border Alignment vs Layout Alignment**:
+> - **Border Alignment** (`BorderAlignment::Inside`, `Center`, `Outside`) is part of box geometry and configured via `.border((color, width, alignment))`.
+> - **Layout Alignment** (`Align::Left`, `Center`, `Right`, `Top`, `Bottom`, `SpaceBetween`, `SpaceAround`) is an orchestration property on builders: `ContainerBuilder` uses it for positioning children, `ButtonBuilder` for positioning its inner label, and `TextBuilder` for aligning glyph lines.
 
 ---
 
 ### 4.3 Production Endpoint Code Recipes
 
-#### 1. Container Endpoint (`ui.container()`)
+#### 1. Container & Row Endpoints (`ui.container()`, `ui.row()`)
 ```rust
+// A. Centered card container
 ui.container()
     .fill_x()
     .height(180.0)
     .padding_all(20.0)
+    .align(Align::Center) // Centers child widgets both horizontally & vertically
     .bg(Color::rgb(0.10, 0.12, 0.16))
     .radius_all(12.0)
-    .border((Color::rgb(0.25, 0.30, 0.45), 1.0))
+    .border((Color::rgb(0.25, 0.30, 0.45), 1.0, BorderAlignment::Inside))
     .shadow(Color::rgba(0.0, 0.0, 0.0, 0.35), 0.0, 6.0, 16.0)
     .show(|ui| {
-        // Child widgets...
+        ui.text("Centered Card Content").show();
+    });
+
+// B. Justified navigation toolbar row
+ui.row()
+    .fill_x()
+    .height(48.0)
+    .halign(Align::SpaceBetween) // Distributes title on left, actions on right
+    .valign(Align::Center)       // Centers items vertically
+    .padding_x(16.0)
+    .bg(Color::rgb(0.14, 0.16, 0.20))
+    .show(|ui| {
+        ui.text("Dashboard").show();
+        ui.button("Settings").show();
     });
 ```
 
@@ -227,6 +272,7 @@ if ui.button("Save Changes")
     .fill_x()
     .height(42.0)
     .padding_x(18.0)
+    .align(Align::Center) // Centers text inside button
     .bg(Gradient::linear(90.0, [Color::rgb(0.15, 0.45, 0.90), Color::rgb(0.25, 0.55, 1.00)]))
     .radius_all(6.0)
     .size(14.0)
@@ -260,6 +306,13 @@ ui.text("Read the developer documentation")
         TextDecoration::Italic,
         TextDecoration::LineHeight(1.5),
     ])
+    .show();
+
+// C. Centered paragraph:
+ui.text("Welcome back to your workspace")
+    .fill_x()
+    .size(16.0)
+    .align(Align::Center)
     .show();
 ```
 

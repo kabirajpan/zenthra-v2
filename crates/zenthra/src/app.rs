@@ -84,13 +84,6 @@ impl App {
         }
         self
     }
-    pub fn bg_opacity(mut self, opacity: f32) -> Self {
-        self.backdrop_opacity = Some(opacity);
-        if opacity < 1.0 {
-            self.platform = self.platform.transparent(true);
-        }
-        self
-    }
     pub fn backdrop_filter(mut self, filter: zenthra_core::BackdropFilter) -> Self {
         self.backdrop_filter = Some(filter.clone());
         let mut transparent = false;

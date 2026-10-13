@@ -13,17 +13,16 @@ pub struct FloatingWindowBuilder<'u, 'a, 'b> {
     // Styling
     width: f32,
     height: f32,
-    bg: Color,
+    bg: zenthra_core::Background,
     border_color: Color,
     border_width: f32,
     radius: f32,
     shadow_color: Color,
     shadow_blur: f32,
     shadow_offset: [f32; 2],
-    shadow_opacity: f32,
 
     // Header Styling
-    header_bg: Color,
+    header_bg: zenthra_core::Background,
     header_text_color: Color,
     header_height: f32,
     
@@ -31,8 +30,6 @@ pub struct FloatingWindowBuilder<'u, 'a, 'b> {
     modal: bool,
     light_dismiss: bool,
     backdrop_filter: Option<zenthra_core::BackdropFilter>,
-    bg_gradient: Option<(Color, Color, zenthra_core::GradientDirection)>,
-    header_bg_gradient: Option<(Color, Color, zenthra_core::GradientDirection)>,
 }
 
 impl<'u, 'a, 'b> FloatingWindowBuilder<'u, 'a, 'b> {
@@ -47,16 +44,15 @@ impl<'u, 'a, 'b> FloatingWindowBuilder<'u, 'a, 'b> {
             
             width: 320.0,
             height: 400.0,
-            bg: Color::rgb(0.1, 0.1, 0.12),
+            bg: Color::rgb(0.1, 0.1, 0.12).into(),
             border_color: Color::rgb(0.3, 0.3, 0.35),
             border_width: 1.0,
             radius: 8.0,
-            shadow_color: Color::BLACK,
+            shadow_color: Color::rgba(0.0, 0.0, 0.0, 0.5),
             shadow_blur: 20.0,
             shadow_offset: [0.0, 10.0],
-            shadow_opacity: 0.5,
 
-            header_bg: Color::rgb(0.15, 0.15, 0.18),
+            header_bg: Color::rgb(0.15, 0.15, 0.18).into(),
             header_text_color: Color::WHITE,
             header_height: 40.0,
             
@@ -64,8 +60,6 @@ impl<'u, 'a, 'b> FloatingWindowBuilder<'u, 'a, 'b> {
             modal: false,
             light_dismiss: false,
             backdrop_filter: None,
-            bg_gradient: None,
-            header_bg_gradient: None,
         }
     }
 
@@ -90,13 +84,8 @@ impl<'u, 'a, 'b> FloatingWindowBuilder<'u, 'a, 'b> {
         self
     }
 
-    pub fn bg(mut self, bg: impl Into<Option<Color>>) -> Self {
-        self.bg = bg.into().unwrap_or(Color::TRANSPARENT);
-        self
-    }
-
-    pub fn bg_gradient(mut self, start: Color, end: Color, direction: zenthra_core::GradientDirection) -> Self {
-        self.bg_gradient = Some((start, end, direction));
+    pub fn bg(mut self, bg: impl Into<zenthra_core::Background>) -> Self {
+        self.bg = bg.into();
         self
     }
 
@@ -124,13 +113,15 @@ impl<'u, 'a, 'b> FloatingWindowBuilder<'u, 'a, 'b> {
         self
     }
 
-    pub fn header_bg(mut self, bg: Color) -> Self {
-        self.header_bg = bg;
+    pub fn shadow(mut self, color: Color, x: f32, y: f32, blur: f32) -> Self {
+        self.shadow_color = color;
+        self.shadow_offset = [x, y];
+        self.shadow_blur = blur;
         self
     }
 
-    pub fn header_bg_gradient(mut self, start: Color, end: Color, direction: zenthra_core::GradientDirection) -> Self {
-        self.header_bg_gradient = Some((start, end, direction));
+    pub fn header_bg(mut self, bg: impl Into<zenthra_core::Background>) -> Self {
+        self.header_bg = bg.into();
         self
     }
 
@@ -235,7 +226,6 @@ impl<'u, 'a, 'b> FloatingWindowBuilder<'u, 'a, 'b> {
         let shadow_color = self.shadow_color;
         let shadow_offset = self.shadow_offset;
         let shadow_blur = self.shadow_blur;
-        let shadow_opacity = self.shadow_opacity;
         let header_height = self.header_height;
         let header_bg = self.header_bg;
         let header_text_color = self.header_text_color;
@@ -266,24 +256,20 @@ impl<'u, 'a, 'b> FloatingWindowBuilder<'u, 'a, 'b> {
 
             let mut container = ui.container()
                 .raw_id(id)
-                .absolute(win_x, win_y)
+                .pos(win_x, win_y)
                 .width(width)
                 .height(height)
                 .bg(bg)
                 .border((border_color, border_width))
                 .radius_all(radius)
                 .shadow(shadow_color, shadow_offset[0], shadow_offset[1], shadow_blur)
-                .shadow_opacity(shadow_opacity)
                 .clip(true);
-            if let Some((start, end, dir)) = self.bg_gradient {
-                container = container.bg_gradient(start, end, dir);
-            }
             if let Some(ref filter) = self.backdrop_filter {
                 container = container.backdrop_filter(filter.clone());
             }
             container.show(|ui| {
                     let mut close_clicked = false;
-                    let mut header_c = ui.container()
+                    let header_c = ui.container()
                         .fill_x()
                         .height(header_height)
                         .bg(header_bg)
@@ -291,16 +277,13 @@ impl<'u, 'a, 'b> FloatingWindowBuilder<'u, 'a, 'b> {
                         .row()
                         .halign(Align::SpaceBetween)
                         .valign(Align::Center);
-                    if let Some((start, end, dir)) = self.header_bg_gradient {
-                        header_c = header_c.bg_gradient(start, end, dir);
-                    }
                     let header_res = header_c.show(|ui| {
                             // Left spacer to balance close button width for centering
                             ui.spacing(20.0);
 
                             ui.text(&title)
                                 .color(header_text_color)
-                                .bold()
+                                .font_weight(zenthra_text::prelude::FontWeight::Bold)
                                 .show();
                             
                             if closable {
@@ -310,7 +293,7 @@ impl<'u, 'a, 'b> FloatingWindowBuilder<'u, 'a, 'b> {
                                     .color(header_text_color)
                                     .padding(4.0, 8.0, 4.0, 8.0)
                                     .radius_all(4.0)
-                                    .font_size(16.0)
+                                    .size(16.0)
                                     .show()
                                     .clicked 
                                 {

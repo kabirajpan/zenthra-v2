@@ -83,7 +83,7 @@ impl Zentype {
     /// A convenience method for printing simple text labels.
     pub fn print(&mut self, queue: &wgpu::Queue, text: &str, pos: [f32; 2], size: f32, color: Color) -> ShapedBuffer {
         let options = TextOptions::new()
-            .font_size(size)
+            .size(size)
             .color(color);
         
         self.renderer.draw(queue, text, pos, &options)

@@ -130,6 +130,8 @@ fn main() {
         .with_ui(move |ui| {
             ui.column().padding_all(24.0).gap(12.0).show(|ui| {
                 ui.text(&format!("count = {}, doubled = {}", count.get(), doubled.get()))
+                    .size(16.0)
+                    .color(Color::WHITE)
                     .show();
                 if ui.button("Increment").show().clicked {
                     count.update(|n| n + 1);
@@ -144,27 +146,57 @@ Also available: `Effect`, `ArcSignal` (for worker threads), `batch()`, `on_state
 
 ---
 
-## Widgets
+## Widgets & Unified Macro APIs
 
-| Widget | Role |
-|---|---|
-| `container()` / `row()` / `column()` | Layout box: padding, fill, scroll, shaders, render mode |
-| `lazy_container()` | Virtualized list/grid (fixed item size) |
-| `stack()` | Overlay children |
-| `card()` / `panel()` | Structured surfaces |
-| `text()` / `h1()` | Styled text |
-| `button()` | Click / hover |
-| `input()` | Single-line field |
-| `text_area()` | Multi-line editor |
-| `slider()` | Numeric drag |
-| `progress_bar()` | Determinate progress |
-| `checkbox()` / `toggle()` / `radio()` | Selection |
-| `dropdown()` | Options list |
-| `image()` | GPU image (`ImageSource`) |
-| `window()` | Floating window |
-| `menu_bar()` / `menu()` / `menu_item()` | Menus |
+All widgets in Zenthra share an identical, single-source fluent styling API generated via declarative macros in [`macros.rs`](crates/zenthra-widgets/src/macros.rs). Full specification: [`docs/api/macros.md`](docs/api/macros.md).
 
-Widget API notes: [`docs/widget-guide.md`](docs/widget-guide.md) (core widgets). Per-widget drafts live under [`widgets/`](widgets/).
+### Core Widget Catalog
+
+| Widget | Role | Styling Macros |
+|---|---|---|
+| `container()` / `row()` / `column()` | Layout boxes, flex direction, scrolling, shaders | `impl_box_style_methods!` |
+| `lazy_container()` | Virtualized list/grid (O(visible) frame cost) | `impl_box_style_methods!` |
+| `stack()` | Layered overlay container | `impl_box_style_methods!` |
+| `button(label)` | Interactive click surface | `impl_box_style_methods!`, `impl_text_style_methods!` |
+| `text(content)` / `h1()`..`h4()` | Typographic text and badges | `impl_box_style_methods!`, `impl_text_style_methods!` |
+| `input(&mut buf)` | Single-line editable field | `impl_box_style_methods!`, `impl_font_style_methods!` |
+| `text_area(&mut buf)` | Multi-line text editor | `impl_box_style_methods!`, `impl_font_style_methods!` |
+| `checkbox(&mut val, label)` | Binary toggle box with label | `impl_dimensions!`, `impl_text_style_methods!` |
+| `toggle(&mut val, label)` | Animated switch slider | `impl_dimensions!`, `impl_text_style_methods!` |
+| `radio(&mut state, val, label)` | Mutually exclusive option selector | `impl_dimensions!`, `impl_text_style_methods!` |
+| `slider()` / `progress_bar()` | Numeric drag & progress indicators | `impl_box_style_methods!` |
+| `dropdown()` / `menu()` | Selectors, popovers, and context menus | `impl_box_style_methods!`, `impl_text_style_methods!` |
+
+### Unified Styling Contract
+
+- **Box Geometry & Visuals (`impl_box_style_methods!`)**:
+  - **Dimensions**: `.width(w)`, `.height(h)`, `.fill_x()`, `.fill_y()`, `.fill()`, `.min_width(w)`, `.max_width(w)`, `.min_height(h)`, `.max_height(h)`
+  - **Padding**: `.padding(t, r, b, l)`, `.padding_all(p)`, `.padding_x(p)`, `.padding_y(p)`
+  - **Corners**: `.radius(tl, tr, br, bl)`, `.radius_all(r)`
+  - **Surfaces**: `.bg(color_or_gradient)`, `.border((color, width))` (accepts `(Color, width)`, `(Color, width, BorderAlignment)`, or `Border`), `.shadow(color, x, y, blur)` (alpha passed via `Color::rgba(...)`)
+
+- **Typography & Text (`impl_text_style_methods!`)**:
+  - 🔒 **`.size(size: f32)`**: Canonical font size in points
+  - 🔒 **`.color(color: Color)`**: Canonical text glyph color
+  - **Font & Weights**: `.font_family(name)`, `.font_weight(weight)`
+  - **Decorations & Flow**: `.decoration(...)`, `.wrap(strategy)`, `.ellipsis(bool)`
+
+```rust
+// Seamless fluent styling across widgets:
+ui.button("Get Started")
+    .width(180.0)
+    .padding(10.0, 20.0, 10.0, 20.0)
+    .radius_all(8.0)
+    .bg(Color::rgb(0.2, 0.45, 0.95))
+    .border((Color::rgb(0.3, 0.55, 1.0), 1.5))
+    .shadow(Color::rgba(0.0, 0.0, 0.0, 0.25), 0.0, 4.0, 12.0)
+    .size(16.0)
+    .color(Color::WHITE)
+    .font_weight(FontWeight::Bold)
+    .show();
+```
+
+Complete architecture & API reference: [`docs/api/macros.md`](docs/api/macros.md). Individual widget specifications: [`docs/api/`](docs/api/).
 
 ---
 

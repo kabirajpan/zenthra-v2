@@ -32,7 +32,7 @@ fn main() {
                                 .show();
 
                             ui.text("Demonstrating unified BoxStyle borders, focus rings, typography, placeholders, and event handling.")
-                                .font_size(14.0)
+                                .size(14.0)
                                 .color(Color::rgb(0.60, 0.65, 0.75))
                                 .show();
                         });
@@ -55,13 +55,13 @@ fn main() {
                                 // Field A: Username
                                 ui.column().gap(6.0).show(|ui: &mut Ui| {
                                     ui.text("Username (Default Accent Focus)")
-                                        .font_size(13.0)
+                                        .size(13.0)
                                         .color(Color::rgb(0.70, 0.75, 0.85))
                                         .show();
 
                                     ui.input(&mut username)
                                         .width(300.0)
-                                        .font_size(14.0)
+                                        .size(14.0)
                                         .bg(Color::rgb(0.12, 0.14, 0.19))
                                         .border((Color::rgb(0.22, 0.25, 0.35), 1.0))
                                         .focus_border((Color::rgb(0.35, 0.65, 1.0), 1.5))
@@ -72,13 +72,13 @@ fn main() {
                                 // Field B: Email with custom emerald focus
                                 ui.column().gap(6.0).show(|ui: &mut Ui| {
                                     ui.text("Email (Emerald Focus + Custom Cursor)")
-                                        .font_size(13.0)
+                                        .size(13.0)
                                         .color(Color::rgb(0.70, 0.75, 0.85))
                                         .show();
 
                                     ui.input(&mut email)
                                         .width(320.0)
-                                        .font_size(14.0)
+                                        .size(14.0)
                                         .placeholder("name@company.com")
                                         .placeholder_color(Color::rgb(0.40, 0.44, 0.52))
                                         .bg(Color::rgb(0.12, 0.14, 0.19))
@@ -108,7 +108,7 @@ fn main() {
                             let res = ui.input(&mut search_query)
                                 .fill_x()
                                 .height(40.0)
-                                .font_size(15.0)
+                                .size(15.0)
                                 .placeholder("Type search query and press Enter...")
                                 .placeholder_color(Color::rgb(0.42, 0.46, 0.56))
                                 .bg(Color::rgb(0.13, 0.15, 0.21))
@@ -116,8 +116,7 @@ fn main() {
                                 .focus_border((Color::rgb(0.40, 0.70, 1.0), 1.5))
                                 .radius_all(20.0)
                                 .padding(10.0, 20.0, 10.0, 20.0)
-                                .shadow(Color::BLACK, 0.0, 4.0, 10.0)
-                                .shadow_opacity(0.35)
+                                .shadow(Color::rgba(0.0, 0.0, 0.0, 0.35), 0.0, 4.0, 10.0)
                                 .show();
 
                             if res.submitted {
@@ -126,7 +125,7 @@ fn main() {
 
                             if !submitted_msg.is_empty() {
                                 ui.text(&submitted_msg)
-                                    .font_size(13.0)
+                                    .size(13.0)
                                     .color(Color::rgb(0.30, 0.85, 0.55))
                                     .show();
                             }
@@ -148,13 +147,13 @@ fn main() {
 
                             ui.row().gap(12.0).valign(Align::Center).show(|ui: &mut Ui| {
                                 ui.text("File:")
-                                    .font_size(14.0)
+                                    .size(14.0)
                                     .color(Color::rgb(0.60, 0.65, 0.75))
                                     .show();
 
                                 ui.input(&mut inline_rename)
                                     .width(260.0)
-                                    .font_size(14.0)
+                                    .size(14.0)
                                     .bg(None)
                                     .border(None)
                                     .focus_border((Color::rgb(0.35, 0.65, 1.0), 1.0))
@@ -163,7 +162,7 @@ fn main() {
                                     .show();
 
                                 ui.text("(Click text to edit inline with subtle border)")
-                                    .font_size(12.0)
+                                    .size(12.0)
                                     .color(Color::rgb(0.45, 0.50, 0.60))
                                     .show();
                             });
@@ -185,8 +184,8 @@ fn main() {
 
                             ui.input(&mut code_snippet)
                                 .fill_x()
-                                .monospace()
-                                .font_size(13.0)
+                                .font_family("monospace")
+                                .size(13.0)
                                 .color(Color::rgb(0.90, 0.92, 0.98))
                                 .bg(Color::rgb(0.08, 0.09, 0.12))
                                 .border((Color::rgb(0.20, 0.24, 0.32), 1.0))
@@ -195,6 +194,47 @@ fn main() {
                                 .radius_all(6.0)
                                 .padding(8.0, 12.0, 8.0, 12.0)
                                 .show();
+                        });
+
+                    // ── SECTION 5: INPUT MARGINS & FORM SPACING ───────────────
+                    ui.container()
+                        .fill_x()
+                        .bg(Color::rgb(0.09, 0.11, 0.15))
+                        .border((Color::rgb(0.18, 0.22, 0.30), 1.0))
+                        .radius_all(10.0)
+                        .padding_all(18.0)
+                        .column()
+                        .gap(12.0)
+                        .show(|ui: &mut Ui| {
+                            ui.h3("5. Outer Margins & Independent Spacing")
+                                .color(Color::rgb(0.35, 0.65, 1.0))
+                                .show();
+
+                            ui.text("Inputs support .margin, .margin_x, .margin_top/bottom to establish outer spacing independently.")
+                                .size(13.0)
+                                .color(Color::rgb(0.60, 0.65, 0.75))
+                                .show();
+
+                            ui.row().show(|ui: &mut Ui| {
+                                ui.input(&mut username)
+                                    .width(240.0)
+                                    .size(14.0)
+                                    .bg(Color::rgb(0.12, 0.14, 0.19))
+                                    .border((Color::rgb(0.22, 0.25, 0.35), 1.0))
+                                    .radius_all(6.0)
+                                    .margin_right(16.0)
+                                    .show();
+
+                                ui.input(&mut search_query)
+                                    .width(240.0)
+                                    .size(14.0)
+                                    .placeholder("Quick filter...")
+                                    .bg(Color::rgb(0.12, 0.14, 0.19))
+                                    .border((Color::rgb(0.22, 0.25, 0.35), 1.0))
+                                    .radius_all(6.0)
+                                    .margin_left(8.0)
+                                    .show();
+                            });
                         });
                 });
         })

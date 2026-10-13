@@ -57,7 +57,6 @@ impl<'u, 'a, 'b, T: PartialEq + Clone> RadioBuilder<'u, 'a, 'b, T> {
         style.border = Border::Solid(Color::rgb(0.4, 0.4, 0.4), 1.5);
         style.shadow_offset = [0.0, 2.0];
         style.shadow_blur = 8.0;
-        style.shadow_opacity = 0.4;
 
         let mut text_style = zenthra_text::prelude::TextStyle::default();
         text_style.font_size = 14.0;
@@ -155,38 +154,9 @@ impl<'u, 'a, 'b, T: PartialEq + Clone> RadioBuilder<'u, 'a, 'b, T> {
     }
 
     #[inline]
-    pub fn shadow_opacity(mut self, opacity: f32) -> Self {
-        self.style.shadow_opacity = opacity;
-        self
-    }
-
-    #[inline]
-    pub fn opacity(mut self, opacity: f32) -> Self {
-        self.style.opacity = opacity;
-        self
-    }
-
-    #[inline]
-    pub fn text_style(mut self, text_style: zenthra_text::prelude::TextStyle) -> Self {
-        self.text_style = text_style;
-        self
-    }
-
-    #[inline]
-    pub fn font_size(mut self, size: f32) -> Self {
-        self.text_style.font_size = size;
-        self
-    }
-
-    #[inline]
-    pub fn text_color(mut self, color: Color) -> Self {
+    pub fn color(mut self, color: Color) -> Self {
         self.text_style.color = color;
         self
-    }
-
-    #[inline]
-    pub fn color(self, color: Color) -> Self {
-        self.text_color(color)
     }
 
     #[inline]
@@ -215,14 +185,14 @@ impl<'u, 'a, 'b, T: PartialEq + Clone> RadioBuilder<'u, 'a, 'b, T> {
     }
 
     #[inline]
-    pub fn bold(mut self) -> Self {
-        self.text_style.font_weight = zenthra_text::prelude::FontWeight::Bold;
+    pub fn font_weight(mut self, weight: impl Into<zenthra_text::prelude::FontWeight>) -> Self {
+        self.text_style.font_weight = weight.into();
         self
     }
 
     #[inline]
-    pub fn italic(mut self) -> Self {
-        self.text_style.font_style = zenthra_text::prelude::FontStyle::Italic;
+    pub fn decoration(mut self, d: impl crate::IntoDecoration) -> Self {
+        d.apply_decoration(&mut self.text_style);
         self
     }
 
@@ -322,7 +292,7 @@ impl<'u, 'a, 'b, T: PartialEq + Clone> RadioBuilder<'u, 'a, 'b, T> {
         let mut label_h = 0.0;
         if let Some(fs) = self.ui.font_system.as_ref() {
             let mut adapter = zenthra_text::prelude::CosmicFontProvider::new_with_system(fs.clone());
-            let options = zenthra_text::prelude::TextOptions::new().font_size(self.text_style.font_size);
+            let options = zenthra_text::prelude::TextOptions::new().size(self.text_style.font_size);
             let buffer = adapter.shape(&self.label, &options);
             let (cw, ch) = buffer.content_size();
             label_w = cw;
@@ -477,7 +447,7 @@ impl<'u, 'a, 'b, T: PartialEq + Clone> RadioBuilder<'u, 'a, 'b, T> {
             text: self.label.clone(),
             pos: [lx, ly],
             options: zenthra_text::prelude::TextOptions::new()
-                .font_size(self.text_style.font_size)
+                .size(self.text_style.font_size)
                 .color(l_color),
             clip: [0.0, 0.0, 9999.0, 9999.0],
         }));
@@ -537,8 +507,7 @@ mod tests {
         ui.radio(&mut choice, 1, "Option 1")
             .size(20.0)
             .colors(Color::rgb(0.3, 0.3, 0.3), Color::rgb(0.2, 0.7, 1.0))
-            .shadow(Color::BLACK, 0.0, 2.0, 4.0)
-            .shadow_opacity(0.3)
+            .shadow(Color::rgba(0.0, 0.0, 0.0, 0.3), 0.0, 2.0, 4.0)
             .show();
 
         // 1 RectDraw for Ring, 1 RectDraw for Dot (active), 1 TextDraw for Label

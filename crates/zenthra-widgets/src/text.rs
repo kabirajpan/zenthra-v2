@@ -157,6 +157,8 @@ impl<'u, 'a> TextBuilder<'u, 'a> {
         if let Some(mode) = self.render_mode {
             self.ui.render_mode_stack.push(mode);
         }
+        self.start_x += self.style.margin.left;
+        self.start_y += self.style.margin.top;
 
         let (w, h, buffer, start) = self.draw_and_measure();
         
@@ -322,7 +324,7 @@ impl<'u, 'a> TextBuilder<'u, 'a> {
 
         // Advance cursor and record draw range AFTER pushing OverlayRectDraw commands
         // so that the parent container's layout translation and scrolling apply to both!
-        self.ui.advance(w, h, start);
+        self.ui.advance(w + self.style.margin.horizontal(), h + self.style.margin.vertical(), start);
         
         if self.render_mode.is_some() {
             self.ui.render_mode_stack.pop();
@@ -354,7 +356,7 @@ impl<'u, 'a> TextBuilder<'u, 'a> {
             if let Some(w) = self.style.width {
                 (w - self.style.padding.horizontal()).max(0.0)
             } else {
-                (self.ui.available_width - self.style.padding.horizontal()).max(0.0)
+                (self.ui.available_width - self.style.padding.horizontal() - self.style.margin.horizontal()).max(0.0)
             }
         });
 
@@ -378,7 +380,7 @@ impl<'u, 'a> TextBuilder<'u, 'a> {
              if let Some(explicit_w) = self.style.width {
                  w = explicit_w;
              } else if self.style.fill_x {
-                 w = self.ui.max_x - self.start_x;
+                 w = (self.ui.max_x - self.start_x - self.style.margin.right).max(0.0);
              } else if let Some(min_w) = self.style.min_width {
                  if w < min_w { w = min_w; }
              }
@@ -386,7 +388,7 @@ impl<'u, 'a> TextBuilder<'u, 'a> {
              if let Some(explicit_h) = self.style.height {
                  h = explicit_h;
              } else if self.style.fill_y {
-                 h = self.ui.max_y - self.start_y;
+                 h = (self.ui.max_y - self.start_y - self.style.margin.bottom).max(0.0);
              }
              self.ui.record_layout(self.id, Rect::new(self.start_x, self.start_y, w, h));
 
@@ -497,7 +499,7 @@ mod tests {
             );
 
             ui.text("PRO")
-                .font_size(10.0)
+                .size(10.0)
                 .bg(Color::rgb(0.95, 0.65, 0.20))
                 .border((Color::rgb(1.0, 0.8, 0.4), 1.0))
                 .radius_all(3.0)
@@ -586,13 +588,13 @@ mod tests {
                 .gap(8.0)
                 .show(|ui: &mut Ui| {
                     ui.text("Multi-line Auto Wrap")
-                        .font_size(12.0)
+                        .size(12.0)
                         .show();
 
                     let (_, buf) = ui.text("Zenthra computes typography layout with sub-pixel precision. When text exceeds available container width, it seamlessly breaks across word boundaries while maintaining consistent line spacing.")
-                        .font_size(14.0)
-                        .line_height(20.0)
-                        .auto_wrap()
+                        .size(14.0)
+                        .decoration(crate::macros::TextDecoration::LineHeight(20.0))
+                        .wrap(zenthra_text::prelude::TextWrap::Word)
                         .show();
 
                     let b = buf.expect("Expected shaped buffer");

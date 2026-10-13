@@ -31,10 +31,6 @@ pub struct PanelBuilder<'u, 'a, 'b> {
     shadow_color: Option<Color>,
     shadow_offset: [f32; 2],
     shadow_blur: f32,
-    shadow_opacity: f32,
-
-    bg_gradient: Option<(Color, Color, zenthra_core::GradientDirection)>,
-    header_bg_gradient: Option<(Color, Color, zenthra_core::GradientDirection)>,
 }
 
 impl<'u, 'a, 'b> PanelBuilder<'u, 'a, 'b> {
@@ -60,9 +56,6 @@ impl<'u, 'a, 'b> PanelBuilder<'u, 'a, 'b> {
             shadow_color: None,
             shadow_offset: [0.0, 0.0],
             shadow_blur: 0.0,
-            shadow_opacity: 0.0,
-            bg_gradient: None,
-            header_bg_gradient: None,
         }
     }
 
@@ -157,16 +150,6 @@ impl<'u, 'a, 'b> PanelBuilder<'u, 'a, 'b> {
         self
     }
 
-    pub fn bg_gradient(mut self, start: Color, end: Color, direction: zenthra_core::GradientDirection) -> Self {
-        self.bg_gradient = Some((start, end, direction));
-        self
-    }
-
-    pub fn header_bg_gradient(mut self, start: Color, end: Color, direction: zenthra_core::GradientDirection) -> Self {
-        self.header_bg_gradient = Some((start, end, direction));
-        self
-    }
-
     pub fn shadow(mut self, color: Color, x: f32, y: f32, blur: f32) -> Self {
         self.shadow_color = Some(color);
         self.shadow_offset = [x, y];
@@ -193,9 +176,6 @@ impl<'u, 'a, 'b> PanelBuilder<'u, 'a, 'b> {
         if let Some(bg) = self.bg {
             panel_container = panel_container.bg(bg);
         }
-        if let Some((start, end, dir)) = self.bg_gradient {
-            panel_container = panel_container.bg_gradient(start, end, dir);
-        }
         if let Some(b) = self.border {
             panel_container = panel_container.border(b);
         } else if let Some(bc) = self.border_color {
@@ -205,8 +185,7 @@ impl<'u, 'a, 'b> PanelBuilder<'u, 'a, 'b> {
             panel_container = panel_container.radius_all(self.radius);
         }
         if let Some(sc) = self.shadow_color {
-            panel_container = panel_container.shadow(sc, self.shadow_offset[0], self.shadow_offset[1], self.shadow_blur)
-                .shadow_opacity(self.shadow_opacity);
+            panel_container = panel_container.shadow(sc, self.shadow_offset[0], self.shadow_offset[1], self.shadow_blur);
         }
 
         if let Some(w) = self.width {
@@ -233,9 +212,6 @@ impl<'u, 'a, 'b> PanelBuilder<'u, 'a, 'b> {
                 if let Some(hbg) = self.header_bg {
                     header_container = header_container.bg(hbg);
                 }
-                if let Some((start, end, dir)) = self.header_bg_gradient {
-                    header_container = header_container.bg_gradient(start, end, dir);
-                }
 
                 // If expanded, only round top corners. If collapsed, round all corners to match outer container.
                 let bottom_r = if is_collapsed { self.radius } else { 0.0 };
@@ -247,13 +223,13 @@ impl<'u, 'a, 'b> PanelBuilder<'u, 'a, 'b> {
                         .column()
                         .show(|ui: &mut Ui| {
                             if let Some(ref t) = self.title {
-                                ui.text(t).font_size(14.0).bold().color(Color::WHITE).show();
+                                ui.text(t).size(14.0).font_weight(zenthra_text::prelude::FontWeight::Bold).color(Color::WHITE).show();
                             }
                             if let Some(ref s) = self.subtitle {
                                 if self.title.is_some() {
                                     ui.spacing(2.0);
                                 }
-                                ui.text(s).font_size(11.0).color(Color::rgb(0.55, 0.55, 0.65)).show();
+                                ui.text(s).size(11.0).color(Color::rgb(0.55, 0.55, 0.65)).show();
                             }
                         });
 
@@ -264,7 +240,7 @@ impl<'u, 'a, 'b> PanelBuilder<'u, 'a, 'b> {
                         } else {
                             crate::icons::NF_FA_CHEVRON_DOWN
                         };
-                        ui.text(chevron).font_size(12.0).color(Color::rgb(0.6, 0.6, 0.7)).show();
+                        ui.text(chevron).size(12.0).color(Color::rgb(0.6, 0.6, 0.7)).show();
                     }
                 });
 

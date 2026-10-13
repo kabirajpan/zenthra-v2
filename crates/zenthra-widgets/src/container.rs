@@ -41,9 +41,7 @@ pub struct ContainerBuilder<'u, 'a> {
     render_mode: Option<zenthra_core::RenderMode>,
     scroll_x: bool,
     scroll_y: bool,
-    show_scrollbar_x: bool,
-    show_scrollbar_y: bool,
-    wheel_fallback_x: bool,
+    show_scrollbars: bool,
     clip: Option<bool>,
     pub id: zenthra_core::Id,
     is_absolute: bool,
@@ -82,6 +80,16 @@ impl<'u, 'a> Styleable for ContainerBuilder<'u, 'a> {
 // Single-source macro generates all BoxStyle builder methods (.width, .height, .padding, .radius, .bg, .border, .shadow, etc.)
 impl_box_style_methods!(ContainerBuilder);
 
+/// Parses an IntoBorder value into (color, width) overrides.
+#[inline]
+fn parse_border(border: impl crate::macros::IntoBorder) -> (Option<Color>, Option<f32>) {
+    let (b, _) = border.into_border();
+    match b {
+        zenthra_core::Border::None => (Some(Color::TRANSPARENT), Some(0.0)),
+        zenthra_core::Border::Solid(c, w) => (Some(c), Some(w)),
+    }
+}
+
 impl<'u, 'a> ContainerBuilder<'u, 'a> {
     pub fn new(ui: &'u mut Ui<'a>) -> Self {
         let id = ui.id();
@@ -107,9 +115,7 @@ impl<'u, 'a> ContainerBuilder<'u, 'a> {
             render_mode: None,
             scroll_x: false,
             scroll_y: false,
-            show_scrollbar_x: true,
-            show_scrollbar_y: true,
-            wheel_fallback_x: true,
+            show_scrollbars: true,
             clip: None,
             id,
             is_absolute: false,
@@ -131,65 +137,47 @@ impl<'u, 'a> ContainerBuilder<'u, 'a> {
         }
     }
 
-    pub fn absolute(mut self, x: f32, y: f32) -> Self {
+    /// Sets explicit position for the container, taking it out of parent layout flow.
+    pub fn pos(mut self, x: f32, y: f32) -> Self {
         self.pos_x = Some(x);
         self.pos_y = Some(y);
         self.is_absolute = true;
         self
     }
-    pub fn pos(mut self, x: f32, y: f32) -> Self {
-        self.pos_x = Some(x);
-        self.pos_y = Some(y);
-        self
-    }
+
     pub fn scroll(mut self, enabled: bool) -> Self {
         self.scroll_x = enabled;
         self.scroll_y = enabled;
         if enabled { self.clip = Some(true); }
         self
     }
+
     pub fn draggable_window(mut self, drag: bool) -> Self {
         self.draggable_window = drag;
         self
     }
+
     pub fn scroll_x(mut self, enabled: bool) -> Self {
         self.scroll_x = enabled;
         if enabled { self.clip = Some(true); }
         self
     }
+
     pub fn scroll_y(mut self, enabled: bool) -> Self {
         self.scroll_y = enabled;
         if enabled { self.clip = Some(true); }
         self
     }
-    /// Whether to visually draw the horizontal scrollbar thumb (default: true).
-    pub fn show_scrollbar_x(mut self, show: bool) -> Self {
-        self.show_scrollbar_x = show;
+
+    /// Controls whether scrollbar thumbs are visually rendered (default: true).
+    pub fn scrollbars(mut self, show: bool) -> Self {
+        self.show_scrollbars = show;
         self
     }
-    /// Whether to visually draw the vertical scrollbar thumb (default: true).
-    pub fn show_scrollbar_y(mut self, show: bool) -> Self {
-        self.show_scrollbar_y = show;
-        self
-    }
-    /// Hide both horizontal and vertical scrollbar thumbs while keeping scrolling behavior.
-    pub fn hide_scrollbars(mut self) -> Self {
-        self.show_scrollbar_x = false;
-        self.show_scrollbar_y = false;
-        self
-    }
-    /// Whether standard vertical mouse wheel scrolls this container horizontally when scroll_x is true and scroll_y is false (default: true).
-    pub fn wheel_fallback_x(mut self, enabled: bool) -> Self {
-        self.wheel_fallback_x = enabled;
-        self
-    }
-    /// Force clip the overflowing content bounds of this container regardless of scrolling state
+
+    /// Force clip the overflowing content bounds of this container.
     pub fn clip(mut self, enabled: bool) -> Self {
         self.clip = Some(enabled);
-        self
-    }
-    pub fn no_clip(mut self) -> Self {
-        self.clip = Some(false);
         self
     }
 
@@ -210,16 +198,6 @@ impl<'u, 'a> ContainerBuilder<'u, 'a> {
 
     pub fn wrap(mut self, strategy: Wrap) -> Self {
         self.wrap = strategy;
-        self
-    }
-
-    pub fn auto_wrap(mut self) -> Self {
-        self.wrap = Wrap::Auto;
-        self
-    }
-
-    pub fn no_wrap(mut self) -> Self {
-        self.wrap = Wrap::NoWrap;
         self
     }
 
@@ -245,17 +223,9 @@ impl<'u, 'a> ContainerBuilder<'u, 'a> {
     }
 
     pub fn active_border(mut self, border: impl crate::macros::IntoBorder) -> Self {
-        let (b, _align) = border.into_border();
-        match b {
-            zenthra_core::Border::None => {
-                self.active_border_color = Some(Color::TRANSPARENT);
-                self.active_border_width = Some(0.0);
-            }
-            zenthra_core::Border::Solid(c, w) => {
-                self.active_border_color = Some(c);
-                self.active_border_width = Some(w);
-            }
-        }
+        let (color, width) = parse_border(border);
+        self.active_border_color = color;
+        self.active_border_width = width;
         self
     }
 
@@ -303,17 +273,9 @@ impl<'u, 'a> ContainerBuilder<'u, 'a> {
     }
 
     pub fn hover_border(mut self, border: impl crate::macros::IntoBorder) -> Self {
-        let (b, _align) = border.into_border();
-        match b {
-            zenthra_core::Border::None => {
-                self.hover_border_color = Some(Color::TRANSPARENT);
-                self.hover_border_width = Some(0.0);
-            }
-            zenthra_core::Border::Solid(c, w) => {
-                self.hover_border_color = Some(c);
-                self.hover_border_width = Some(w);
-            }
-        }
+        let (color, width) = parse_border(border);
+        self.hover_border_color = color;
+        self.hover_border_width = width;
         self
     }
 
@@ -330,14 +292,8 @@ impl<'u, 'a> ContainerBuilder<'u, 'a> {
         self
     }
 
-    pub fn post_process_shader(mut self, shader_id: &'static str) -> Self {
+    pub fn shader(mut self, shader_id: &'static str) -> Self {
         self.post_process_shader = Some(shader_id);
-        self
-    }
-
-    pub fn post_process_shader_with_params(mut self, shader_id: &'static str, params: [f32; 8]) -> Self {
-        self.post_process_shader = Some(shader_id);
-        self.post_process_params = params;
         self
     }
 
@@ -353,50 +309,6 @@ impl<'u, 'a> ContainerBuilder<'u, 'a> {
 
     pub fn overlay(mut self) -> Self {
         self.is_overlay = true;
-        self
-    }
-
-    pub fn on_click<F>(self, mut f: F) -> Self
-    where
-        F: FnMut() + 'a,
-    {
-        self.ui.add_listener(self.id, crate::ui::EventPhase::Bubble, move |_, event| {
-            if let crate::ui::WidgetEvent::Click = event {
-                f();
-            }
-        });
-        self
-    }
-
-    pub fn on_hover<F>(self, mut f: F) -> Self
-    where
-        F: FnMut(bool) + 'a,
-    {
-        self.ui.add_listener(self.id, crate::ui::EventPhase::Bubble, move |_, event| {
-            if let crate::ui::WidgetEvent::Hover(hovered) = event {
-                f(*hovered);
-            }
-        });
-        self
-    }
-
-    pub fn on_scroll<F>(self, mut f: F) -> Self
-    where
-        F: FnMut(f32, f32) + 'a,
-    {
-        self.ui.add_listener(self.id, crate::ui::EventPhase::Bubble, move |_, event| {
-            if let crate::ui::WidgetEvent::Scroll(dx, dy) = event {
-                f(*dx, *dy);
-            }
-        });
-        self
-    }
-
-    pub fn on_event<F>(self, phase: crate::ui::EventPhase, f: F) -> Self
-    where
-        F: FnMut(&mut crate::ui::EventContext, &crate::ui::WidgetEvent) + 'a,
-    {
-        self.ui.add_listener(self.id, phase, f);
         self
     }
 
@@ -418,6 +330,10 @@ impl<'u, 'a> ContainerBuilder<'u, 'a> {
         let padding_right = self.style.padding.right;
         let padding_top = self.style.padding.top;
         let padding_bottom = self.style.padding.bottom;
+        let margin_left = self.style.margin.left;
+        let margin_right = self.style.margin.right;
+        let margin_top = self.style.margin.top;
+        let margin_bottom = self.style.margin.bottom;
         let border_width = self.style.border_width();
         let border_color = self.style.border_color();
         let fill_x = self.style.fill_x;
@@ -431,8 +347,8 @@ impl<'u, 'a> ContainerBuilder<'u, 'a> {
 
         self.start_x = self.ui.cursor_x;
         self.start_y = self.ui.cursor_y;
-        let ox = self.pos_x.unwrap_or(self.start_x);
-        let oy = self.pos_y.unwrap_or(self.start_y);
+        let ox = self.pos_x.unwrap_or(self.start_x) + margin_left;
+        let oy = self.pos_y.unwrap_or(self.start_y) + margin_top;
 
         // -- Save current Ui environment --
         let prev_dir = self.ui.direction;
@@ -475,12 +391,12 @@ impl<'u, 'a> ContainerBuilder<'u, 'a> {
         let avail_w = if let Some(w) = width {
             w - padding_left - padding_right - 2.0 * border_width
         } else {
-            (prev_max_x - ox - padding_left - padding_right - 2.0 * border_width).max(0.0)
+            (prev_max_x - ox - padding_left - padding_right - 2.0 * border_width - margin_right).max(0.0)
         };
         let avail_h = if let Some(h) = height {
             h - padding_top - padding_bottom - 2.0 * border_width
         } else {
-            (prev_max_y - oy - padding_top - padding_bottom - 2.0 * border_width).max(0.0)
+            (prev_max_y - oy - padding_top - padding_bottom - 2.0 * border_width - margin_bottom).max(0.0)
         };
 
         // Important: If we are absolute, our internal boundary is NOT capped by prev_max_x.
@@ -599,7 +515,7 @@ impl<'u, 'a> ContainerBuilder<'u, 'a> {
         };
 
         let mut w = if fill_x {
-            self.ui.max_x - ox  // use parent's right boundary, not global window width
+            (self.ui.max_x - ox - margin_right).max(0.0)  // use parent's right boundary, not global window width
         } else {
             width.unwrap_or(content_w + padding_left + padding_right + 2.0 * border_width)
         };
@@ -608,7 +524,7 @@ impl<'u, 'a> ContainerBuilder<'u, 'a> {
         if let Some(mw) = min_width { w = w.max(mw); }
 
         let mut h = if fill_y {
-            self.ui.max_y - oy  // use parent's bottom boundary, not global window height
+            (self.ui.max_y - oy - margin_bottom).max(0.0)  // use parent's bottom boundary, not global window height
         } else {
             height.unwrap_or(content_h + padding_top + padding_bottom + 2.0 * border_width)
         };
@@ -700,7 +616,7 @@ impl<'u, 'a> ContainerBuilder<'u, 'a> {
                             consumed = true;
                         }
                         // Fallback: standard vertical wheel scrolls horizontal-only viewports (if allowed)
-                        if self.wheel_fallback_x && self.scroll_x && !self.scroll_y && *delta_y != 0.0 && *delta_x == 0.0 {
+                        if self.scroll_x && !self.scroll_y && *delta_y != 0.0 && *delta_x == 0.0 {
                             let can_left = sx > 0.0 && *delta_y > 0.0;
                             let can_right = sx < max_sx && *delta_y < 0.0;
                             if can_left || can_right {
@@ -965,7 +881,7 @@ impl<'u, 'a> ContainerBuilder<'u, 'a> {
             let bar_margin = 2.0;
 
             // Vertical Scrollbar
-            if self.show_scrollbar_y && self.scroll_y && max_sy > 0.0 {
+            if self.show_scrollbars && self.scroll_y && max_sy > 0.0 {
                 let thumb_h = (h / (content_h + padding_top + padding_bottom)) * h;
                 let thumb_h = thumb_h.max(20.0);
                 let scroll_ratio = scroll_y / max_sy;
@@ -1024,7 +940,7 @@ impl<'u, 'a> ContainerBuilder<'u, 'a> {
             }
 
             // Horizontal Scrollbar
-            if self.show_scrollbar_x && self.scroll_x && max_sx > 0.0 {
+            if self.show_scrollbars && self.scroll_x && max_sx > 0.0 {
                 let thumb_w = (w / (content_w + padding_left + padding_right)) * w;
                 let thumb_w = thumb_w.max(20.0);
                 let scroll_ratio = scroll_x / max_sx;
@@ -1084,7 +1000,7 @@ impl<'u, 'a> ContainerBuilder<'u, 'a> {
         self.ui.id_log.extend(child_ids_only);
         
         if !self.is_absolute {
-            self.ui.advance(w, h, draw_start);
+            self.ui.advance(w + margin_left + margin_right, h + margin_top + margin_bottom, draw_start);
         }
 
         // Dispatch events

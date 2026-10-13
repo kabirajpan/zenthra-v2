@@ -49,7 +49,6 @@ pub struct ToggleBuilder<'u, 'a, 'b> {
     disabled: bool,
     animation_speed: f32,
     is_pill: bool,
-    hover_brightness: f32,
 }
 
 impl<'u, 'a, 'b> Styleable for ToggleBuilder<'u, 'a, 'b> {
@@ -83,8 +82,6 @@ impl<'u, 'a, 'b> ToggleBuilder<'u, 'a, 'b> {
         style.padding = EdgeInsets::all(3.0);
         style.shadow_offset = [0.0, 2.0];
         style.shadow_blur = 8.0;
-        style.shadow_opacity = 0.4;
-        style.opacity = 1.0;
 
         let mut text_style = zenthra_text::prelude::TextStyle::default();
         text_style.font_size = 14.0;
@@ -121,12 +118,11 @@ impl<'u, 'a, 'b> ToggleBuilder<'u, 'a, 'b> {
             disabled: false,
             animation_speed: 15.0,
             is_pill: true,
-            hover_brightness: 1.05,
         }
     }
 
     #[inline]
-    pub fn size(mut self, w: f32, h: f32) -> Self {
+    pub fn track_size(mut self, w: f32, h: f32) -> Self {
         self.style.width = Some(w);
         self.style.height = Some(h);
         self
@@ -238,18 +234,6 @@ impl<'u, 'a, 'b> ToggleBuilder<'u, 'a, 'b> {
     }
 
     #[inline]
-    pub fn label_size(mut self, size: f32) -> Self {
-        self.text_style.font_size = size;
-        self
-    }
-
-    #[inline]
-    pub fn label_color(mut self, color: Color) -> Self {
-        self.text_style.color = color;
-        self
-    }
-
-    #[inline]
     pub fn active_label(mut self, color: Color) -> Self {
         self.active_label_color = Some(color);
         self
@@ -277,12 +261,6 @@ impl<'u, 'a, 'b> ToggleBuilder<'u, 'a, 'b> {
     #[inline]
     pub fn animation_speed(mut self, speed: f32) -> Self {
         self.animation_speed = speed;
-        self
-    }
-
-    #[inline]
-    pub fn hover_brightness(mut self, b: f32) -> Self {
-        self.hover_brightness = b;
         self
     }
 
@@ -349,7 +327,7 @@ impl<'u, 'a, 'b> ToggleBuilder<'u, 'a, 'b> {
         if let Some(label_text) = &self.label {
             if let Some(fs) = self.ui.font_system.as_ref() {
                 let mut adapter = zenthra_text::prelude::CosmicFontProvider::new_with_system(fs.clone());
-                let options = zenthra_text::prelude::TextOptions::new().font_size(self.text_style.font_size);
+                let options = self.text_style.to_options(0.0, 0.0, self.ui.scale_factor, self.ui.font_scale);
                 let buffer = adapter.shape(label_text, &options);
                 let (cw, ch) = buffer.content_size();
                 label_w = cw;
@@ -464,9 +442,6 @@ impl<'u, 'a, 'b> ToggleBuilder<'u, 'a, 'b> {
             1.0,
         );
         instance.radius = current_radius;
-        if is_hovered {
-            instance.brightness = self.hover_brightness;
-        }
         if self.style.shadow_color.is_none() && self.glow {
             let mut sc = self.on_color.to_array();
             sc[3] *= 0.4 * final_pos;
@@ -487,7 +462,7 @@ impl<'u, 'a, 'b> ToggleBuilder<'u, 'a, 'b> {
                 let mut text_h = 0.0;
                 if let Some(fs) = self.ui.font_system.as_ref() {
                     let mut adapter = zenthra_text::prelude::CosmicFontProvider::new_with_system(fs.clone());
-                    let options = zenthra_text::prelude::TextOptions::new().font_size(self.inner_font_size * final_scale);
+                    let options = zenthra_text::prelude::TextOptions::new().size(self.inner_font_size * final_scale);
                     let buffer = adapter.shape(text, &options);
                     let (cw, ch) = buffer.content_size();
                     text_w = cw;
@@ -514,7 +489,7 @@ impl<'u, 'a, 'b> ToggleBuilder<'u, 'a, 'b> {
                         text: text.clone(),
                         pos: [inner_tx, inner_ty],
                         options: zenthra_text::prelude::TextOptions::new()
-                            .font_size(self.inner_font_size * final_scale)
+                            .size(self.inner_font_size * final_scale)
                             .color(t_color),
                         clip,
                     }));
@@ -573,12 +548,13 @@ impl<'u, 'a, 'b> ToggleBuilder<'u, 'a, 'b> {
             }
             l_color.a *= self.style.opacity;
 
+            let mut text_opts = self.text_style.to_options(lx, ly, self.ui.scale_factor, self.ui.font_scale);
+            text_opts.color = l_color;
+
             self.ui.draws.push(DrawCommand::Text(TextDraw {
                 text: label_text.clone(),
                 pos: [lx, ly],
-                options: zenthra_text::prelude::TextOptions::new()
-                    .font_size(self.text_style.font_size)
-                    .color(l_color),
+                options: text_opts,
                 clip: [0.0, 0.0, 9999.0, 9999.0],
             }));
         }
@@ -623,38 +599,70 @@ mod tests {
 
         let mut active = false;
 
-        let mut ui = Ui::new(
-            800, 600, 1.0, None, Vec::new(), None,
-            (0.0, 0.0), false,
-            &mut scroll_state, &mut cursor_state, &mut interaction_state,
-            None, None, false, false, 0.0,
-            &layout_cache, &mut next_layout_cache,
-            &screen_layout_cache, &mut next_screen_layout_cache,
-            &widget_window_map, &mut next_widget_window_map,
-            &image_sizes,
-        );
+        // 1. Unchecked Toggle with shadow and custom dimensions
+        {
+            let mut ui = Ui::new(
+                800, 600, 1.0, None, Vec::new(), None,
+                (0.0, 0.0), false,
+                &mut scroll_state, &mut cursor_state, &mut interaction_state,
+                None, None, false, false, 0.0,
+                &layout_cache, &mut next_layout_cache,
+                &screen_layout_cache, &mut next_screen_layout_cache,
+                &widget_window_map, &mut next_widget_window_map,
+                &image_sizes,
+            );
 
-        ui.toggle(&mut active, "Airplane Mode")
-            .width(52.0)
-            .height(26.0)
-            .padding(4.0)
-            .shadow(Color::BLACK, 0.0, 2.0, 6.0)
-            .shadow_opacity(0.4)
-            .show();
+            ui.toggle(&mut active, "Airplane Mode")
+                .width(52.0)
+                .height(26.0)
+                .padding(4.0)
+                .shadow(Color::rgba(0.0, 0.0, 0.0, 0.4), 0.0, 2.0, 6.0)
+                .show();
 
-        // 1 RectDraw for Track, 1 RectDraw for Thumb, 1 TextDraw for Label
-        assert_eq!(ui.draws.len(), 3);
-        if let DrawCommand::Rect(track) = &ui.draws[0] {
-            assert_eq!(track.instance.size, [52.0, 26.0]);
-            assert_eq!(track.instance.shadow_color, [0.0, 0.0, 0.0, 0.4]);
-        } else {
-            panic!("Expected RectDraw for track");
+            // 1 RectDraw for Track, 1 RectDraw for Thumb, 1 TextDraw for Label
+            assert_eq!(ui.draws.len(), 3);
+            if let DrawCommand::Rect(track) = &ui.draws[0] {
+                assert_eq!(track.instance.size, [52.0, 26.0]);
+                assert_eq!(track.instance.shadow_color, [0.0, 0.0, 0.0, 0.4]);
+            } else {
+                panic!("Expected RectDraw for track");
+            }
+
+            if let DrawCommand::Rect(thumb) = &ui.draws[1] {
+                assert_eq!(thumb.instance.size, [18.0, 18.0]); // 26 - 4*2 = 18
+            } else {
+                panic!("Expected RectDraw for thumb");
+            }
         }
 
-        if let DrawCommand::Rect(thumb) = &ui.draws[1] {
-            assert_eq!(thumb.instance.size, [18.0, 18.0]); // 26 - 4*2 = 18
-        } else {
-            panic!("Expected RectDraw for thumb");
+        // 2. Unified IntoBorder and typography styling on ToggleBuilder
+        {
+            let mut active = true;
+            let mut ui = Ui::new(
+                800, 600, 1.0, None, Vec::new(), None,
+                (0.0, 0.0), false,
+                &mut scroll_state, &mut cursor_state, &mut interaction_state,
+                None, None, false, false, 0.0,
+                &layout_cache, &mut next_layout_cache,
+                &screen_layout_cache, &mut next_screen_layout_cache,
+                &widget_window_map, &mut next_widget_window_map,
+                &image_sizes,
+            );
+
+            let t = ui.toggle(&mut active, "Dark Mode")
+                .track_size(60.0, 30.0)
+                .border((Color::GREEN, 2.0, zenthra_core::BorderAlignment::Inside))
+                .size(16.0)
+                .color(Color::YELLOW)
+                .font_weight(600);
+
+            assert_eq!(t.style.width, Some(60.0));
+            assert_eq!(t.style.height, Some(30.0));
+            assert_eq!(t.style.border, zenthra_core::Border::Solid(Color::GREEN, 2.0));
+            assert_eq!(t.style.border_alignment, zenthra_core::BorderAlignment::Inside);
+            assert_eq!(t.text_style.font_size, 16.0);
+            assert_eq!(t.text_style.color, Color::YELLOW);
+            assert_eq!(t.text_style.font_weight, zenthra_text::prelude::FontWeight::SemiBold);
         }
     }
 }

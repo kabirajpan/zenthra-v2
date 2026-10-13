@@ -17,11 +17,10 @@ The `Text` widget is the primary tool for displaying typography in Zenthra. It u
 |--------|-------------|
 | `.size(f32)` | Sets the font size in logical pixels. |
 | `.color(Color)` | Sets the text color. |
-| `.weight(impl Into<FontWeight>)` | Sets thickness (e.g., `FontWeight::Bold` or numeric `700`). |
-| `.bold()` | Shortcut for `FontWeight::Bold`. |
-| `.italic()` | Enables italic styling. |
-| `.family(String)` | Sets font family (e.g., "serif", "monospace", "Arial"). |
-| `.line_height(f32)` | Sets the line spacing multiplier (Default is `1.2`). |
+| `.font_family(impl Into<String>)` | Sets font family (e.g. "Inter", "monospace"). |
+| `.font_weight(impl Into<FontWeight>)` | Sets weight (numeric `100`..`900` or `FontWeight` enum). |
+| `.decoration(impl IntoDecoration)` | Applies text decorations (Underline, Strikethrough, Italic). |
+| `.ellipsis(bool)` | Truncates overflowing text with trailing dots. |
 
 ### Layout & Sizing
 | Method | Description |
@@ -37,7 +36,6 @@ The `Text` widget is the primary tool for displaying typography in Zenthra. It u
 | Method | Description |
 |--------|-------------|
 | `.bg(Color)` | Draws a background rectangle behind the text block. |
-| `.highlight(Color)` | Adds a background color to the characters themselves. |
 | `.cursor(CursorIcon)` | Changes the mouse cursor when hovering over the text. |
 
 ## Text Weight (Numeric)
@@ -51,7 +49,7 @@ Zenthra supports CSS-style numeric weights for maximum control:
 - `900`: Black
 
 ```rust
-ui.text("Heavy Text").weight(900).show();
+ui.text("Heavy Text").font_weight(900).show();
 ```
 
 ## Example: Styled Paragraph
@@ -60,7 +58,6 @@ ui.text("Heavy Text").weight(900).show();
 ui.text("Zenthra provides a modern, high-performance UI toolkit for Rust developers.")
     .size(16.0)
     .color(Color::rgb(0.8, 0.8, 0.8))
-    .line_height(1.5)
     .wrap(TextWrap::Word)
     .max_width(400.0)
     .show();

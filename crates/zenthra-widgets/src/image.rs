@@ -10,8 +10,8 @@ pub struct ImageBuilder<'u, 'a> {
     // Sizing & Position
     pos: Option<(f32, f32)>,
     width: Option<f32>,
-    height: Option<f32>,
     max_width: Option<f32>,
+    height: Option<f32>,
     max_height: Option<f32>,
     aspect_ratio: Option<f32>,
     original_size: bool,
@@ -31,7 +31,6 @@ pub struct ImageBuilder<'u, 'a> {
     shadow_color: Color,
     shadow_offset: [f32; 2],
     shadow_blur: f32,
-    shadow_opacity: f32,
 
     // Interaction Styling (Hover & Active States)
     hover_opacity: Option<f32>,
@@ -60,8 +59,8 @@ impl<'u, 'a> ImageBuilder<'u, 'a> {
             source,
             pos: None,
             width: None,
-            height: None,
             max_width: None,
+            height: None,
             max_height: None,
             padding: EdgeInsets::ZERO,
             margin: EdgeInsets::ZERO,
@@ -75,7 +74,6 @@ impl<'u, 'a> ImageBuilder<'u, 'a> {
             shadow_color: Color::TRANSPARENT,
             shadow_offset: [0.0, 0.0],
             shadow_blur: 0.0,
-            shadow_opacity: 1.0,
             hover_opacity: None,
             hover_grayscale: None,
             hover_border: None,
@@ -288,10 +286,6 @@ impl<'u, 'a> ImageBuilder<'u, 'a> {
         self.shadow_blur = blur;
         self
     }
-    pub fn shadow_opacity(mut self, opacity: f32) -> Self {
-        self.shadow_opacity = opacity;
-        self
-    }
 
     // Advanced Controls
     pub fn scale(mut self, s: f32) -> Self {
@@ -453,11 +447,7 @@ impl<'u, 'a> ImageBuilder<'u, 'a> {
             self.border_color
         };
 
-        let shadow_color_arr = {
-            let mut c = self.shadow_color;
-            c.a *= self.shadow_opacity;
-            c.to_array()
-        };
+        let shadow_color_arr = self.shadow_color.to_array();
 
         let uv_rect = if w <= 0.0 || h <= 0.0 || orig_w <= 0.0 || orig_h <= 0.0 {
             [0.0, 0.0, 1.0, 1.0]

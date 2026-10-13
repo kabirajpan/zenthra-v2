@@ -317,7 +317,7 @@ impl<'u, 'a> PopoverBuilder<'u, 'a> {
             let mut container = ui
                 .container()
                 .raw_id(popover_id)
-                .absolute(pos_x, pos_y)
+                .pos(pos_x, pos_y)
                 .overlay()
                 .width(content_w)
                 .bg(bg_color)

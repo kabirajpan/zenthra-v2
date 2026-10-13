@@ -14,6 +14,7 @@ pub use zenthra_widgets::{
     TextAreaBuilder, FloatingWindowBuilder, ImageBuilder, CardBuilder, PanelBuilder,
     StackBuilder, ProgressBarBuilder, CheckboxBuilder, ToggleBuilder, RadioBuilder, DropdownBuilder,
     MenuBarBuilder, MenuBuilder, MenuItemBuilder, PopoverBuilder, DragValueBuilder, NumericValue, icons,
+    TextDecoration, IntoDecoration,
 };
 pub use zenthra_platform::app::WindowAction;
 pub use zenthra_platform::event::{PlatformEvent, KeyCode};
@@ -38,6 +39,7 @@ pub mod prelude {
         TextAreaBuilder, FloatingWindowBuilder, ImageBuilder, CardBuilder, PanelBuilder,
         StackBuilder, ProgressBarBuilder, CheckboxBuilder, ToggleBuilder, RadioBuilder, DropdownBuilder,
         MenuBarBuilder, MenuBuilder, MenuItemBuilder, PopoverBuilder, DragValueBuilder, NumericValue, icons,
+        TextDecoration, IntoDecoration,
     };
     pub use zenthra_platform::app::WindowAction;
     pub use zenthra_platform::event::{PlatformEvent, KeyCode};

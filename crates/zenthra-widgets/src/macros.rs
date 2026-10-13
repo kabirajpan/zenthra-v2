@@ -213,6 +213,67 @@ macro_rules! impl_padding {
     };
 }
 
+/// Implements margin builder methods on a builder struct with `self.style`.
+#[macro_export]
+macro_rules! impl_margin {
+    ($builder:ident) => {
+        $crate::impl_margin!($builder, 'u, 'a);
+    };
+    ($builder:ident, $($lt:lifetime),+) => {
+        impl<$($lt),+> $builder<$($lt),+> {
+            #[inline]
+            pub fn margin(mut self, t: f32, r: f32, b: f32, l: f32) -> Self {
+                self.style.margin = zenthra_core::EdgeInsets { top: t, right: r, bottom: b, left: l };
+                self
+            }
+
+            #[inline]
+            pub fn margin_all(mut self, m: f32) -> Self {
+                self.style.margin = zenthra_core::EdgeInsets::all(m);
+                self
+            }
+
+            #[inline]
+            pub fn margin_x(mut self, m: f32) -> Self {
+                self.style.margin.left = m;
+                self.style.margin.right = m;
+                self
+            }
+
+            #[inline]
+            pub fn margin_y(mut self, m: f32) -> Self {
+                self.style.margin.top = m;
+                self.style.margin.bottom = m;
+                self
+            }
+
+            #[inline]
+            pub fn margin_top(mut self, m: f32) -> Self {
+                self.style.margin.top = m;
+                self
+            }
+
+            #[inline]
+            pub fn margin_bottom(mut self, m: f32) -> Self {
+                self.style.margin.bottom = m;
+                self
+            }
+
+            #[inline]
+            pub fn margin_left(mut self, m: f32) -> Self {
+                self.style.margin.left = m;
+                self
+            }
+
+            #[inline]
+            pub fn margin_right(mut self, m: f32) -> Self {
+                self.style.margin.right = m;
+                self
+            }
+        }
+    };
+}
+
 /// Implements corner radius builder methods on a builder struct with `self.style`.
 #[macro_export]
 macro_rules! impl_radius {
@@ -333,18 +394,20 @@ macro_rules! impl_visuals {
     };
 }
 
-/// Comprehensive macro that implements all dimensions, padding, radius, and visual box styling methods.
+/// Comprehensive macro that implements all dimensions, padding, margin, radius, and visual box styling methods.
 #[macro_export]
 macro_rules! impl_box_style_methods {
     ($builder:ident) => {
         $crate::impl_dimensions!($builder);
         $crate::impl_padding!($builder);
+        $crate::impl_margin!($builder);
         $crate::impl_radius!($builder);
         $crate::impl_visuals!($builder);
     };
     ($builder:ident, $($lt:lifetime),+) => {
         $crate::impl_dimensions!($builder, $($lt),+);
         $crate::impl_padding!($builder, $($lt),+);
+        $crate::impl_margin!($builder, $($lt),+);
         $crate::impl_radius!($builder, $($lt),+);
         $crate::impl_visuals!($builder, $($lt),+);
     };
@@ -359,20 +422,9 @@ macro_rules! impl_font_style_methods {
     ($builder:ident, $($lt:lifetime),+) => {
         impl<$($lt),+> $builder<$($lt),+> {
             #[inline]
-            pub fn text_style(mut self, style: zenthra_text::prelude::TextStyle) -> Self {
-                self.text_style = style;
-                self
-            }
-
-            #[inline]
-            pub fn font_size(mut self, size: f32) -> Self {
+            pub fn size(mut self, size: f32) -> Self {
                 self.text_style.font_size = size;
                 self
-            }
-
-            #[inline]
-            pub fn size(self, size: f32) -> Self {
-                self.font_size(size)
             }
 
             #[inline]
@@ -382,24 +434,8 @@ macro_rules! impl_font_style_methods {
             }
 
             #[inline]
-            pub fn text_color(self, color: zenthra_core::Color) -> Self {
-                self.color(color)
-            }
-
-            #[inline]
             pub fn font_family(mut self, family: impl Into<String>) -> Self {
                 self.text_style.font_family = Some(family.into());
-                self
-            }
-
-            #[inline]
-            pub fn family(self, family: impl Into<String>) -> Self {
-                self.font_family(family)
-            }
-
-            #[inline]
-            pub fn monospace(mut self) -> Self {
-                self.text_style.font_family = Some("monospace".to_string());
                 self
             }
 
@@ -408,56 +444,11 @@ macro_rules! impl_font_style_methods {
                 self.text_style.font_weight = weight.into();
                 self
             }
-
-            #[inline]
-            pub fn weight(self, weight: impl Into<zenthra_text::prelude::FontWeight>) -> Self {
-                self.font_weight(weight)
-            }
-
-            #[inline]
-            pub fn bold(mut self) -> Self {
-                self.text_style.font_weight = zenthra_text::prelude::FontWeight::Bold;
-                self
-            }
-
-            #[inline]
-            pub fn bold_when(mut self, bold: bool) -> Self {
-                if bold {
-                    self.text_style.font_weight = zenthra_text::prelude::FontWeight::Bold;
-                }
-                self
-            }
-
-            #[inline]
-            pub fn font_style(mut self, style: zenthra_text::prelude::FontStyle) -> Self {
-                self.text_style.font_style = style;
-                self
-            }
-
-            #[inline]
-            pub fn italic(mut self) -> Self {
-                self.text_style.font_style = zenthra_text::prelude::FontStyle::Italic;
-                self
-            }
-
-            #[inline]
-            pub fn italic_when(mut self, italic: bool) -> Self {
-                if italic {
-                    self.text_style.font_style = zenthra_text::prelude::FontStyle::Italic;
-                }
-                self
-            }
-
-            #[inline]
-            pub fn line_height(mut self, lh: f32) -> Self {
-                self.text_style.line_height = lh;
-                self
-            }
         }
     };
 }
 
-/// Implements text wrapping flow builder methods (wrap, auto_wrap, no_wrap)
+/// Implements text wrapping flow builder methods (wrap)
 #[macro_export]
 macro_rules! impl_text_wrap_methods {
     ($builder:ident) => {
@@ -470,23 +461,11 @@ macro_rules! impl_text_wrap_methods {
                 self.text_style.wrap = wrap.into();
                 self
             }
-
-            #[inline]
-            pub fn auto_wrap(mut self) -> Self {
-                self.text_style.wrap = zenthra_text::prelude::TextWrap::Word;
-                self
-            }
-
-            #[inline]
-            pub fn no_wrap(mut self) -> Self {
-                self.text_style.wrap = zenthra_text::prelude::TextWrap::None;
-                self
-            }
         }
     };
 }
 
-/// Implements text decoration builder methods (decoration, ellipsis, underline, strikethrough, highlight)
+/// Implements text decoration builder methods (decoration, ellipsis)
 #[macro_export]
 macro_rules! impl_text_decorations {
     ($builder:ident) => {
@@ -501,40 +480,8 @@ macro_rules! impl_text_decorations {
             }
 
             #[inline]
-            pub fn highlight(mut self, color: zenthra_core::Color) -> Self {
-                self.text_style.highlight_color = Some(color);
-                self
-            }
-
-            #[inline]
             pub fn ellipsis(mut self, ellipsis: bool) -> Self {
                 self.text_style.ellipsis = ellipsis;
-                self
-            }
-
-            #[inline]
-            pub fn underline(mut self, underline: bool) -> Self {
-                self.text_style.underline = underline;
-                self
-            }
-
-            #[inline]
-            pub fn underline_color(mut self, color: zenthra_core::Color) -> Self {
-                self.text_style.underline = true;
-                self.text_style.underline_color = Some(color);
-                self
-            }
-
-            #[inline]
-            pub fn strikethrough(mut self, strikethrough: bool) -> Self {
-                self.text_style.strikethrough = strikethrough;
-                self
-            }
-
-            #[inline]
-            pub fn strikethrough_color(mut self, color: zenthra_core::Color) -> Self {
-                self.text_style.strikethrough = true;
-                self.text_style.strikethrough_color = Some(color);
                 self
             }
         }

@@ -16,7 +16,7 @@ The `Input` widget strictly adheres to the unified styling contract established 
    - [2.4 Backgrounds & Colors](#24-backgrounds--colors)
    - [2.5 Borders & Focus Rings](#25-borders--focus-rings)
    - [2.6 Corner Radii](#26-corner-radii)
-   - [2.7 Shadows & Opacity](#27-shadows--opacity)
+   - [2.7 Shadows & Elevation](#27-shadows--elevation)
    - [2.8 Sizing, Width & Padding](#28-sizing-width--padding)
    - [2.9 Scrolling & Selection](#29-scrolling--selection)
    - [2.10 Event Handling & Callbacks](#210-event-handling--callbacks)
@@ -46,7 +46,7 @@ Just like `Container`:
 - `.bg(Color)` sets a solid surface background; `.bg(None)` makes the surface transparent.
 - `.border((Color, width))` sets the default unfocused border; `.border(None)` removes it.
 - `.focus_border((Color, width))` customizes the active focus ring; `.focus_border(None)` explicitly disables the focus border.
-- `.shadow(color, ox, oy, blur)` and `.shadow_opacity(opacity)` elevate the input off the canvas.
+- `.shadow(color, ox, oy, blur)` elevates the input off the canvas (shadow opacity is configured directly via `Color::rgba(...)`).
 
 ```rust
 // ✅ Clean, consistent Zenthra styling:
@@ -90,28 +90,16 @@ pub fn pos(mut self, x: f32, y: f32) -> Self
 #### Method Signatures
 
 ```rust
-// Individual Typography Setters
-pub fn font_size(mut self, size: f32) -> Self
-pub fn color(mut self, color: Color) -> Self
-pub fn text_color(self, color: Color) -> Self // Alias for .color()
-pub fn line_height(mut self, lh: f32) -> Self
+// Individual Typography Setters (via impl_font_style_methods!)
+pub fn size(mut self, size: f32) -> Self
+pub fn color(mut self, color: zenthra_core::Color) -> Self
 pub fn font_family(mut self, family: impl Into<String>) -> Self
-pub fn family(self, family: impl Into<String>) -> Self
-pub fn monospace(mut self) -> Self
-pub fn font_weight(mut self, weight: impl Into<FontWeight>) -> Self
-pub fn weight(self, weight: impl Into<FontWeight>) -> Self
-pub fn bold(mut self) -> Self
-pub fn font_style(mut self, style: FontStyle) -> Self
-pub fn italic(mut self) -> Self
-
-// Bulk Typography Styling
-pub fn text_style(mut self, style: TextStyle) -> Self
+pub fn font_weight(mut self, weight: impl Into<zenthra_text::prelude::FontWeight>) -> Self
 ```
 
 #### Defaults
-- `font_size`: `18.0`
+- `size`: `18.0`
 - `color`: `Color::WHITE`
-- `line_height`: `1.2`
 
 #### Examples
 
@@ -119,14 +107,9 @@ pub fn text_style(mut self, style: TextStyle) -> Self
 // Fluent builder typography:
 ui.input(&mut search_term)
     .font_family("Inter")
-    .bold()
-    .font_size(14.0)
+    .font_weight(zenthra_text::prelude::FontWeight::Bold)
+    .size(14.0)
     .color(Color::rgb(0.9, 0.9, 0.95))
-    .show();
-
-// Bulk TextStyle theme reuse:
-ui.input(&mut code_snippet)
-    .text_style(my_code_font)
     .show();
 ```
 
@@ -165,17 +148,13 @@ ui.input(&mut email)
 
 ```rust
 pub fn bg(mut self, bg: impl Into<zenthra_core::Background>) -> Self
-pub fn bg_gradient(mut self, start: Color, end: Color, direction: GradientDirection) -> Self
-pub fn bg_opacity(mut self, opacity: f32) -> Self
 
 // Bulk Box Styling
 pub fn style(mut self, style: BoxStyle) -> Self
 ```
 
 #### Description
-- `bg`: Sets the background quad. Accepts solid colors or `Background::Solid(Color)`, `Background::Gradient(...)`, or `None` for transparency. Default: `Some(Background::Solid(Color::rgb(0.2, 0.2, 0.2)))`.
-- `bg_gradient`: Sets a linear or radial gradient surface.
-- `bg_opacity`: Controls alpha transparency of the background.
+- `bg`: Sets the background quad. Accepts solid colors (e.g. `Color::rgb(...)`, `Color::rgba(...)`), `Background::Solid(Color)`, `Background::Gradient(...)`, or `None` for transparency. Default: `Some(Background::Solid(Color::rgb(0.2, 0.2, 0.2)))`.
 - `style`: Applies a complete, reusable `BoxStyle` theme.
 
 ```rust
@@ -198,26 +177,22 @@ ui.input(&mut code)
 #### Method Signatures
 
 ```rust
-pub fn border(mut self, border: impl Into<zenthra_core::Border>) -> Self
-pub fn border_alignment(mut self, alignment: BorderAlignment) -> Self
-pub fn focus_border(mut self, border: impl Into<zenthra_core::Border>) -> Self
+pub fn border(mut self, border: impl IntoBorder) -> Self
+pub fn focus_border(mut self, border: impl IntoBorder) -> Self
 ```
 
 #### Behavior & Unified Contract
-- `border(...)`:
-  - Accepts `(Color, f32)` (e.g. `(Color::WHITE, 1.0)`) or `Border::Solid(color, width)`.
-  - Accepts `None` or `Border::None` to remove the border.
-  - Default: `None` (0.0 width).
-- `border_alignment(...)`:
-  - Position of border relative to box boundary (`Inside`, `Center`, or `Outside`).
-- `focus_border(...)`:
-  - Applied automatically whenever this input has keyboard focus (`ui.focused_id == Some(id)`).
-  - Accepts `(Color, f32)` or `Border::Solid(color, width)` to customize the focus ring.
-  - Accepts `None` or `Border::None` to **completely disable** the focus ring.
-  - If omitted and focused, defaults to a `1.0` width accent blue border (`Color::rgb(0.4, 0.7, 1.0)`).
+- `border(...)` and `focus_border(...)`:
+  - Accepts `(Color, f32)` or `(Color, f64)`.
+  - Accepts `(Color, f32, BorderAlignment)` or `(Color, f64, BorderAlignment)`.
+  - Accepts `Border` or `(Border, BorderAlignment)`.
+  - Accepts `None` or `Option<Border>` to remove / disable the border.
+  - Default for `border`: `None` (0.0 width).
+  - Default for `focus_border`: If omitted and focused, defaults to a `1.0` width accent blue border (`Color::rgb(0.4, 0.7, 1.0)`).
+  - Explicit `focus_border(None)` completely disables the focus ring.
 
 ```rust
-// Custom 2px emerald focus ring:
+// Standard 1px border with 2px emerald focus ring:
 ui.input(&mut title)
     .border((Color::rgb(0.2, 0.2, 0.2), 1.0))
     .focus_border((Color::rgb(0.1, 0.8, 0.5), 2.0))
@@ -261,25 +236,20 @@ ui.input(&mut search)
 
 ---
 
-### 2.7 Shadows & Opacity
+### 2.7 Shadows & Elevation
 
 #### Method Signatures
 
 ```rust
 pub fn shadow(mut self, color: Color, ox: f32, oy: f32, blur: f32) -> Self
-pub fn shadow_opacity(mut self, opacity: f32) -> Self
-pub fn opacity(mut self, o: f32) -> Self
 ```
 
 #### Description
-- `shadow`: Draws a soft drop shadow beneath the input box.
-- `shadow_opacity`: Multiplier for the shadow color's alpha channel (default: `1.0`).
-- `opacity`: Overall opacity for the entire input quad and glyphs (default: `1.0`).
+- `shadow`: Draws a soft drop shadow beneath the input box. Shadow alpha / opacity is configured directly using `Color::rgba(...)`.
 
 ```rust
 ui.input(&mut search)
-    .shadow(Color::BLACK, 0.0, 4.0, 10.0)
-    .shadow_opacity(0.35)
+    .shadow(Color::rgba(0.0, 0.0, 0.0, 0.35), 0.0, 4.0, 10.0)
     .show();
 ```
 
@@ -398,13 +368,13 @@ A standard dark-mode form input with label, placeholder, subtle border, and roun
 ```rust
 ui.column().spacing(6.0).show(|ui| {
     ui.text("Display Name")
-        .font_size(13.0)
+        .size(13.0)
         .color(Color::rgb(0.70, 0.75, 0.85))
         .show();
 
     ui.input(&mut user.name)
         .width(280.0)
-        .font_size(14.0)
+        .size(14.0)
         .bg(Color::rgb(0.12, 0.13, 0.17))
         .border((Color::rgb(0.22, 0.25, 0.32), 1.0))
         .focus_border((Color::rgb(0.35, 0.60, 0.98), 1.5))
@@ -424,7 +394,7 @@ Pure text with zero background or border when unfocused, activating an elegant a
 ```rust
 // Seamless Inline Input (Directly from docs/api/container.md Section 3.2)
 ui.input(&mut item_name)
-    .font_size(14.0)
+    .size(14.0)
     .bg(None)                                           // Transparent surface
     .border(None)                                       // Borderless when idle
     .focus_border((Color::rgb(0.35, 0.65, 1.0), 1.0))   // Clean highlight when editing
@@ -442,14 +412,13 @@ Pill-shaped search field with subtle depth and clear placeholder:
 ```rust
 ui.input(&mut search_query)
     .fill_x()
-    .font_size(14.0)
+    .size(14.0)
     .bg(Color::rgb(0.14, 0.15, 0.20))
     .border((Color::rgb(0.24, 0.27, 0.35), 1.0))
     .focus_border((Color::rgb(0.40, 0.75, 1.00), 1.5))
     .radius_all(18.0)
     .padding(8.0, 14.0, 8.0, 14.0)
-    .shadow(Color::BLACK, 0.0, 3.0, 8.0)
-    .shadow_opacity(0.30)
+    .shadow(Color::rgba(0.0, 0.0, 0.0, 0.30), 0.0, 3.0, 8.0)
     .placeholder("Search assets, components...")
     .show();
 ```
@@ -495,7 +464,7 @@ ui.row().spacing(8.0).valign(Align::Center).show(|ui| {
     
     ui.input(&mut label_text)
         .width(140.0)
-        .font_size(12.0)
+        .size(12.0)
         .bg(Color::rgb(0.10, 0.11, 0.14))
         .border((Color::rgb(0.20, 0.22, 0.28), 1.0))
         .radius_all(4.0)

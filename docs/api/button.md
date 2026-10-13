@@ -78,23 +78,22 @@ pub fn pos(mut self, x: f32, y: f32) -> Self
 #### Method Signatures
 
 ```rust
-pub fn font_size(mut self, size: f32) -> Self
-pub fn text_color(mut self, color: Color) -> Self
-pub fn color(self, color: Color) -> Self
-
+pub fn size(mut self, size: f32) -> Self
+pub fn color(mut self, color: Color) -> Self
 pub fn font_family(mut self, family: impl Into<String>) -> Self
+pub fn font_weight(mut self, weight: impl Into<zenthra_text::prelude::FontWeight>) -> Self
 pub fn wrap(mut self, strategy: impl Into<zenthra_text::prelude::TextWrap>) -> Self
 ```
 
 #### Defaults
-- `font_size`: `14.0`
-- `text_color`: `Color::WHITE`
+- `size`: `14.0`
+- `color`: `Color::WHITE`
 - `wrap`: `TextWrap::Word`
 
 ```rust
 ui.button("Deploy")
-    .font_size(15.0)
-    .text_color(Color::rgb(0.9, 0.95, 1.0))
+    .size(15.0)
+    .color(Color::rgb(0.9, 0.95, 1.0))
     .show();
 ```
 
@@ -332,7 +331,7 @@ A transparent text-only button with zero borders (directly from [`docs/api/conta
 if ui.button("Cancel")
     .bg(None)                                   // Transparent surface
     .border(None)                               // No border
-    .text_color(Color::rgb(0.70, 0.75, 0.85))
+    .color(Color::rgb(0.70, 0.75, 0.85))
     .show()
     .clicked 
 {

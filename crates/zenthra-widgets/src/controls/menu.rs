@@ -186,11 +186,6 @@ impl<'u, 'a> MenuBuilder<'u, 'a> {
         self
     }
 
-    pub fn text_color(mut self, color: Color) -> Self {
-        self.text_color = Some(color);
-        self
-    }
-
     pub fn hover_text_color(mut self, color: Color) -> Self {
         self.hover_text_color = Some(color);
         self
@@ -223,7 +218,7 @@ impl<'u, 'a> MenuBuilder<'u, 'a> {
         self
     }
 
-    pub fn font_size(mut self, size: f32) -> Self {
+    pub fn size(mut self, size: f32) -> Self {
         self.font_size = size;
         self
     }
@@ -270,7 +265,7 @@ impl<'u, 'a> MenuBuilder<'u, 'a> {
         let mut text_w = self.label.len() as f32 * 7.0;
         if let Some(fs) = self.ui.font_system.as_ref() {
             let mut adapter = zenthra_text::prelude::CosmicFontProvider::new_with_system(fs.clone());
-            let options = zenthra_text::prelude::TextOptions::new().font_size(self.font_size);
+            let options = zenthra_text::prelude::TextOptions::new().size(self.font_size);
             adapter.set_layout_size(1000.0, 100.0);
             let buffer = adapter.shape(&self.label, &options);
             text_w = buffer.size().0;
@@ -382,7 +377,7 @@ impl<'u, 'a> MenuBuilder<'u, 'a> {
             self.ui.draws.push(DrawCommand::Text(TextDraw {
                 text: icon.clone(),
                 pos: [x + self.padding_x, y + (h - self.font_size) / 2.0],
-                options: zenthra_text::prelude::TextOptions::new().font_size(self.font_size).color(text_color),
+                options: zenthra_text::prelude::TextOptions::new().size(self.font_size).color(text_color),
                 clip: [x, y, w, h + 4.0],
             }));
             x + self.padding_x + 18.0
@@ -393,7 +388,7 @@ impl<'u, 'a> MenuBuilder<'u, 'a> {
         self.ui.draws.push(DrawCommand::Text(TextDraw {
             text: self.label.clone(),
             pos: [text_start_x, y + (h - self.font_size) / 2.0],
-            options: zenthra_text::prelude::TextOptions::new().font_size(self.font_size).color(text_color),
+            options: zenthra_text::prelude::TextOptions::new().size(self.font_size).color(text_color),
             clip: [x, y, w, h + 4.0],
         }));
 
@@ -453,9 +448,9 @@ impl<'u, 'a> MenuBuilder<'u, 'a> {
             self.ui.overlay(|ui| {
                 let mut container = ui.container()
                     .raw_id(popup_id)
-                    .absolute(popup_x, popup_y)
+                    .pos(popup_x, popup_y)
                     .overlay()
-                    .no_clip()
+                    .clip(false)
                     .width(self.menu_width)
                     .radius_all(self.radius)
                     .padding(4.0, 4.0, 4.0, 4.0)
@@ -631,7 +626,7 @@ impl<'u, 'a> MenuBuilder<'u, 'a> {
             self.ui.draws.push(DrawCommand::Text(TextDraw {
                 text: icon.clone(),
                 pos: [x + 8.0, y + (h - self.font_size) / 2.0],
-                options: zenthra_text::prelude::TextOptions::new().font_size(self.font_size).color(text_color),
+                options: zenthra_text::prelude::TextOptions::new().size(self.font_size).color(text_color),
                 clip: [x, y, w, h],
             }));
             x + 28.0
@@ -642,14 +637,14 @@ impl<'u, 'a> MenuBuilder<'u, 'a> {
         self.ui.draws.push(DrawCommand::Text(TextDraw {
             text: self.label.clone(),
             pos: [text_start_x, y + (h - self.font_size) / 2.0],
-            options: zenthra_text::prelude::TextOptions::new().font_size(self.font_size).color(text_color),
+            options: zenthra_text::prelude::TextOptions::new().size(self.font_size).color(text_color),
             clip: [x, y, w - 24.0, h],
         }));
 
         self.ui.draws.push(DrawCommand::Text(TextDraw {
             text: crate::icons::NF_FA_CHEVRON_RIGHT.to_string(),
             pos: [x + w - 20.0, y + (h - 10.0) / 2.0],
-            options: zenthra_text::prelude::TextOptions::new().font_size(10.0).color(chevron_color),
+            options: zenthra_text::prelude::TextOptions::new().size(10.0).color(chevron_color),
             clip: [x, y, w, h],
         }));
 
@@ -706,9 +701,9 @@ impl<'u, 'a> MenuBuilder<'u, 'a> {
             self.ui.overlay(|ui| {
                 let mut container = ui.container()
                     .raw_id(sub_popup_id)
-                    .absolute(sub_x, sub_y)
+                    .pos(sub_x, sub_y)
                     .overlay()
-                    .no_clip()
+                    .clip(false)
                     .width(sub_w)
                     .radius_all(self.radius)
                     .padding(4.0, 4.0, 4.0, 4.0)
@@ -804,11 +799,6 @@ impl<'u, 'a> MenuItemBuilder<'u, 'a> {
         self
     }
 
-    pub fn text_color(mut self, color: Color) -> Self {
-        self.text_color = Some(color);
-        self
-    }
-
     pub fn hover_text_color(mut self, color: Color) -> Self {
         self.hover_text_color = Some(color);
         self
@@ -824,7 +814,7 @@ impl<'u, 'a> MenuItemBuilder<'u, 'a> {
         self
     }
 
-    pub fn font_size(mut self, size: f32) -> Self {
+    pub fn size(mut self, size: f32) -> Self {
         self.font_size = size;
         self
     }
@@ -942,7 +932,7 @@ impl<'u, 'a> MenuItemBuilder<'u, 'a> {
             self.ui.draws.push(DrawCommand::Text(TextDraw {
                 text: icon.clone(),
                 pos: [x + 8.0, y + (h - self.font_size) / 2.0],
-                options: zenthra_text::prelude::TextOptions::new().font_size(self.font_size).color(text_color),
+                options: zenthra_text::prelude::TextOptions::new().size(self.font_size).color(text_color),
                 clip: [x, y, w, h],
             }));
             x + 28.0
@@ -953,7 +943,7 @@ impl<'u, 'a> MenuItemBuilder<'u, 'a> {
         self.ui.draws.push(DrawCommand::Text(TextDraw {
             text: self.label.clone(),
             pos: [text_start_x, y + (h - self.font_size) / 2.0],
-            options: zenthra_text::prelude::TextOptions::new().font_size(self.font_size).color(text_color),
+            options: zenthra_text::prelude::TextOptions::new().size(self.font_size).color(text_color),
             clip: [x, y, w - 80.0, h],
         }));
 
@@ -961,7 +951,7 @@ impl<'u, 'a> MenuItemBuilder<'u, 'a> {
             self.ui.draws.push(DrawCommand::Text(TextDraw {
                 text: sh,
                 pos: [x + w - 80.0, y + (h - 12.0) / 2.0],
-                options: zenthra_text::prelude::TextOptions::new().font_size(12.0).color(shortcut_color),
+                options: zenthra_text::prelude::TextOptions::new().size(12.0).color(shortcut_color),
                 clip: [x, y, w, h],
             }));
         }

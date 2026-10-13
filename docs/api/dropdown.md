@@ -241,12 +241,9 @@ Controls text size and label colors across both the trigger button and menu item
 
 ```rust
 /// Sets font size for trigger label and menu items (default 14.0).
-pub fn font_size(mut self, size: f32) -> Self
+pub fn size(mut self, size: f32) -> Self
 
 /// Sets text color for label and chevron.
-pub fn text_color(mut self, color: Color) -> Self
-
-/// Alias for .text_color(color).
 pub fn color(mut self, color: Color) -> Self
 ```
 
@@ -336,7 +333,7 @@ ui.dropdown(&mut selected_branch, branches)
 ```rust
 ui.column().gap(8.0).show(|ui| {
     ui.text("Output Resolution")
-        .font_size(13.0)
+        .size(13.0)
         .color(Color::rgb(0.6, 0.6, 0.7))
         .show();
 

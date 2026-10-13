@@ -1,7 +1,7 @@
 use crate::ui::{Ui, DrawCommand, OverlayRectDraw, ScrollDrag};
 use crate::text::TextBuilder;
 use crate::style_ext::BoxStyleExt;
-use zenthra_core::{BoxStyle, Color, EdgeInsets, Id, Role, SemanticNode, Rect, Styleable};
+use zenthra_core::{BoxStyle, Color, EdgeInsets, Id, IntoBorder, Role, SemanticNode, Rect, Styleable};
 use zenthra_platform::event::PlatformEvent;
 use zenthra_text::prelude::{TextOptions, CosmicFontProvider, ShapedGlyph};
 use zenthra_text::traits::FontProvider;
@@ -322,8 +322,9 @@ impl<'u, 'a, 'b> InputBuilder<'u, 'a, 'b> {
         self
     }
 
-    pub fn focus_border(mut self, border: impl Into<zenthra_core::Border>) -> Self {
-        match border.into() {
+    pub fn focus_border(mut self, border: impl IntoBorder) -> Self {
+        let (b, _align) = border.into_border();
+        match b {
             zenthra_core::Border::None => {
                 self.focus_border_color = Some(Color::TRANSPARENT);
                 self.focus_border_width = Some(0.0);
@@ -397,10 +398,12 @@ impl<'u, 'a, 'b> InputBuilder<'u, 'a, 'b> {
         self
     }
 
-    pub fn show(self) -> zenthra_core::Response {
+    pub fn show(mut self) -> zenthra_core::Response {
         if let Some(mode) = self.render_mode {
             self.ui.render_mode_stack.push(mode);
         }
+        self.x += self.style.margin.left;
+        self.y += self.style.margin.top;
         let mut is_focused = self.ui.focused_id == Some(self.id);
 
         let select_all_key = Id::from_u64(self.id.raw() ^ 0x5E1E_A110);
@@ -422,11 +425,11 @@ impl<'u, 'a, 'b> InputBuilder<'u, 'a, 'b> {
         let (mut w_text_raw, h_content, mut shaped_buffer) = if let Some(fs) = self.ui.font_system.as_ref() {
             let mut adapter = CosmicFontProvider::new_with_system(fs.clone());
             let mut options = TextOptions::new()
-                .font_size(self.text_style.font_size * self.ui.font_scale)
+                .size(self.text_style.font_size * self.ui.font_scale)
                 .font_weight(self.text_style.font_weight)
-                .font_style(self.text_style.font_style)
-                .line_height(self.text_style.line_height)
                 .wrap(zenthra_text::prelude::TextWrap::None);
+            options.font_style = self.text_style.font_style;
+            options.line_height = self.text_style.line_height;
             if let Some(ref family) = self.text_style.font_family {
                 options = options.font_family(family.clone());
             }
@@ -439,10 +442,10 @@ impl<'u, 'a, 'b> InputBuilder<'u, 'a, 'b> {
         };
 
         let min_w = self.style.min_width.unwrap_or(0.0);
-        let max_available_w = (self.ui.max_x - self.x).max(min_w);
+        let max_available_w = (self.ui.max_x - self.x - self.style.margin.right).max(min_w);
         let mut w_box = if self.style.fill_x { max_available_w } else { self.style.width.unwrap_or_else(|| (w_text_raw + self.style.padding.horizontal()).min(max_available_w)).max(min_w) };
         let h_box = if self.style.fill_y {
-            (self.ui.max_y - self.y).max(h_content + self.style.padding.vertical())
+            (self.ui.max_y - self.y - self.style.margin.bottom).max(h_content + self.style.padding.vertical())
         } else {
             self.style.height.unwrap_or(h_content + self.style.padding.vertical())
         };
@@ -908,11 +911,11 @@ impl<'u, 'a, 'b> InputBuilder<'u, 'a, 'b> {
                 let mut adapter = CosmicFontProvider::new_with_system(fs.clone());
                 adapter.set_layout_size(1000000.0, 10000.0);
                 let mut options = TextOptions::new()
-                    .font_size(self.text_style.font_size * self.ui.font_scale)
+                    .size(self.text_style.font_size * self.ui.font_scale)
                     .font_weight(self.text_style.font_weight)
-                    .font_style(self.text_style.font_style)
-                    .line_height(self.text_style.line_height)
                     .wrap(zenthra_text::prelude::TextWrap::None);
+                options.font_style = self.text_style.font_style;
+                options.line_height = self.text_style.line_height;
                 if let Some(ref family) = self.text_style.font_family {
                     options = options.font_family(family.clone());
                 }
@@ -1036,11 +1039,12 @@ impl<'u, 'a, 'b> InputBuilder<'u, 'a, 'b> {
         clean_text_style.highlight_color = None;
 
         let mut text_builder = TextBuilder::new(self.ui, text_to_draw)
-            .text_style(clean_text_style)
             .color(draw_color)
             .wrap(zenthra_text::prelude::TextWrap::None)
             .pos(self.x + self.style.padding.left - scroll_x, self.y + self.style.padding.top)
             .clip_rect(self.x, self.y, w_box, h_box);
+        text_builder.text_style = clean_text_style;
+        text_builder.text_style.color = draw_color;
 
         if self.style.fill_x {
             text_builder = text_builder.fill_x();
@@ -1151,7 +1155,7 @@ impl<'u, 'a, 'b> InputBuilder<'u, 'a, 'b> {
 
         // --- 9. Advance UI ---
         self.ui.record_layout(self.id, Rect::new(self.x, self.y, w_box, h_box));
-        self.ui.advance(w_box, h_box, start_draw);
+        self.ui.advance(w_box + self.style.margin.horizontal(), h_box + self.style.margin.vertical(), start_draw);
 
         if self.render_mode.is_some() {
             self.ui.render_mode_stack.pop();
@@ -1211,7 +1215,6 @@ mod tests {
                 .bg(None)
                 .border(None)
                 .focus_border((Color::rgb(0.35, 0.58, 0.98), 1.5))
-                .shadow_opacity(0.8)
                 .show();
 
             assert_eq!(ui.draws.len(), 2);
@@ -1278,6 +1281,35 @@ mod tests {
             } else {
                 panic!("Expected RectDraw for input at draws[0]");
             }
+        }
+
+        // Case 4: Unified IntoBorder 3-tuple and typography on Input
+        {
+            let mut ui = Ui::new(
+                800, 600, 1.0, None, Vec::new(), None,
+                (0.0, 0.0), false,
+                &mut scroll_state, &mut cursor_state, &mut interaction_state,
+                None, None, false, false, 0.0,
+                &layout_cache, &mut next_layout_cache,
+                &screen_layout_cache, &mut next_screen_layout_cache,
+                &widget_window_map, &mut next_widget_window_map,
+                &image_sizes,
+            );
+
+            let inp = ui.input_with_id(&mut text, "unified_input")
+                .border((Color::GREEN, 2.0, zenthra_core::BorderAlignment::Outside))
+                .focus_border((Color::CYAN, 3.0))
+                .size(16.0)
+                .color(Color::YELLOW)
+                .font_weight(500);
+
+            assert_eq!(inp.style.border, zenthra_core::Border::Solid(Color::GREEN, 2.0));
+            assert_eq!(inp.style.border_alignment, zenthra_core::BorderAlignment::Outside);
+            assert_eq!(inp.focus_border_color, Some(Color::CYAN));
+            assert_eq!(inp.focus_border_width, Some(3.0));
+            assert_eq!(inp.text_style.font_size, 16.0);
+            assert_eq!(inp.text_style.color, Color::YELLOW);
+            assert_eq!(inp.text_style.font_weight, zenthra_text::prelude::FontWeight::Medium);
         }
     }
 }

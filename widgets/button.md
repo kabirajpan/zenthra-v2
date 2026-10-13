@@ -23,7 +23,7 @@ The `Button` is an interactive component with built-in state management for hove
 | Method | Description |
 |--------|-------------|
 | `.bg(Color)` | Sets the idle background color. |
-| `.text_color(Color)` | Sets the label text color. |
+| `.color(Color)` | Sets the label text color. |
 | `.radius(tl, tr, br, bl)` | Sets independent corner radii. |
 | `.stroke(Color, weight)` | Adds a border/stroke around the button. |
 | `.shadow(Color, x, y, blur)` | Adds a drop shadow. |

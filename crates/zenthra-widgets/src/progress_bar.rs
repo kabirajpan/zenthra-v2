@@ -11,7 +11,7 @@ pub struct ProgressBarBuilder<'u, 'a> {
     width: Option<f32>,
     height: Option<f32>,
     padding: EdgeInsets,
-    bg: Option<Color>,
+    bg: Option<zenthra_core::Background>,
     radius: [f32; 4],
     border_color: Option<Color>,
     border_width: f32,
@@ -28,18 +28,15 @@ pub struct ProgressBarBuilder<'u, 'a> {
     shadow_color: Option<Color>,
     shadow_offset: [f32; 2],
     shadow_blur: f32,
-    shadow_opacity: f32,
 
     fill_shadow_color: Option<Color>,
     fill_shadow_offset: [f32; 2],
     fill_shadow_blur: f32,
-    fill_shadow_opacity: f32,
 
     // 5. Effects
     shimmer: bool,
 
     // 6. Gradients
-    bg_gradient: Option<(Color, Color, zenthra_core::GradientDirection)>,
     track_gradient: Option<(Color, Color, zenthra_core::GradientDirection)>,
     fill_gradient: Option<(Color, Color, zenthra_core::GradientDirection)>,
 }
@@ -69,15 +66,12 @@ impl<'u, 'a> ProgressBarBuilder<'u, 'a> {
             shadow_color: None,
             shadow_offset: [0.0, 2.0],
             shadow_blur: 5.0,
-            shadow_opacity: 0.3,
 
             fill_shadow_color: None,
             fill_shadow_offset: [0.0, 1.0],
             fill_shadow_blur: 3.0,
-            fill_shadow_opacity: 0.4,
             
             shimmer: false,
-            bg_gradient: None,
             track_gradient: None,
             fill_gradient: None,
         }
@@ -168,13 +162,11 @@ impl<'u, 'a> ProgressBarBuilder<'u, 'a> {
         self
     }
 
-    pub fn bg(mut self, bg: impl Into<Option<Color>>) -> Self {
-        self.bg = bg.into();
-        self
-    }
-
-    pub fn bg_gradient(mut self, start: Color, end: Color, direction: zenthra_core::GradientDirection) -> Self {
-        self.bg_gradient = Some((start, end, direction));
+    pub fn bg(mut self, bg: impl Into<zenthra_core::Background>) -> Self {
+        match bg.into() {
+            zenthra_core::Background::None => self.bg = None,
+            other => self.bg = Some(other),
+        }
         self
     }
 
@@ -189,11 +181,6 @@ impl<'u, 'a> ProgressBarBuilder<'u, 'a> {
                 self.border_width = w;
             }
         }
-        self
-    }
-
-    pub fn opacity(mut self, o: f32) -> Self {
-        self.opacity = o;
         self
     }
 
@@ -237,20 +224,10 @@ impl<'u, 'a> ProgressBarBuilder<'u, 'a> {
         self
     }
 
-    pub fn shadow_opacity(mut self, opacity: f32) -> Self {
-        self.shadow_opacity = opacity;
-        self
-    }
-
     pub fn fill_shadow(mut self, color: Color, x: f32, y: f32, blur: f32) -> Self {
         self.fill_shadow_color = Some(color);
         self.fill_shadow_offset = [x, y];
         self.fill_shadow_blur = blur;
-        self
-    }
-
-    pub fn fill_shadow_opacity(mut self, opacity: f32) -> Self {
-        self.fill_shadow_opacity = opacity;
         self
     }
 
@@ -272,13 +249,8 @@ impl<'u, 'a> ProgressBarBuilder<'u, 'a> {
         let start_draw = self.ui.draws.len();
 
         // 0. Background
-        if let Some(bg) = self.bg {
-            let (bg_c1, bg_c2, bg_params) = if let Some((s, e, d)) = self.bg_gradient {
-                let (t, a) = d.to_type_and_angle();
-                (s.to_array(), e.to_array(), [t, a, 0.0, 0.0])
-            } else {
-                (bg.to_array(), [0.0; 4], [0.0; 4])
-            };
+        if self.bg.is_some() {
+            let (bg_c1, bg_c2, _c3, _c4, bg_params, _stops, _vis) = crate::style_ext::resolve_background(&self.bg);
 
             self.ui.draws.push(DrawCommand::Rect(RectDraw {
                 instance: RectInstance {
@@ -290,7 +262,7 @@ impl<'u, 'a> ProgressBarBuilder<'u, 'a> {
                     radius: self.radius,
                     border_width: self.border_width,
                     border_color: self.border_color.map(|c| c.to_array()).unwrap_or([0.0; 4]),
-                    opacity: self.opacity,
+                    opacity: 1.0,
                     ..Default::default()
                 }
             }));
@@ -301,11 +273,7 @@ impl<'u, 'a> ProgressBarBuilder<'u, 'a> {
         let track_x = x + self.padding.left;
         let ty = y + (h - self.track_h) / 2.0;
 
-        let mut track_shadow_color = [0.0; 4];
-        if let Some(c) = self.shadow_color {
-            track_shadow_color = c.to_array();
-            track_shadow_color[3] *= self.shadow_opacity;
-        }
+        let track_shadow_color = self.shadow_color.map(|c| c.to_array()).unwrap_or([0.0; 4]);
 
         let (track_c1, track_c2, track_params) = if let Some((s, e, d)) = self.track_gradient {
             let (t, a) = d.to_type_and_angle();
@@ -322,7 +290,7 @@ impl<'u, 'a> ProgressBarBuilder<'u, 'a> {
                 color2: track_c2,
                 gradient_params: track_params,
                 radius: self.radius,
-                opacity: self.opacity,
+                opacity: 1.0,
                 shadow_color: track_shadow_color,
                 shadow_offset: self.shadow_offset,
                 shadow_blur: self.shadow_blur,
@@ -333,11 +301,7 @@ impl<'u, 'a> ProgressBarBuilder<'u, 'a> {
         // 2. Draw Fill
         let fill_w = track_w * self.value;
         if fill_w > 0.1 {
-            let mut fill_shadow_color = [0.0; 4];
-            if let Some(c) = self.fill_shadow_color {
-                fill_shadow_color = c.to_array();
-                fill_shadow_color[3] *= self.fill_shadow_opacity;
-            }
+            let fill_shadow_color = self.fill_shadow_color.map(|c| c.to_array()).unwrap_or([0.0; 4]);
 
             let (fill_c1, fill_c2, fill_params) = if let Some((s, e, d)) = self.fill_gradient {
                 let (t, a) = d.to_type_and_angle();

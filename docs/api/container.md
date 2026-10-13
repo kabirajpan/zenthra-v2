@@ -392,11 +392,8 @@ pub fn stack(mut self) -> Self
 /// Sets the spacing gap in logical pixels between adjacent child widgets.
 pub fn gap(mut self, g: f32) -> Self
 
-/// Enables automatic flex wrapping to the next line when available width is filled.
-pub fn auto_wrap(mut self) -> Self
-
-/// Disables flex wrapping, keeping children strictly on a single line (Default).
-pub fn no_wrap(mut self) -> Self
+/// Sets the child flex wrapping strategy (`Wrap::NoWrap`, `Wrap::Wrap`, `Wrap::WrapReverse`).
+pub fn wrap(mut self, strategy: Wrap) -> Self
 ```
 
 #### Code Examples
@@ -418,7 +415,7 @@ ui.container()
     .column()
     .gap(12.0)
     .show(|ui| {
-        ui.text("General Settings").bold().show();
+        ui.text("General Settings").font_weight(FontWeight::Bold).show();
         ui.checkbox(&mut auto_save, "Auto-save changes").show();
     });
 
@@ -478,7 +475,7 @@ ui.container()
     .halign(Align::SpaceBetween)
     .valign(Align::Center)
     .show(|ui| {
-        ui.text("Project Settings").font_size(16.0).bold().show();
+        ui.text("Project Settings").size(16.0).font_weight(FontWeight::Bold).show();
         ui.button("Close").show();
     });
 
@@ -489,7 +486,7 @@ ui.container()
     .align(Align::Center)
     .gap(8.0)
     .show(|ui| {
-        ui.text("No Items Found").font_size(18.0).bold().show();
+        ui.text("No Items Found").size(18.0).font_weight(FontWeight::Bold).show();
         ui.text("Create a new document to get started.").color(Color::GRAY).show();
     });
 ```
@@ -587,7 +584,7 @@ ui.container()
     .row()
     .valign(Align::Center)
     .show(|ui| {
-        ui.text("My Application").font_size(12.0).show();
+        ui.text("My Application").size(12.0).show();
     });
 
 // 2. Clickable Card Tile
@@ -701,7 +698,7 @@ ui.drag_value(&mut scale, "box_scale")
 ui.drag_value(&mut scale, "txt_scale")
     .bg(None)       // No background box
     .border(None)   // No idle border
-    .text_color(Color::rgb(0.40, 0.75, 1.0)) // Colored accent text
+    .color(Color::rgb(0.40, 0.75, 1.0)) // Colored accent text
     .suffix(" %")
     .show();
 ```
@@ -724,7 +721,7 @@ ui.button("Export")
 ui.button("Cancel")
     .bg(None)       // No background box
     .border(None)   // No border
-    .text_color(Color::rgb(0.70, 0.75, 0.85))
+    .color(Color::rgb(0.70, 0.75, 0.85))
     .show();
 ```
 
@@ -737,7 +734,7 @@ Static text and multiline text areas use the identical parameters when decorated
 ```rust
 // Tag / Badge Text
 ui.text("PRO")
-    .font_size(10.0)
+    .size(10.0)
     .bg(Color::rgb(0.95, 0.65, 0.20))
     .border((Color::rgb(1.0, 0.8, 0.4), 1.0))
     .radius_all(3.0)
@@ -791,8 +788,8 @@ ui.container()
     .gap(10.0)
     .show(|ui| {
         ui.text("TRANSFORM")
-            .font_size(11.0)
-            .bold()
+            .size(11.0)
+            .font_weight(FontWeight::Bold)
             .color(Color::rgb(0.45, 0.65, 1.0))
             .show();
 
@@ -817,14 +814,14 @@ ui.container()
     .gap(10.0)
     .valign(Align::Center)
     .show(|ui| {
-        ui.text("Scale:").font_size(13.0).color(Color::rgb(0.85, 0.88, 0.95)).show();
+        ui.text("Scale:").size(13.0).color(Color::rgb(0.85, 0.88, 0.95)).show();
         ui.drag_value(&mut scale, "scale")
             .bg(None)
             .border(None)
             .suffix(" %")
             .precision(1)
             .width(80.0)
-            .text_color(Color::rgb(0.95, 0.80, 0.40))
+            .color(Color::rgb(0.95, 0.80, 0.40))
             .show();
     });
 ```
@@ -845,7 +842,7 @@ ui.container()
     .padding_all(24.0)
     .gap(16.0)
     .show(|ui| {
-        ui.text("Save Changes?").font_size(18.0).bold().show();
+        ui.text("Save Changes?").size(18.0).font_weight(FontWeight::Bold).show();
         ui.text("You have unsaved changes in this document.").color(Color::GRAY).show();
 
         ui.container().row().halign(Align::Right).gap(10.0).show(|ui| {
@@ -906,7 +903,7 @@ ui.container()
     .halign(Align::SpaceBetween)
     .valign(Align::Center)
     .show(|ui| {
-        ui.text("Zenthra Engine - Composition View").font_size(12.0).bold().show();
+        ui.text("Zenthra Engine - Composition View").size(12.0).font_weight(FontWeight::Bold).show();
 
         ui.container().row().gap(8.0).show(|ui| {
             ui.button("—").width(28.0).bg(None).show();

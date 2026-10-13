@@ -2,7 +2,7 @@
 
 `Toggle` is Zenthra's interactive sliding switch control for immediate-mode boolean state binding. It supports smooth spring animations, track box styling with full `BoxStyle` unification, customizable thumb knobs, optional inner track status labels ("ON" / "OFF"), external labels on either side, glow effects, drop shadows, and disabling.
 
-The `Toggle` widget strictly adheres to the unified styling contract established in [`docs/theming.md`](../theming.md).
+The `Toggle` widget strictly adheres to the unified styling contract established in [`docs/api/macros.md`](macros.md).
 
 ---
 
@@ -69,7 +69,7 @@ pub fn id(mut self, id: impl std::hash::Hash) -> Self
 ### 2.2 Track Box Dimensions & Shape
 
 ```rust
-pub fn size(mut self, width: f32, height: f32) -> Self
+pub fn track_size(mut self, width: f32, height: f32) -> Self
 pub fn width(mut self, width: f32) -> Self      // Default: 48.0
 pub fn height(mut self, height: f32) -> Self    // Default: 24.0
 pub fn padding(mut self, padding: f32) -> Self  // Default: 3.0 (spacing to thumb)
@@ -87,10 +87,11 @@ Generated via `impl_visuals!(ToggleBuilder, ...)`:
 
 ```rust
 pub fn shadow(mut self, color: Color, x: f32, y: f32, blur: f32) -> Self
-pub fn shadow_opacity(mut self, opacity: f32) -> Self
-pub fn border(mut self, border: impl Into<Border>) -> Self
-pub fn opacity(mut self, opacity: f32) -> Self
+pub fn border(mut self, border: impl IntoBorder) -> Self
 ```
+
+- Shadow opacity is configured directly via `Color::rgba(...)`.
+- `.border(...)` accepts `(Color, width)`, `(Color, width, BorderAlignment)`, `Border`, or `None`.
 
 ---
 
@@ -134,13 +135,10 @@ Generated via `impl_text_style_methods!(ToggleBuilder, ...)`:
 pub fn label_left(mut self) -> Self
 pub fn label_right(mut self) -> Self                // Default
 pub fn label_gap(mut self, gap: f32) -> Self        // Default: 10.0
-pub fn font_size(mut self, size: f32) -> Self       // Default: 14.0
-pub fn label_size(mut self, size: f32) -> Self      // Alias for font_size
-pub fn text_color(mut self, color: Color) -> Self   // Default: Color::WHITE
-pub fn label_color(mut self, color: Color) -> Self  // Alias for text_color
+pub fn size(mut self, size: f32) -> Self            // Default: 14.0 (Label text size)
+pub fn color(mut self, color: Color) -> Self        // Default: Color::WHITE (Label text color)
 pub fn active_label(mut self, color: Color) -> Self // Transition color when toggled ON
-pub fn bold(mut self) -> Self
-pub fn italic(mut self) -> Self
+pub fn font_weight(mut self, weight: impl Into<zenthra_text::prelude::FontWeight>) -> Self
 pub fn font_family(mut self, family: impl Into<String>) -> Self
 ```
 
@@ -152,7 +150,6 @@ pub fn font_family(mut self, family: impl Into<String>) -> Self
 pub fn animation_speed(mut self, speed: f32) -> Self // Default: 15.0
 pub fn glow(mut self, enabled: bool) -> Self         // Accent neon aura when active
 pub fn scaling(mut self, hover: f32, pressed: f32) -> Self
-pub fn hover_brightness(mut self, b: f32) -> Self
 pub fn disabled(mut self, disabled: bool) -> Self
 ```
 

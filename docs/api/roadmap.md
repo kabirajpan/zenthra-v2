@@ -91,7 +91,6 @@ Unify all widgets and controls in `zenthra-widgets` to use:
 * `widgets/text.md`
 * `widgets/text_area.md`
 * `widgets/toggle.md`
-* `docs/widget-guide.md`
 
 ---
 
@@ -107,7 +106,6 @@ Unify all widgets and controls in `zenthra-widgets` to use:
      ```rust
      ui.button("Save").style(theme.primary_button)
      ```
-   * Text-bearing widgets must expose `.text_style(TextStyle)`.
 
 3. **No Unintentional Git Commands**:
    * Do not run `git commit`, `git push`, or modifying git operations unless explicitly requested.

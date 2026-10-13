@@ -101,14 +101,11 @@ pub fn opacity(mut self, opacity: f32) -> Self
 Generated via `impl_text_style_methods!`:
 
 ```rust
-pub fn font_size(mut self, size: f32) -> Self      // Default: 14.0
-pub fn label_size(mut self, size: f32) -> Self     // Alias for font_size
-pub fn text_color(mut self, color: Color) -> Self  // Default: Color::WHITE
-pub fn label_color(mut self, color: Color) -> Self // Alias for text_color
+pub fn size(mut self, size: f32) -> Self      // Default: 14.0
+pub fn color(mut self, color: Color) -> Self  // Default: Color::WHITE
 pub fn active_label(mut self, color: Color) -> Self
-pub fn bold(mut self) -> Self
-pub fn italic(mut self) -> Self
 pub fn font_family(mut self, family: impl Into<String>) -> Self
+pub fn font_weight(mut self, weight: impl Into<zenthra_text::prelude::FontWeight>) -> Self
 ```
 
 ---

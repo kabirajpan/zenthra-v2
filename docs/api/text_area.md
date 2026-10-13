@@ -18,7 +18,7 @@ The `TextArea` widget strictly adheres to the unified styling contract establish
    - [2.6 Backgrounds & Colors](#26-backgrounds--colors)
    - [2.7 Borders & Focus Rings](#27-borders--focus-rings)
    - [2.8 Corner Radii](#28-corner-radii)
-   - [2.9 Shadows & Opacity](#29-shadows--opacity)
+   - [2.9 Shadows & Elevation](#29-shadows--elevation)
    - [2.10 Inner Padding & Text Padding](#210-inner-padding--text-padding)
    - [2.11 Enter Key Behavior & Submission](#211-enter-key-behavior--submission)
    - [2.12 Event Handling & Callbacks](#212-event-handling--callbacks)
@@ -94,42 +94,25 @@ pub fn pos(mut self, x: f32, y: f32) -> Self
 #### Method Signatures
 
 ```rust
-// Individual Typography Setters
-pub fn font_size(mut self, size: f32) -> Self
-pub fn color(mut self, color: Color) -> Self
-pub fn text_color(self, color: Color) -> Self // Alias for .color()
-pub fn line_height(mut self, lh: f32) -> Self
+// Individual Typography Setters (via impl_font_style_methods! and impl_text_wrap_methods!)
+pub fn size(mut self, size: f32) -> Self
+pub fn color(mut self, color: zenthra_core::Color) -> Self
 pub fn font_family(mut self, family: impl Into<String>) -> Self
-pub fn family(self, family: impl Into<String>) -> Self
-pub fn monospace(mut self) -> Self
-pub fn font_weight(mut self, weight: impl Into<FontWeight>) -> Self
-pub fn weight(self, weight: impl Into<FontWeight>) -> Self
-pub fn bold(mut self) -> Self
-pub fn font_style(mut self, style: FontStyle) -> Self
-pub fn italic(mut self) -> Self
-
-// Bulk Typography Styling
-pub fn text_style(mut self, style: TextStyle) -> Self
+pub fn font_weight(mut self, weight: impl Into<zenthra_text::prelude::FontWeight>) -> Self
+pub fn wrap(mut self, strategy: impl Into<zenthra_text::prelude::TextWrap>) -> Self
 ```
 
 #### Defaults
-- `font_size`: `18.0`
+- `size`: `18.0`
 - `color`: `Color::WHITE`
-- `line_height`: `1.2`
 - `wrap`: `TextWrap::Word`
 
 ```rust
 // Fluent builder typography:
 ui.text_area(&mut code, "code_view")
-    .monospace()
-    .font_size(13.0)
-    .line_height(1.4)
+    .font_family("Fira Code")
+    .size(13.0)
     .color(Color::rgb(0.85, 0.90, 0.95))
-    .show();
-
-// Bulk TextStyle theme reuse:
-ui.text_area(&mut editor_buffer, "editor")
-    .text_style(my_editor_font)
     .show();
 ```
 
@@ -197,17 +180,13 @@ pub fn wrap(mut self, wrap: zenthra_text::prelude::TextWrap) -> Self // Default:
 
 ```rust
 pub fn bg(mut self, bg: impl Into<zenthra_core::Background>) -> Self
-pub fn bg_gradient(mut self, start: Color, end: Color, direction: GradientDirection) -> Self
-pub fn bg_opacity(mut self, opacity: f32) -> Self
 
 // Bulk Box Styling
 pub fn style(mut self, style: BoxStyle) -> Self
 ```
 
 #### Unified Contract
-- `bg`: Sets the background surface quad. Accepts solid colors or `Background::Solid(Color)`, `Background::Gradient(...)`, or `None` for transparency. Default: `Some(Background::Solid(Color::rgb(0.2, 0.2, 0.2)))`.
-- `bg_gradient`: Sets a linear or radial gradient surface.
-- `bg_opacity`: Controls alpha transparency of the background.
+- `bg`: Sets the background surface quad. Accepts solid colors (e.g. `Color::rgb(...)`, `Color::rgba(...)`), `Background::Solid(Color)`, `Background::Gradient(...)`, or `None` for transparency. Default: `Some(Background::Solid(Color::rgb(0.2, 0.2, 0.2)))`.
 - When `.bg(None)` is set, borders, focus rings, and drop shadows continue to render properly.
 - `style`: Applies a complete, reusable `BoxStyle` theme.
 
@@ -218,23 +197,19 @@ pub fn style(mut self, style: BoxStyle) -> Self
 #### Method Signatures
 
 ```rust
-pub fn border(mut self, border: impl Into<zenthra_core::Border>) -> Self
-pub fn border_alignment(mut self, alignment: BorderAlignment) -> Self
-pub fn focus_border(mut self, border: impl Into<zenthra_core::Border>) -> Self
+pub fn border(mut self, border: impl IntoBorder) -> Self
+pub fn focus_border(mut self, border: impl IntoBorder) -> Self
 ```
 
 #### Behavior & Unified Contract
-- `border(...)`:
-  - Accepts `(Color, f32)` (e.g. `(Color::WHITE, 1.0)`) or `Border::Solid(color, width)`.
-  - Accepts `None` or `Border::None` to remove the border.
-  - Default: `None` (0.0 width).
-- `border_alignment(...)`:
-  - Position of border relative to box boundary (`Inside`, `Center`, or `Outside`).
-- `focus_border(...)`:
-  - Applied automatically whenever the text area is focused.
-  - Accepts `(Color, f32)` or `Border::Solid(color, width)`.
-  - Accepts `None` or `Border::None` to **explicitly disable** the focus border.
-  - If omitted and focused, defaults to `1.0` width accent blue (`Color::rgb(0.4, 0.7, 1.0)`).
+- `border(...)` and `focus_border(...)`:
+  - Accepts `(Color, f32)` or `(Color, f64)`.
+  - Accepts `(Color, f32, BorderAlignment)` or `(Color, f64, BorderAlignment)`.
+  - Accepts `Border` or `(Border, BorderAlignment)`.
+  - Accepts `None` or `Option<Border>` to remove / disable the border.
+  - Default for `border`: `None` (0.0 width).
+  - Default for `focus_border`: If omitted and focused, defaults to `1.0` width accent blue (`Color::rgb(0.4, 0.7, 1.0)`).
+  - Explicit `focus_border(None)` completely disables the focus ring.
 
 ```rust
 // Clean subtle border with vibrant focus ring:
@@ -268,14 +243,21 @@ pub fn radius_bottom_left(mut self, r: f32) -> Self
 
 ---
 
-### 2.9 Shadows & Opacity
+### 2.9 Shadows & Elevation
 
 #### Method Signatures
 
 ```rust
 pub fn shadow(mut self, color: Color, ox: f32, oy: f32, blur: f32) -> Self
-pub fn shadow_opacity(mut self, opacity: f32) -> Self
-pub fn opacity(mut self, o: f32) -> Self
+```
+
+#### Description
+- `shadow`: Draws a soft drop shadow beneath the text area. Shadow alpha / opacity is configured directly using `Color::rgba(...)`.
+
+```rust
+ui.text_area(&mut notes, "notes")
+    .shadow(Color::rgba(0.0, 0.0, 0.0, 0.35), 0.0, 4.0, 10.0)
+    .show();
 ```
 
 ---
@@ -381,8 +363,7 @@ A fixed-dimension code editor with dark background, monospaced line spacing, and
 ui.text_area(&mut script_code, "script_editor")
     .width(560.0)
     .height(280.0)
-    .font_size(13.0)
-    .line_height(1.4)
+    .size(13.0)
     .scrollable(true)
     .wrap(TextWrap::None) // Horizontal scrolling for long code lines
     .bg(Color::rgb(0.08, 0.09, 0.12))
@@ -402,7 +383,7 @@ An auto-expanding comment box that grows naturally with text:
 ```rust
 ui.column().spacing(6.0).show(|ui| {
     ui.text("Feedback / Notes")
-        .font_size(13.0)
+        .size(13.0)
         .color(Color::rgb(0.70, 0.75, 0.85))
         .show();
 
@@ -430,7 +411,7 @@ A distraction-free, seamless note editor with zero idle borders:
 ui.text_area(&mut scratchpad, "scratchpad")
     .fill_x()
     .height(180.0)
-    .font_size(14.0)
+    .size(14.0)
     .bg(None)                                           // Transparent surface
     .border(None)                                       // Borderless when idle
     .focus_border((Color::rgb(0.35, 0.65, 1.0), 1.0))   // Subtle focus box

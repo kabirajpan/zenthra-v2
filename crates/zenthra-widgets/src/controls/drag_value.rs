@@ -118,7 +118,6 @@ pub struct DragValueBuilder<'u, 'a, 'b, N: NumericValue> {
     shadow_color: Option<Color>,
     shadow_offset: [f32; 2],
     shadow_blur: f32,
-    shadow_opacity: f32,
     radius: [f32; 4],
     font_size: f32,
     font_family: Option<String>,
@@ -163,7 +162,6 @@ impl<'u, 'a, 'b, N: NumericValue> DragValueBuilder<'u, 'a, 'b, N> {
             shadow_color: None,
             shadow_offset: [0.0, 0.0],
             shadow_blur: 0.0,
-            shadow_opacity: 1.0,
             radius: [4.0; 4],
             font_size: 12.0,
             font_family: None,
@@ -324,12 +322,6 @@ impl<'u, 'a, 'b, N: NumericValue> DragValueBuilder<'u, 'a, 'b, N> {
         self
     }
 
-    /// Box shadow opacity multiplier
-    pub fn shadow_opacity(mut self, opacity: f32) -> Self {
-        self.shadow_opacity = opacity;
-        self
-    }
-
     /// Corner radius
     pub fn radius(mut self, r: f32) -> Self {
         self.radius = [r; 4];
@@ -349,7 +341,7 @@ impl<'u, 'a, 'b, N: NumericValue> DragValueBuilder<'u, 'a, 'b, N> {
     }
 
     /// Font size
-    pub fn font_size(mut self, size: f32) -> Self {
+    pub fn size(mut self, size: f32) -> Self {
         self.font_size = size;
         self
     }
@@ -361,7 +353,7 @@ impl<'u, 'a, 'b, N: NumericValue> DragValueBuilder<'u, 'a, 'b, N> {
     }
 
     /// Numeric text color
-    pub fn text_color(mut self, color: Color) -> Self {
+    pub fn color(mut self, color: Color) -> Self {
         self.text_color = color;
         self
     }
@@ -663,10 +655,7 @@ impl<'u, 'a, 'b, N: NumericValue> DragValueBuilder<'u, 'a, 'b, N> {
                     radius: self.radius,
                     border_width: self.focus_border_width,
                     border_color: self.focus_border_color.to_array(),
-                    shadow_color: self.shadow_color.map(|mut c| {
-                        c.a *= self.shadow_opacity;
-                        c.to_array()
-                    }).unwrap_or([0.0; 4]),
+                    shadow_color: self.shadow_color.map(|c| c.to_array()).unwrap_or([0.0; 4]),
                     shadow_offset: self.shadow_offset,
                     shadow_blur: self.shadow_blur,
                     clip_rect: [0.0, 0.0, 9999.0, 9999.0],
@@ -681,7 +670,7 @@ impl<'u, 'a, 'b, N: NumericValue> DragValueBuilder<'u, 'a, 'b, N> {
             if let Some(fs) = self.ui.font_system.as_ref() {
                 let mut adapter = zenthra_text::prelude::CosmicFontProvider::new_with_system(fs.clone());
                 let mut options = zenthra_text::prelude::TextOptions::new()
-                    .font_size(self.font_size * self.ui.font_scale)
+                    .size(self.font_size * self.ui.font_scale)
                     .scale_factor(self.ui.scale_factor)
                     .wrap(zenthra_text::prelude::TextWrap::None);
                 if let Some(ref family) = self.font_family {
@@ -718,7 +707,7 @@ impl<'u, 'a, 'b, N: NumericValue> DragValueBuilder<'u, 'a, 'b, N> {
 
             // Text
             let mut text_opts = zenthra_text::prelude::TextOptions::new()
-                .font_size(self.font_size * self.ui.font_scale)
+                .size(self.font_size * self.ui.font_scale)
                 .scale_factor(self.ui.scale_factor)
                 .color(self.text_color)
                 .wrap(zenthra_text::prelude::TextWrap::None)
@@ -952,10 +941,7 @@ impl<'u, 'a, 'b, N: NumericValue> DragValueBuilder<'u, 'a, 'b, N> {
                 radius: self.radius,
                 border_width: self.border_width,
                 border_color: current_border.to_array(),
-                shadow_color: self.shadow_color.map(|mut c| {
-                    c.a *= self.shadow_opacity;
-                    c.to_array()
-                }).unwrap_or([0.0; 4]),
+                shadow_color: self.shadow_color.map(|c| c.to_array()).unwrap_or([0.0; 4]),
                 shadow_offset: self.shadow_offset,
                 shadow_blur: self.shadow_blur,
                 clip_rect: [0.0, 0.0, 9999.0, 9999.0],
@@ -979,7 +965,7 @@ impl<'u, 'a, 'b, N: NumericValue> DragValueBuilder<'u, 'a, 'b, N> {
             let mut adapter =
                 zenthra_text::prelude::CosmicFontProvider::new_with_system(fs.clone());
             let mut options = zenthra_text::prelude::TextOptions::new()
-                .font_size(self.font_size * self.ui.font_scale)
+                .size(self.font_size * self.ui.font_scale)
                 .scale_factor(self.ui.scale_factor)
                 .wrap(zenthra_text::prelude::TextWrap::None);
             if let Some(ref family) = self.font_family {
@@ -1019,7 +1005,7 @@ impl<'u, 'a, 'b, N: NumericValue> DragValueBuilder<'u, 'a, 'b, N> {
             let mut cur_x = tx;
             if !self.prefix.is_empty() {
                 let mut p_opts = zenthra_text::prelude::TextOptions::new()
-                    .font_size(self.font_size * self.ui.font_scale)
+                    .size(self.font_size * self.ui.font_scale)
                     .scale_factor(self.ui.scale_factor)
                     .color(self.prefix_color.unwrap_or(self.text_color))
                     .wrap(zenthra_text::prelude::TextWrap::None)
@@ -1037,7 +1023,7 @@ impl<'u, 'a, 'b, N: NumericValue> DragValueBuilder<'u, 'a, 'b, N> {
             }
 
             let mut n_opts = zenthra_text::prelude::TextOptions::new()
-                .font_size(self.font_size * self.ui.font_scale)
+                .size(self.font_size * self.ui.font_scale)
                 .scale_factor(self.ui.scale_factor)
                 .color(self.text_color)
                 .wrap(zenthra_text::prelude::TextWrap::None)
@@ -1055,7 +1041,7 @@ impl<'u, 'a, 'b, N: NumericValue> DragValueBuilder<'u, 'a, 'b, N> {
 
             if !self.suffix.is_empty() {
                 let mut s_opts = zenthra_text::prelude::TextOptions::new()
-                    .font_size(self.font_size * self.ui.font_scale)
+                    .size(self.font_size * self.ui.font_scale)
                     .scale_factor(self.ui.scale_factor)
                     .color(self.suffix_color.unwrap_or(self.text_color))
                     .wrap(zenthra_text::prelude::TextWrap::None)
@@ -1072,7 +1058,7 @@ impl<'u, 'a, 'b, N: NumericValue> DragValueBuilder<'u, 'a, 'b, N> {
             }
         } else {
             let mut text_opts = zenthra_text::prelude::TextOptions::new()
-                .font_size(self.font_size * self.ui.font_scale)
+                .size(self.font_size * self.ui.font_scale)
                 .scale_factor(self.ui.scale_factor)
                 .color(self.text_color)
                 .wrap(zenthra_text::prelude::TextWrap::None)
@@ -1184,11 +1170,11 @@ mod tests {
                 .padding(24.0, 32.0, 24.0, 32.0)
                 .show(|ui: &mut Ui| {
                     ui.text("Drag Value / Numeric Box")
-                        .font_size(22.0)
+                        .size(22.0)
                         .show();
                     ui.spacing(4.0);
                     ui.text("Scrub horizontally...")
-                        .font_size(13.0)
+                        .size(13.0)
                         .show();
                     ui.spacing(20.0);
 
@@ -1199,12 +1185,12 @@ mod tests {
                                 .fill_x()
                                 .padding(14.0, 16.0, 14.0, 16.0)
                                 .show(|ui: &mut Ui| {
-                                    ui.text("BOX STYLE: TRANSFORM").font_size(11.0).show();
+                                    ui.text("BOX STYLE: TRANSFORM").size(11.0).show();
                                     ui.spacing(10.0);
 
                                     ui.container().row().gap(10.0).valign(Align::Center).show(|ui| {
                                         ui.container().width(70.0).show(|ui| {
-                                            ui.text("Position:").font_size(13.0).show();
+                                            ui.text("Position:").size(13.0).show();
                                         });
                                         ui.drag_value(&mut pos_x, "box_pos_x")
                                             .prefix("X: ")
@@ -1226,7 +1212,7 @@ mod tests {
 
                                     ui.container().row().gap(10.0).valign(Align::Center).show(|ui| {
                                         ui.container().width(70.0).show(|ui| {
-                                            ui.text("Scale:").font_size(13.0).show();
+                                            ui.text("Scale:").size(13.0).show();
                                         });
                                         ui.drag_value(&mut scale, "box_scale")
                                             .min(0.0)
@@ -1237,7 +1223,7 @@ mod tests {
                                             .width(110.0)
                                             .show();
 
-                                        ui.text("Rotation:").font_size(13.0).show();
+                                        ui.text("Rotation:").size(13.0).show();
                                         ui.drag_value(&mut rotation, "box_rotation")
                                             .speed(0.5)
                                             .step(1.0)
@@ -1251,7 +1237,7 @@ mod tests {
 
                                     ui.container().row().gap(10.0).valign(Align::Center).show(|ui| {
                                         ui.container().width(70.0).show(|ui| {
-                                            ui.text("Opacity:").font_size(13.0).show();
+                                            ui.text("Opacity:").size(13.0).show();
                                         });
                                         ui.drag_value(&mut opacity, "box_opacity")
                                             .range(0.0, 100.0)
@@ -1269,11 +1255,11 @@ mod tests {
                                 .fill_x()
                                 .padding(14.0, 16.0, 14.0, 16.0)
                                 .show(|ui: &mut Ui| {
-                                    ui.text("BOX STYLE: TIMELINE / SHADER").font_size(11.0).show();
+                                    ui.text("BOX STYLE: TIMELINE / SHADER").size(11.0).show();
                                     ui.spacing(10.0);
 
                                     ui.container().row().gap(10.0).valign(Align::Center).show(|ui| {
-                                        ui.container().width(95.0).show(|ui| { ui.text("Duration:").font_size(13.0).show(); });
+                                        ui.container().width(95.0).show(|ui| { ui.text("Duration:").size(13.0).show(); });
                                         ui.drag_value(&mut duration_sec, "box_duration")
                                             .min(0.0)
                                             .speed(0.05)
@@ -1286,7 +1272,7 @@ mod tests {
                                     ui.spacing(8.0);
 
                                     ui.container().row().gap(10.0).valign(Align::Center).show(|ui| {
-                                        ui.container().width(95.0).show(|ui| { ui.text("Frames:").font_size(13.0).show(); });
+                                        ui.container().width(95.0).show(|ui| { ui.text("Frames:").size(13.0).show(); });
                                         ui.drag_value(&mut frame_count, "box_frame_count")
                                             .min(0)
                                             .speed(1.0)
@@ -1298,7 +1284,7 @@ mod tests {
                                     ui.spacing(8.0);
 
                                     ui.container().row().gap(10.0).valign(Align::Center).show(|ui| {
-                                        ui.container().width(95.0).show(|ui| { ui.text("Layer:").font_size(13.0).show(); });
+                                        ui.container().width(95.0).show(|ui| { ui.text("Layer:").size(13.0).show(); });
                                         ui.drag_value(&mut layer_id, "box_layer_id")
                                             .min(1)
                                             .speed(1.0)
@@ -1310,7 +1296,7 @@ mod tests {
                                     ui.spacing(8.0);
 
                                     ui.container().row().gap(10.0).valign(Align::Center).show(|ui| {
-                                        ui.container().width(95.0).show(|ui| { ui.text("Roughness:").font_size(13.0).show(); });
+                                        ui.container().width(95.0).show(|ui| { ui.text("Roughness:").size(13.0).show(); });
                                         ui.drag_value(&mut roughness, "box_roughness")
                                             .range(0.0, 1.0)
                                             .speed(0.01)
@@ -1327,12 +1313,12 @@ mod tests {
                                 .fill_x()
                                 .padding(14.0, 16.0, 14.0, 16.0)
                                 .show(|ui: &mut Ui| {
-                                    ui.text("WITHOUT BOX (INTERACTIVE DRAGGABLE TEXT)").font_size(11.0).show();
+                                    ui.text("WITHOUT BOX (INTERACTIVE DRAGGABLE TEXT)").size(11.0).show();
                                     ui.spacing(10.0);
 
                                     ui.container().row().gap(10.0).valign(Align::Center).show(|ui| {
                                         ui.container().width(70.0).show(|ui| {
-                                            ui.text("Position:").font_size(13.0).show();
+                                            ui.text("Position:").size(13.0).show();
                                         });
 
                                         ui.drag_value(&mut pos_x, "txt_pos_x")
@@ -1360,7 +1346,7 @@ mod tests {
 
                                     ui.container().row().gap(10.0).valign(Align::Center).show(|ui| {
                                         ui.container().width(70.0).show(|ui| {
-                                            ui.text("Scale:").font_size(13.0).show();
+                                            ui.text("Scale:").size(13.0).show();
                                         });
                                         ui.drag_value(&mut scale, "txt_scale")
                                             .bg(None)
@@ -1373,7 +1359,7 @@ mod tests {
                                             .width(90.0)
                                             .show();
 
-                                        ui.text("Rotation:").font_size(13.0).show();
+                                        ui.text("Rotation:").size(13.0).show();
                                         ui.drag_value(&mut rotation, "txt_rotation")
                                             .bg(None)
                                             .border(None)
@@ -1389,7 +1375,7 @@ mod tests {
 
                                     ui.container().row().gap(10.0).valign(Align::Center).show(|ui| {
                                         ui.container().width(70.0).show(|ui| {
-                                            ui.text("Opacity:").font_size(13.0).show();
+                                            ui.text("Opacity:").size(13.0).show();
                                         });
                                         ui.drag_value(&mut opacity, "txt_opacity")
                                             .bg(None)
@@ -1401,7 +1387,7 @@ mod tests {
                                             .width(90.0)
                                             .show();
 
-                                        ui.text("Duration:").font_size(13.0).show();
+                                        ui.text("Duration:").size(13.0).show();
                                         ui.drag_value(&mut duration_sec, "txt_duration")
                                             .bg(None)
                                             .border(None)
@@ -1420,11 +1406,11 @@ mod tests {
                                 .fill_x()
                                 .padding(14.0, 16.0, 14.0, 16.0)
                                 .show(|ui: &mut Ui| {
-                                    ui.text("LIVE VALUE READOUT (PURE TEXT)").font_size(11.0).show();
+                                    ui.text("LIVE VALUE READOUT (PURE TEXT)").size(11.0).show();
                                     ui.spacing(10.0);
-                                    ui.text(&format!("Position:    X = {:.1} px,  Y = {:.1} px", pos_x, pos_y)).font_size(13.0).show();
+                                    ui.text(&format!("Position:    X = {:.1} px,  Y = {:.1} px", pos_x, pos_y)).size(13.0).show();
                                     ui.spacing(6.0);
-                                    ui.text(&format!("Scale:       {:.1} %", scale)).font_size(13.0).show();
+                                    ui.text(&format!("Scale:       {:.1} %", scale)).size(13.0).show();
                                 });
                         });
                     });

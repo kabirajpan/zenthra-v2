@@ -14,15 +14,13 @@ pub struct SliderBuilder<'u, 'a, 'b> {
     width: Option<f32>,
     height: Option<f32>,
     padding: EdgeInsets,
-    bg: Option<Color>,
+    bg: Option<zenthra_core::Background>,
     radius: [f32; 4],
     border_color: Option<Color>,
     border_width: f32,
-    opacity: f32,
     shadow_color: Option<Color>,
     shadow_offset: [f32; 2],
     shadow_blur: f32,
-    shadow_opacity: f32,
 
     // 2. Track Style
     track_w: Option<f32>,
@@ -32,7 +30,6 @@ pub struct SliderBuilder<'u, 'a, 'b> {
     track_shadow_color: Option<Color>,
     track_shadow_offset: [f32; 2],
     track_shadow_blur: f32,
-    track_shadow_opacity: f32,
 
     // 3. Thumb Style
     thumb_w: f32,
@@ -42,9 +39,7 @@ pub struct SliderBuilder<'u, 'a, 'b> {
     thumb_shadow_color: Option<Color>,
     thumb_shadow_offset: [f32; 2],
     thumb_shadow_blur: f32,
-    thumb_shadow_opacity: f32,
 
-    bg_gradient: Option<(Color, Color, zenthra_core::GradientDirection)>,
     track_gradient: Option<(Color, Color, zenthra_core::GradientDirection)>,
     thumb_gradient: Option<(Color, Color, zenthra_core::GradientDirection)>,
 }
@@ -68,11 +63,9 @@ impl<'u, 'a, 'b> SliderBuilder<'u, 'a, 'b> {
             radius: [0.0; 4],
             border_color: None,
             border_width: 0.0,
-            opacity: 1.0,
             shadow_color: None,
             shadow_offset: [0.0; 2],
             shadow_blur: 0.0,
-            shadow_opacity: 1.0,
 
             // Default Track Style
             track_w: None,
@@ -82,7 +75,6 @@ impl<'u, 'a, 'b> SliderBuilder<'u, 'a, 'b> {
             track_shadow_color: None,
             track_shadow_offset: [0.0; 2],
             track_shadow_blur: 0.0,
-            track_shadow_opacity: 1.0,
 
             // Default Thumb Style
             thumb_w: 16.0,
@@ -92,8 +84,6 @@ impl<'u, 'a, 'b> SliderBuilder<'u, 'a, 'b> {
             thumb_shadow_color: None,
             thumb_shadow_offset: [0.0; 2],
             thumb_shadow_blur: 0.0,
-            thumb_shadow_opacity: 1.0,
-            bg_gradient: None,
             track_gradient: None,
             thumb_gradient: None,
         }
@@ -200,13 +190,11 @@ impl<'u, 'a, 'b> SliderBuilder<'u, 'a, 'b> {
         self
     }
 
-    pub fn bg(mut self, bg: impl Into<Option<Color>>) -> Self {
-        self.bg = bg.into();
-        self
-    }
-
-    pub fn bg_gradient(mut self, start: Color, end: Color, direction: zenthra_core::GradientDirection) -> Self {
-        self.bg_gradient = Some((start, end, direction));
+    pub fn bg(mut self, bg: impl Into<zenthra_core::Background>) -> Self {
+        match bg.into() {
+            zenthra_core::Background::None => self.bg = None,
+            other => self.bg = Some(other),
+        }
         self
     }
 
@@ -224,20 +212,10 @@ impl<'u, 'a, 'b> SliderBuilder<'u, 'a, 'b> {
         self
     }
 
-    pub fn opacity(mut self, o: f32) -> Self {
-        self.opacity = o;
-        self
-    }
-
     pub fn shadow(mut self, color: Color, ox: f32, oy: f32, blur: f32) -> Self {
         self.shadow_color = Some(color);
         self.shadow_offset = [ox, oy];
         self.shadow_blur = blur;
-        self
-    }
-
-    pub fn shadow_opacity(mut self, o: f32) -> Self {
-        self.shadow_opacity = o;
         self
     }
 
@@ -292,11 +270,6 @@ impl<'u, 'a, 'b> SliderBuilder<'u, 'a, 'b> {
         self
     }
 
-    pub fn track_shadow_opacity(mut self, o: f32) -> Self {
-        self.track_shadow_opacity = o;
-        self
-    }
-
     // --- 3. Thumb Methods ---
     pub fn thumb_size(mut self, w: f32, h: f32) -> Self {
         self.thumb_w = w;
@@ -323,11 +296,6 @@ impl<'u, 'a, 'b> SliderBuilder<'u, 'a, 'b> {
         self.thumb_shadow_color = Some(color);
         self.thumb_shadow_offset = [ox, oy];
         self.thumb_shadow_blur = blur;
-        self
-    }
-
-    pub fn thumb_shadow_opacity(mut self, o: f32) -> Self {
-        self.thumb_shadow_opacity = o;
         self
     }
 
@@ -451,13 +419,8 @@ impl<'u, 'a, 'b> SliderBuilder<'u, 'a, 'b> {
         let track_w = w - self.padding.horizontal();
 
         // 0. Background
-        if self.bg.is_some() || self.bg_gradient.is_some() || self.border_color.is_some() || self.shadow_color.is_some() {
-            let (bg_c1, bg_c2, bg_params) = if let Some((s, e, d)) = self.bg_gradient {
-                let (t, a) = d.to_type_and_angle();
-                (s.to_array(), e.to_array(), [t, a, 0.0, 0.0])
-            } else {
-                (self.bg.unwrap_or(Color::TRANSPARENT).to_array(), [0.0; 4], [0.0; 4])
-            };
+        if self.bg.is_some() || self.border_color.is_some() || self.shadow_color.is_some() {
+            let (bg_c1, bg_c2, _c3, _c4, bg_params, _stops, _vis) = crate::style_ext::resolve_background(&self.bg);
 
             self.ui.draws.push(DrawCommand::Rect(RectDraw {
                 instance: RectInstance {
@@ -474,10 +437,10 @@ impl<'u, 'a, 'b> SliderBuilder<'u, 'a, 'b> {
                     ],
                     border_width: self.border_width,
                     border_color: self.border_color.map(|c| c.to_array()).unwrap_or([0.0; 4]),
-                    shadow_color: self.shadow_color.map(|mut c| { c.a *= self.shadow_opacity; c.to_array() }).unwrap_or([0.0; 4]),
+                    shadow_color: self.shadow_color.map(|c| c.to_array()).unwrap_or([0.0; 4]),
                     shadow_offset: self.shadow_offset,
                     shadow_blur: self.shadow_blur,
-                    opacity: self.opacity,
+                    opacity: 1.0,
                     ..Default::default()
                 }
             }));
@@ -505,10 +468,10 @@ impl<'u, 'a, 'b> SliderBuilder<'u, 'a, 'b> {
                     self.track_radius[1],
                     self.track_radius[0],
                 ],
-                shadow_color: self.track_shadow_color.map(|mut c| { c.a *= self.track_shadow_opacity; c.to_array() }).unwrap_or([0.0; 4]),
+                shadow_color: self.track_shadow_color.map(|c| c.to_array()).unwrap_or([0.0; 4]),
                 shadow_offset: self.track_shadow_offset,
                 shadow_blur: self.track_shadow_blur,
-                opacity: self.opacity,
+                opacity: 1.0,
                 ..Default::default()
             }
         }));
@@ -546,10 +509,10 @@ impl<'u, 'a, 'b> SliderBuilder<'u, 'a, 'b> {
                     self.thumb_radius[0],
                 ],
                 brightness,
-                shadow_color: self.thumb_shadow_color.map(|mut c| { c.a *= self.thumb_shadow_opacity; c.to_array() }).unwrap_or([0.0; 4]),
+                shadow_color: self.thumb_shadow_color.map(|c| c.to_array()).unwrap_or([0.0; 4]),
                 shadow_offset: self.thumb_shadow_offset,
                 shadow_blur: self.thumb_shadow_blur,
-                opacity: self.opacity,
+                opacity: 1.0,
                 ..Default::default()
             }
         }));
@@ -629,8 +592,7 @@ mod tests {
                 .width(200.0)
                 .border((Color::WHITE, 1.5))
                 .radius_all(6.0)
-                .shadow(Color::BLACK, 0.0, 2.0, 4.0)
-                .shadow_opacity(0.4)
+                .shadow(Color::rgba(0.0, 0.0, 0.0, 0.4), 0.0, 2.0, 4.0)
                 .show();
 
             assert_eq!(ui.draws.len(), 3, "Decorated slider must emit Background/Border quad");

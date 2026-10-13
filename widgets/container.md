@@ -26,8 +26,6 @@ The `Container` is the core layout and styling primitive of Zenthra. It provides
 | `.fill()` | Expand to fill all available parent space (both X and Y). |
 | `.fill_x()` | Expand horizontally to fill available space. |
 | `.fill_y()` | Expand vertically to fill available space. |
-| `.full_width()` | Alias for `.fill_x()`. |
-| `.full_height()` | Alias for `.fill_y()`. |
 | `.absolute(x, y)` | Places the container at an absolute position, ignoring flow. |
 | `.pos(x, y)` | Sets the starting cursor position for this container. |
 
@@ -41,7 +39,6 @@ The `Container` is the core layout and styling primitive of Zenthra. It provides
 | `.align(Align)` | Sets both horizontal and vertical alignment. |
 | `.gap(f32)` | Sets the spacing between child elements. |
 | `.wrap(Wrap)` | Sets wrapping strategy (`NoWrap`, `Wrap`, `WrapReverse`, etc.). |
-| `.no_wrap()` | Disables wrapping (Default). |
 
 ### Padding & Borders
 | Method | Description |
@@ -54,7 +51,6 @@ The `Container` is the core layout and styling primitive of Zenthra. It provides
 | `.padding_left(f32)` | Sets only left padding. |
 | `.padding_right(f32)` | Sets only right padding. |
 | `.border(Color, width)` | Sets the border color and width. |
-| `.border_alignment(BorderAlignment)`| Sets border placement: `Inside`, `Center`, or `Outside`. |
 
 ### Visual Styling
 | Method | Description |

@@ -28,7 +28,7 @@ fn main() {
                                 .show();
 
                             ui.text("Demonstrating unified BoxStyle properties, interactive states (hover/press), gradients, borders, shadows, and click responses.")
-                                .font_size(14.0)
+                                .size(14.0)
                                 .color(Color::rgb(0.60, 0.65, 0.75))
                                 .show();
                         });
@@ -45,13 +45,13 @@ fn main() {
                         .valign(Align::Center)
                         .show(|ui: &mut Ui| {
                             ui.text(&format!("Counter: {}", click_count))
-                                .font_size(16.0)
-                                .weight(FontWeight::Bold)
+                                .size(16.0)
+                                .font_weight(FontWeight::Bold)
                                 .color(Color::rgb(0.35, 0.75, 1.0))
                                 .show();
 
                             ui.text(&format!("Last Action: {}", last_action))
-                                .font_size(14.0)
+                                .size(14.0)
                                 .color(Color::rgb(0.75, 0.80, 0.90))
                                 .show();
 
@@ -61,7 +61,7 @@ fn main() {
                                 .border((Color::rgb(0.30, 0.35, 0.45), 1.0))
                                 .radius_all(6.0)
                                 .padding(6.0, 14.0, 6.0, 14.0)
-                                .font_size(13.0)
+                                .size(13.0)
                                 .show()
                                 .clicked
                             {
@@ -92,8 +92,8 @@ fn main() {
                                     .active_bg(Color::rgb(0.10, 0.35, 0.80))
                                     .radius_all(6.0)
                                     .padding(8.0, 18.0, 8.0, 18.0)
-                                    .font_size(14.0)
-                                    .weight(FontWeight::Bold)
+                                    .size(14.0)
+                                    .font_weight(FontWeight::Bold)
                                     .show()
                                     .clicked
                                 {
@@ -109,7 +109,7 @@ fn main() {
                                     .border((Color::rgb(0.26, 0.31, 0.40), 1.0))
                                     .radius_all(6.0)
                                     .padding(8.0, 18.0, 8.0, 18.0)
-                                    .font_size(14.0)
+                                    .size(14.0)
                                     .show()
                                     .clicked
                                 {
@@ -124,7 +124,7 @@ fn main() {
                                     .active_bg(Color::rgb(0.09, 0.48, 0.28))
                                     .radius_all(6.0)
                                     .padding(8.0, 18.0, 8.0, 18.0)
-                                    .font_size(14.0)
+                                    .size(14.0)
                                     .show()
                                     .clicked
                                 {
@@ -139,7 +139,7 @@ fn main() {
                                     .active_bg(Color::rgb(0.60, 0.14, 0.14))
                                     .radius_all(6.0)
                                     .padding(8.0, 18.0, 8.0, 18.0)
-                                    .font_size(14.0)
+                                    .size(14.0)
                                     .show()
                                     .clicked
                                 {
@@ -152,10 +152,10 @@ fn main() {
                                     .bg(None)
                                     .hover_bg(Color::rgba(1.0, 1.0, 1.0, 0.08))
                                     .active_bg(Color::rgba(1.0, 1.0, 1.0, 0.04))
-                                    .text_color(Color::rgb(0.70, 0.85, 1.0))
+                                    .color(Color::rgb(0.70, 0.85, 1.0))
                                     .radius_all(6.0)
                                     .padding(8.0, 18.0, 8.0, 18.0)
-                                    .font_size(14.0)
+                                    .size(14.0)
                                     .show()
                                     .clicked
                                 {
@@ -201,10 +201,9 @@ fn main() {
                                     .hover_bg(neon_hover_grad)
                                     .radius_all(8.0)
                                     .padding(10.0, 24.0, 10.0, 24.0)
-                                    .font_size(15.0)
-                                    .weight(FontWeight::Bold)
-                                    .shadow(Color::rgb(0.50, 0.15, 0.85), 0.0, 4.0, 16.0)
-                                    .shadow_opacity(0.40)
+                                    .size(15.0)
+                                    .font_weight(FontWeight::Bold)
+                                    .shadow(Color::rgba(0.50, 0.15, 0.85, 0.40), 0.0, 4.0, 16.0)
                                     .show()
                                     .clicked
                                 {
@@ -225,10 +224,9 @@ fn main() {
                                     .bg(sunset_grad)
                                     .radius_all(20.0) // Pill shape
                                     .padding(10.0, 24.0, 10.0, 24.0)
-                                    .font_size(15.0)
-                                    .weight(FontWeight::Bold)
-                                    .shadow(Color::rgb(0.85, 0.30, 0.10), 0.0, 4.0, 14.0)
-                                    .shadow_opacity(0.45)
+                                    .size(15.0)
+                                    .font_weight(FontWeight::Bold)
+                                    .shadow(Color::rgba(0.85, 0.30, 0.10, 0.45), 0.0, 4.0, 14.0)
                                     .show()
                                     .clicked
                                 {
@@ -262,7 +260,7 @@ fn main() {
                                     .hover_bg(Color::rgba(0.35, 0.65, 1.0, 0.12))
                                     .radius_all(6.0)
                                     .padding(8.0, 20.0, 8.0, 20.0)
-                                    .text_color(Color::rgb(0.85, 0.92, 1.0))
+                                    .color(Color::rgb(0.85, 0.92, 1.0))
                                     .show()
                                     .clicked
                                 {
@@ -308,7 +306,7 @@ fn main() {
                                     .bg(Color::rgb(0.18, 0.20, 0.26))
                                     .hover_bg(Color::rgb(0.75, 0.20, 0.20))
                                     .radius_all(6.0)
-                                    .font_size(14.0)
+                                    .size(14.0)
                                     .show()
                                     .clicked
                                 {
@@ -357,14 +355,72 @@ fn main() {
                                 .hover_bg(Color::rgb(0.20, 0.26, 0.36))
                                 .border((Color::rgb(0.25, 0.32, 0.45), 1.0))
                                 .radius_all(8.0)
-                                .font_size(15.0)
-                                .weight(FontWeight::Bold)
+                                .size(15.0)
+                                .font_weight(FontWeight::Bold)
                                 .show()
                                 .clicked
                             {
                                 click_count += 1;
                                 last_action = String::from("Clicked 'Full Width Block Button'");
                             }
+                        });
+
+                    // ── SECTION 5: MARGINS & SPACING (.margin, .margin_x, .margin_top) ──
+                    ui.container()
+                        .fill_x()
+                        .bg(Color::rgb(0.09, 0.11, 0.15))
+                        .border((Color::rgb(0.18, 0.22, 0.30), 1.0))
+                        .radius_all(10.0)
+                        .padding_all(18.0)
+                        .column()
+                        .gap(12.0)
+                        .show(|ui: &mut Ui| {
+                            ui.h3("5. Outer Margins & Independent Spacing")
+                                .color(Color::rgb(0.35, 0.65, 1.0))
+                                .show();
+
+                            ui.text("Buttons can declare outer margins (.margin, .margin_x, .margin_left/right) to establish independent spacing beyond container gaps.")
+                                .size(13.0)
+                                .color(Color::rgb(0.60, 0.65, 0.75))
+                                .show();
+
+                            ui.row().bg(Color::rgb(0.12, 0.14, 0.19)).radius_all(8.0).padding_all(10.0).show(|ui: &mut Ui| {
+                                if ui.button("Leading Action")
+                                    .bg(Color::rgb(0.18, 0.22, 0.30))
+                                    .padding(6.0, 14.0, 6.0, 14.0)
+                                    .radius_all(6.0)
+                                    .margin_right(18.0)
+                                    .show()
+                                    .clicked
+                                {
+                                    click_count += 1;
+                                    last_action = String::from("Clicked Leading Action (margin_right: 18px)");
+                                }
+
+                                if ui.button("Centered Tag")
+                                    .bg(Color::rgb(0.20, 0.35, 0.50))
+                                    .padding(6.0, 14.0, 6.0, 14.0)
+                                    .radius_all(6.0)
+                                    .margin_x(8.0)
+                                    .show()
+                                    .clicked
+                                {
+                                    click_count += 1;
+                                    last_action = String::from("Clicked Centered Tag (margin_x: 8px)");
+                                }
+
+                                if ui.button("Floating CTA")
+                                    .bg(Color::rgb(0.10, 0.65, 0.40))
+                                    .padding(6.0, 16.0, 6.0, 16.0)
+                                    .radius_all(6.0)
+                                    .margin_left(24.0)
+                                    .show()
+                                    .clicked
+                                {
+                                    click_count += 1;
+                                    last_action = String::from("Clicked Floating CTA (margin_left: 24px)");
+                                }
+                            });
                         });
                 });
         })

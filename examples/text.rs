@@ -25,7 +25,7 @@ fn main() {
                                 .show();
 
                             ui.text("Demonstrating font sizes, weights, styles, word-wrapping, badges, and selectable text.")
-                                .font_size(14.0)
+                                .size(14.0)
                                 .color(Color::rgb(0.60, 0.65, 0.75))
                                 .show();
                         });
@@ -61,7 +61,7 @@ fn main() {
                                 .show();
 
                             ui.text("Body regular text (16px Normal)")
-                                .font_size(16.0)
+                                .size(16.0)
                                 .color(Color::rgb(0.60, 0.65, 0.75))
                                 .show();
                         });
@@ -86,37 +86,37 @@ fn main() {
                                 .valign(Align::Center)
                                 .show(|ui: &mut Ui| {
                                     ui.text("Regular Text")
-                                        .font_size(15.0)
+                                        .size(15.0)
                                         .color(Color::WHITE)
                                         .show();
 
                                     ui.text("Bold Text")
-                                        .font_size(15.0)
-                                        .bold()
+                                        .size(15.0)
+                                        .font_weight(FontWeight::Bold)
                                         .color(Color::WHITE)
                                         .show();
 
                                     ui.text("Italic Text")
-                                        .font_size(15.0)
-                                        .italic()
+                                        .size(15.0)
+                                        .decoration(TextDecoration::Italic)
                                         .color(Color::rgb(0.80, 0.85, 0.95))
                                         .show();
 
                                     ui.text("Underline Text")
-                                        .font_size(15.0)
-                                        .underline(true)
+                                        .size(15.0)
+                                        .decoration(TextDecoration::Underline)
                                         .color(Color::rgb(0.40, 0.85, 0.60))
                                         .show();
 
                                     ui.text("Strikethrough")
-                                        .font_size(15.0)
-                                        .strikethrough(true)
+                                        .size(15.0)
+                                        .decoration(TextDecoration::Strikethrough)
                                         .color(Color::rgb(0.65, 0.70, 0.80))
                                         .show();
 
                                     ui.text("Monospace Code")
-                                        .font_size(15.0)
-                                        .monospace()
+                                        .size(15.0)
+                                        .font_family("monospace")
                                         .color(Color::rgb(0.40, 0.80, 0.95))
                                         .show();
                                 });
@@ -143,8 +143,8 @@ fn main() {
                                 .show(|ui: &mut Ui| {
                                     // Primary Badge
                                     ui.text("PRIMARY")
-                                        .font_size(11.0)
-                                        .bold()
+                                        .size(11.0)
+                                        .font_weight(FontWeight::Bold)
                                         .color(Color::WHITE)
                                         .bg(Color::rgb(0.20, 0.42, 0.88))
                                         .border((Color::rgb(0.35, 0.60, 1.0), 1.0))
@@ -154,8 +154,8 @@ fn main() {
 
                                     // Success Badge
                                     ui.text("ACTIVE")
-                                        .font_size(11.0)
-                                        .bold()
+                                        .size(11.0)
+                                        .font_weight(FontWeight::Bold)
                                         .color(Color::rgb(0.20, 0.85, 0.45))
                                         .bg(Color::rgb(0.10, 0.25, 0.16))
                                         .border((Color::rgb(0.20, 0.60, 0.35), 1.0))
@@ -165,8 +165,8 @@ fn main() {
 
                                     // Warning Pill Tag
                                     ui.text("PENDING")
-                                        .font_size(11.0)
-                                        .bold()
+                                        .size(11.0)
+                                        .font_weight(FontWeight::Bold)
                                         .color(Color::rgb(1.0, 0.75, 0.20))
                                         .bg(Color::rgb(0.25, 0.18, 0.08))
                                         .border((Color::rgb(0.65, 0.45, 0.15), 1.0))
@@ -176,8 +176,8 @@ fn main() {
 
                                     // Error Badge
                                     ui.text("CRITICAL")
-                                        .font_size(11.0)
-                                        .bold()
+                                        .size(11.0)
+                                        .font_weight(FontWeight::Bold)
                                         .color(Color::rgb(1.0, 0.35, 0.35))
                                         .bg(Color::rgb(0.26, 0.10, 0.10))
                                         .border((Color::rgb(0.65, 0.25, 0.25), 1.0))
@@ -216,16 +216,16 @@ fn main() {
                                         .gap(8.0)
                                         .show(|ui: &mut Ui| {
                                             ui.text("Multi-line Auto Wrap")
-                                                .font_size(12.0)
-                                                .bold()
+                                                .size(12.0)
+                                                .font_weight(FontWeight::Bold)
                                                 .color(Color::rgb(0.45, 0.65, 1.0))
                                                 .show();
 
                                             ui.text("Zenthra computes typography layout with sub-pixel precision. When text exceeds available container width, it seamlessly breaks across word boundaries while maintaining consistent line spacing.")
-                                                .font_size(14.0)
+                                                .size(14.0)
                                                 .color(Color::rgb(0.80, 0.85, 0.92))
-                                                .line_height(20.0)
-                                                .auto_wrap()
+                                                .decoration(TextDecoration::LineHeight(20.0))
+                                                .wrap(TextWrap::Word)
                                                 .selectable(true)
                                                 .show();
                                         });
@@ -241,16 +241,16 @@ fn main() {
                                         .gap(8.0)
                                         .show(|ui: &mut Ui| {
                                             ui.text("Single-Line Ellipsis")
-                                                .font_size(12.0)
-                                                .bold()
+                                                .size(12.0)
+                                                .font_weight(FontWeight::Bold)
                                                 .color(Color::rgb(0.45, 0.65, 1.0))
                                                 .show();
 
                                             ui.text("This very long single line of text will be neatly truncated with an ellipsis rather than overflowing its parent container boundary.")
-                                                .font_size(14.0)
+                                                .size(14.0)
                                                 .color(Color::rgb(0.80, 0.85, 0.92))
                                                 .width(250.0)
-                                                .no_wrap()
+                                                .wrap(TextWrap::None)
                                                 .ellipsis(true)
                                                 .show();
                                         });
@@ -272,11 +272,63 @@ fn main() {
                                 .show();
 
                             ui.text("You can click and drag across this text to select it. Try selecting this sentence!")
-                                .font_size(15.0)
+                                .size(15.0)
                                 .color(Color::rgb(0.90, 0.92, 0.98))
                                 .selectable(true)
                                 .cursor(CursorIcon::Text)
                                 .show();
+                        });
+
+                    // ── SECTION 6: TYPOGRAPHY MARGINS & SPACING ───────────────
+                    ui.container()
+                        .fill_x()
+                        .bg(Color::rgb(0.09, 0.11, 0.15))
+                        .border((Color::rgb(0.18, 0.22, 0.30), 1.0))
+                        .radius_all(10.0)
+                        .padding_all(18.0)
+                        .column()
+                        .show(|ui: &mut Ui| {
+                            ui.h3("6. Outer Margins on Text Elements")
+                                .color(Color::rgb(0.35, 0.65, 1.0))
+                                .margin_bottom(12.0)
+                                .show();
+
+                            ui.text("Text elements support .margin, .margin_top, and .margin_bottom, allowing typographic vertical rhythm without container wrapper nesting.")
+                                .size(14.0)
+                                .color(Color::rgb(0.70, 0.75, 0.85))
+                                .margin_bottom(16.0)
+                                .show();
+
+                            ui.row().show(|ui: &mut Ui| {
+                                ui.text("TAG 1")
+                                    .size(11.0)
+                                    .font_weight(FontWeight::Bold)
+                                    .color(Color::WHITE)
+                                    .bg(Color::rgb(0.20, 0.40, 0.80))
+                                    .radius_all(4.0)
+                                    .padding(3.0, 8.0, 3.0, 8.0)
+                                    .margin_right(12.0)
+                                    .show();
+
+                                ui.text("TAG 2 (Margin Separated)")
+                                    .size(11.0)
+                                    .font_weight(FontWeight::Bold)
+                                    .color(Color::WHITE)
+                                    .bg(Color::rgb(0.30, 0.25, 0.60))
+                                    .radius_all(4.0)
+                                    .padding(3.0, 8.0, 3.0, 8.0)
+                                    .margin_right(12.0)
+                                    .show();
+
+                                ui.text("TAG 3")
+                                    .size(11.0)
+                                    .font_weight(FontWeight::Bold)
+                                    .color(Color::WHITE)
+                                    .bg(Color::rgb(0.15, 0.50, 0.35))
+                                    .radius_all(4.0)
+                                    .padding(3.0, 8.0, 3.0, 8.0)
+                                    .show();
+                            });
                         });
                 });
         })

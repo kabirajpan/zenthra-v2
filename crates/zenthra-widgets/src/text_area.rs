@@ -1,7 +1,7 @@
 use crate::ui::{Ui, DrawCommand, OverlayRectDraw};
 use crate::text::TextBuilder;
 use crate::style_ext::BoxStyleExt;
-use zenthra_core::{BoxStyle, Color, EdgeInsets, Id, Rect, Styleable};
+use zenthra_core::{BoxStyle, Color, EdgeInsets, Id, IntoBorder, Rect, Styleable};
 use zenthra_platform::event::PlatformEvent;
 use zenthra_text::prelude::{TextOptions, CosmicFontProvider};
 // use zenthra_text::traits::FontProvider;
@@ -487,8 +487,9 @@ impl<'u, 'a, 'b> TextAreaBuilder<'u, 'a, 'b> {
         self
     }
 
-    pub fn focus_border(mut self, border: impl Into<zenthra_core::Border>) -> Self {
-        match border.into() {
+    pub fn focus_border(mut self, border: impl IntoBorder) -> Self {
+        let (b, _align) = border.into_border();
+        match b {
             zenthra_core::Border::None => {
                 self.focus_border_color = Some(Color::TRANSPARENT);
                 self.focus_border_width = Some(0.0);
@@ -567,10 +568,12 @@ impl<'u, 'a, 'b> TextAreaBuilder<'u, 'a, 'b> {
         self
     }
 
-    pub fn show(self) -> zenthra_core::Response {
+    pub fn show(mut self) -> zenthra_core::Response {
         if let Some(mode) = self.render_mode {
             self.ui.render_mode_stack.push(mode);
         }
+        self.x += self.style.margin.left;
+        self.y += self.style.margin.top;
         let mut is_focused = self.ui.focused_id == Some(self.id);
 
         let select_all_key = Id::from_u64(self.id.raw() ^ 0x5E1E_A110);
@@ -592,7 +595,7 @@ impl<'u, 'a, 'b> TextAreaBuilder<'u, 'a, 'b> {
 
         // --- 2. Initial Measure (to get content height) ---
         let actual_width = if self.style.fill_x {
-            (self.ui.max_x - self.x).max(self.style.width.unwrap_or(300.0))
+            (self.ui.max_x - self.x - self.style.margin.right).max(self.style.width.unwrap_or(300.0))
         } else {
             self.style.width.unwrap_or(300.0)
         };
@@ -604,12 +607,12 @@ impl<'u, 'a, 'b> TextAreaBuilder<'u, 'a, 'b> {
             adapter.set_layout_size(layout_width, 10000.0);
             
             let mut options = TextOptions::new()
-                .font_size(effective_font_size)
+                .size(effective_font_size)
                 .font_weight(self.text_style.font_weight)
-                .font_style(self.text_style.font_style)
-                .line_height(self.text_style.line_height)
                 .wrap(self.text_style.wrap)
                 .max_width(layout_width);
+            options.font_style = self.text_style.font_style;
+            options.line_height = self.text_style.line_height;
             if let Some(ref family) = self.text_style.font_family {
                 options = options.font_family(family.clone());
             }
@@ -647,7 +650,7 @@ impl<'u, 'a, 'b> TextAreaBuilder<'u, 'a, 'b> {
         }
 
         if self.style.fill_y {
-            h_box = (self.ui.max_y - self.y).max(h_box);
+            h_box = (self.ui.max_y - self.y - self.style.margin.bottom).max(h_box);
         }
 
         // --- 3. Handle Events ---
@@ -1239,12 +1242,12 @@ impl<'u, 'a, 'b> TextAreaBuilder<'u, 'a, 'b> {
                             adapter.set_layout_size(layout_width, 10000.0);
                             
                             let mut options = TextOptions::new()
-                                .font_size(effective_font_size)
+                                .size(effective_font_size)
                                 .font_weight(self.text_style.font_weight)
-                                .font_style(self.text_style.font_style)
-                                .line_height(self.text_style.line_height)
                                 .wrap(self.text_style.wrap)
                                 .max_width(layout_width);
+                            options.font_style = self.text_style.font_style;
+                            options.line_height = self.text_style.line_height;
                             if let Some(ref family) = self.text_style.font_family {
                                 options = options.font_family(family.clone());
                             }
@@ -1370,11 +1373,12 @@ impl<'u, 'a, 'b> TextAreaBuilder<'u, 'a, 'b> {
         clean_text_style.highlight_color = None;
 
         let mut text_builder = TextBuilder::new(self.ui, display_text)
-            .text_style(clean_text_style)
             .color(display_color)
             .wrap(self.text_style.wrap)
-            .max_width(actual_width - self.style.padding.horizontal())
+            .width(actual_width - self.style.padding.horizontal())
             .pos(self.x + self.style.padding.left, pos_y);
+        text_builder.text_style = clean_text_style;
+        text_builder.text_style.color = display_color;
 
         // Always clip text to the textarea box boundary so text never overflows outside
         text_builder = text_builder.clip_rect(self.x + 1.0, self.y + 1.0, (actual_width - 2.0).max(0.0), (h_box - 2.0).max(0.0));
@@ -1583,7 +1587,7 @@ impl<'u, 'a, 'b> TextAreaBuilder<'u, 'a, 'b> {
 
         // --- 8. Advance UI ---
         self.ui.record_layout(self.id, Rect::new(self.x, self.y, actual_width, h_box));
-        self.ui.advance(actual_width, h_box, start_draw);
+        self.ui.advance(actual_width + self.style.margin.horizontal(), h_box + self.style.margin.vertical(), start_draw);
 
         if self.render_mode.is_some() {
             self.ui.render_mode_stack.pop();
@@ -1743,8 +1747,7 @@ mod tests {
                 .bg(None)
                 .border(None)
                 .focus_border((Color::rgb(0.35, 0.58, 0.98), 1.5))
-                .shadow(Color::BLACK, 0.0, 2.0, 4.0)
-                .shadow_opacity(0.8)
+                .shadow(Color::rgba(0.0, 0.0, 0.0, 0.8), 0.0, 2.0, 4.0)
                 .show();
 
             assert!(ui.draws.len() >= 2);
@@ -1812,6 +1815,35 @@ mod tests {
                 panic!("Expected RectDraw at draws[0]");
             }
         }
+
+        // Case 4: Unified IntoBorder 3-tuple and typography on TextArea
+        {
+            let mut ui = Ui::new(
+                800, 600, 1.0, None, Vec::new(), None,
+                (0.0, 0.0), false,
+                &mut scroll_state, &mut cursor_state, &mut interaction_state,
+                None, None, false, false, 0.0,
+                &layout_cache, &mut next_layout_cache,
+                &screen_layout_cache, &mut next_screen_layout_cache,
+                &widget_window_map, &mut next_widget_window_map,
+                &image_sizes,
+            );
+
+            let area = ui.text_area_with_id(&mut text, "unified_area")
+                .border((Color::GREEN, 2.0, zenthra_core::BorderAlignment::Outside))
+                .focus_border((Color::CYAN, 3.0))
+                .size(16.0)
+                .color(Color::YELLOW)
+                .font_weight(500);
+
+            assert_eq!(area.style.border, zenthra_core::Border::Solid(Color::GREEN, 2.0));
+            assert_eq!(area.style.border_alignment, zenthra_core::BorderAlignment::Outside);
+            assert_eq!(area.focus_border_color, Some(Color::CYAN));
+            assert_eq!(area.focus_border_width, Some(3.0));
+            assert_eq!(area.text_style.font_size, 16.0);
+            assert_eq!(area.text_style.color, Color::YELLOW);
+            assert_eq!(area.text_style.font_weight, zenthra_text::prelude::FontWeight::Medium);
+        }
     }
 
     #[test]
@@ -1824,9 +1856,9 @@ mod tests {
         let line_height = 1.0;
 
         let mut adapter = CosmicFontProvider::new();
-        let options = TextOptions::new()
-            .font_size(font_size)
-            .line_height(line_height);
+        let mut options = TextOptions::new()
+            .size(font_size);
+        options.line_height = line_height;
         let sb = adapter.shape(text, &options);
 
         // Click above text -> line 0, start
@@ -1869,9 +1901,9 @@ mod tests {
         let line_height = 1.4;
 
         let mut adapter = CosmicFontProvider::new();
-        let options = TextOptions::new()
-            .font_size(font_size)
-            .line_height(line_height);
+        let mut options = TextOptions::new()
+            .size(font_size);
+        options.line_height = line_height;
         let sb = adapter.shape(&code_content, &options);
 
         println!("TOTAL LINES: {}", sb.lines().len());

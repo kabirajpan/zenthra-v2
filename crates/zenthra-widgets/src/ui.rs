@@ -936,19 +936,19 @@ impl<'a> Ui<'a> {
     }
 
     pub fn h1(&mut self, content: &str) -> TextBuilder<'_, 'a> {
-        self.text(content).font_size(40.0).bold()
+        self.text(content).size(40.0).font_weight(crate::text::FontWeight::Bold)
     }
 
     pub fn h2(&mut self, content: &str) -> TextBuilder<'_, 'a> {
-        self.text(content).font_size(32.0).bold()
+        self.text(content).size(32.0).font_weight(crate::text::FontWeight::Bold)
     }
 
     pub fn h3(&mut self, content: &str) -> TextBuilder<'_, 'a> {
-        self.text(content).font_size(24.0).bold()
+        self.text(content).size(24.0).font_weight(crate::text::FontWeight::Bold)
     }
 
     pub fn h4(&mut self, content: &str) -> TextBuilder<'_, 'a> {
-        self.text(content).font_size(20.0).bold()
+        self.text(content).size(20.0).font_weight(crate::text::FontWeight::Bold)
     }
 
     pub fn card(&mut self) -> crate::containers::card::CardBuilder<'_, 'a> {
@@ -972,14 +972,14 @@ impl<'a> Ui<'a> {
                     .column()
                     .show(|ui| {
                         ui.text(title)
-                            .font_size(16.0)
-                            .weight(crate::text::FontWeight::Bold)
+                            .size(16.0)
+                            .font_weight(crate::text::FontWeight::Bold)
                             .color(Color::WHITE)
                             .show();
                         if !subtitle.is_empty() {
                             ui.spacing(2.0);
                             ui.text(subtitle)
-                                .font_size(12.0)
+                                .size(12.0)
                                 .color(Color::rgb(0.6, 0.6, 0.6))
                                 .show();
                         }

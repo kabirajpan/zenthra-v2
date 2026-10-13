@@ -38,7 +38,6 @@ pub struct DropdownBuilder<'u, 'a, 'b, T: PartialEq + Clone + ToString> {
     shadow_color: Color,
     shadow_offset: [f32; 2],
     shadow_blur: f32,
-    shadow_opacity: f32,
     shadow_enabled: bool,
 
     placement: zenthra_core::Placement,
@@ -79,7 +78,6 @@ impl<'u, 'a, 'b, T: PartialEq + Clone + ToString> DropdownBuilder<'u, 'a, 'b, T>
             shadow_color: Color::rgb(0.0, 0.0, 0.0),
             shadow_offset: [0.0, 4.0],
             shadow_blur: 20.0,
-            shadow_opacity: 1.0,
 
             placement: zenthra_core::Placement::Bottom,
             gap: 4.0,
@@ -145,15 +143,8 @@ impl<'u, 'a, 'b, T: PartialEq + Clone + ToString> DropdownBuilder<'u, 'a, 'b, T>
         self
     }
 
-    pub fn size(mut self, w: f32, h: f32) -> Self {
-        self.width = w;
-        self.height = h;
-        self.fill_x = false;
-        self.fill_y = false;
-        self
-    }
 
-    pub fn font_size(mut self, size: f32) -> Self {
+    pub fn size(mut self, size: f32) -> Self {
         self.font_size = size;
         self
     }
@@ -194,11 +185,6 @@ impl<'u, 'a, 'b, T: PartialEq + Clone + ToString> DropdownBuilder<'u, 'a, 'b, T>
 
     pub fn menu_radius_all(mut self, r: f32) -> Self {
         self.menu_radius = Some([r; 4]);
-        self
-    }
-
-    pub fn text_color(mut self, color: Color) -> Self {
-        self.text_color = color;
         self
     }
 
@@ -285,11 +271,6 @@ impl<'u, 'a, 'b, T: PartialEq + Clone + ToString> DropdownBuilder<'u, 'a, 'b, T>
         self
     }
 
-    pub fn shadow_opacity(mut self, opacity: f32) -> Self {
-        self.shadow_opacity = opacity;
-        self
-    }
-
     pub fn show(self) -> Response {
         let (x, y) = (self.ui.cursor_x, self.ui.cursor_y);
         let width = if self.fill_x {
@@ -347,9 +328,7 @@ impl<'u, 'a, 'b, T: PartialEq + Clone + ToString> DropdownBuilder<'u, 'a, 'b, T>
         let (header_shadow_color, header_shadow_offset, header_shadow_blur) = if self.glow && is_hovered {
             ([0.4, 0.7, 1.0, 0.3], [0.0, 0.0], 15.0)
         } else if self.shadow_enabled {
-            let mut a = self.shadow_color.to_array();
-            a[3] *= self.shadow_opacity;
-            (a, self.shadow_offset, self.shadow_blur)
+            (self.shadow_color.to_array(), self.shadow_offset, self.shadow_blur)
         } else {
             ([0.0, 0.0, 0.0, 0.0], [0.0, 0.0], 0.0)
         };
@@ -381,7 +360,7 @@ impl<'u, 'a, 'b, T: PartialEq + Clone + ToString> DropdownBuilder<'u, 'a, 'b, T>
         self.ui.draws.push(DrawCommand::Text(TextDraw {
             text: selected_text,
             pos: [x + self.padding_x, y + (height - self.font_size) / 2.0],
-            options: zenthra_text::prelude::TextOptions::new().font_size(self.font_size).color(self.text_color),
+            options: zenthra_text::prelude::TextOptions::new().size(self.font_size).color(self.text_color),
             clip: [x, y, text_clip_w, height],
         }));
 
@@ -394,7 +373,7 @@ impl<'u, 'a, 'b, T: PartialEq + Clone + ToString> DropdownBuilder<'u, 'a, 'b, T>
         self.ui.draws.push(DrawCommand::Text(TextDraw {
             text: chevron.to_string(),
             pos: [x + width - 20.0, y + (height - 12.0) / 2.0],
-            options: zenthra_text::prelude::TextOptions::new().font_size(12.0).color(self.text_color),
+            options: zenthra_text::prelude::TextOptions::new().size(12.0).color(self.text_color),
             clip: [x, y, width, height],
         }));
 
@@ -453,9 +432,7 @@ impl<'u, 'a, 'b, T: PartialEq + Clone + ToString> DropdownBuilder<'u, 'a, 'b, T>
                     border_width: final_menu_border_w,
                     border_color: final_menu_border_c.to_array(),
                     shadow_color: if self.shadow_enabled {
-                        let mut a = self.shadow_color.to_array();
-                        a[3] *= self.shadow_opacity;
-                        a
+                        self.shadow_color.to_array()
                     } else {
                         [0.0, 0.0, 0.0, 0.35]
                     },
@@ -502,7 +479,7 @@ impl<'u, 'a, 'b, T: PartialEq + Clone + ToString> DropdownBuilder<'u, 'a, 'b, T>
                 self.ui.overlays.push(DrawCommand::Text(TextDraw {
                     text: opt.to_string(),
                     pos: [menu_ox + self.padding_x, item_oy + (item_h - (self.font_size - 1.0)) / 2.0],
-                    options: zenthra_text::prelude::TextOptions::new().font_size((self.font_size - 1.0).max(11.0)).color(self.text_color),
+                    options: zenthra_text::prelude::TextOptions::new().size((self.font_size - 1.0).max(11.0)).color(self.text_color),
                     clip: [menu_ox, menu_oy, width, menu_h],
                 }));
             }
@@ -612,11 +589,10 @@ mod tests {
             .bg(None)
             .border(None)
             .radius_all(8.0)
-            .font_size(16.0)
+            .size(16.0)
             .padding_x(14.0)
             .color(Color::WHITE)
             .shadow(Color::BLACK, 0.0, 4.0, 12.0)
-            .shadow_opacity(0.8)
             .menu_bg(Color::rgb(0.08, 0.08, 0.10))
             .menu_max_height(300.0)
             .menu_border((Color::rgb(0.3, 0.3, 0.35), 1.5))
@@ -630,7 +606,6 @@ mod tests {
         assert_eq!(builder.padding_x, 14.0);
         assert_eq!(builder.text_color, Color::WHITE);
         assert_eq!(builder.shadow_enabled, true);
-        assert_eq!(builder.shadow_opacity, 0.8);
         assert_eq!(builder.menu_bg, Color::rgb(0.08, 0.08, 0.10));
         assert_eq!(builder.menu_max_height, 300.0);
         assert_eq!(builder.menu_border_width, Some(1.5));

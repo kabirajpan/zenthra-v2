@@ -25,7 +25,6 @@ pub struct CardBuilder<'u, 'a> {
     shadow_color: Option<Color>,
     shadow_offset: [f32; 2],
     shadow_blur: f32,
-    shadow_opacity: f32,
 
     // Premium Animations
     hover_scale: f32,
@@ -37,9 +36,6 @@ pub struct CardBuilder<'u, 'a> {
     
     // Backdrop Filter
     backdrop_filter: Option<zenthra_core::BackdropFilter>,
-    opacity: Option<f32>,
-    bg_opacity: Option<f32>,
-    bg_gradient: Option<(Color, Color, zenthra_core::GradientDirection)>,
 }
 
 impl<'u, 'a> CardBuilder<'u, 'a> {
@@ -61,7 +57,6 @@ impl<'u, 'a> CardBuilder<'u, 'a> {
             shadow_color: None,
             shadow_offset: [0.0, 0.0],
             shadow_blur: 0.0,
-            shadow_opacity: 0.0,
             hover_scale: 1.0,
             hover_bg: None,
             hover_border_color: None,
@@ -69,9 +64,6 @@ impl<'u, 'a> CardBuilder<'u, 'a> {
             active_bg: None,
             active_border: None,
             backdrop_filter: None,
-            opacity: None,
-            bg_opacity: None,
-            bg_gradient: None,
         }
     }
 
@@ -88,15 +80,6 @@ impl<'u, 'a> CardBuilder<'u, 'a> {
         self
     }
 
-    pub fn full_width(mut self) -> Self {
-        self.width = Some(self.ui.available_width);
-        self
-    }
-
-    pub fn full_height(mut self) -> Self {
-        self.height = Some(self.ui.height);
-        self
-    }
 
     pub fn height(mut self, h: f32) -> Self {
         self.height = Some(h);
@@ -119,11 +102,6 @@ impl<'u, 'a> CardBuilder<'u, 'a> {
             zenthra_core::Background::None => self.bg = None,
             other => self.bg = Some(other),
         }
-        self
-    }
-
-    pub fn bg_gradient(mut self, start: Color, end: Color, direction: zenthra_core::GradientDirection) -> Self {
-        self.bg = Some(zenthra_core::Gradient::linear(direction, [start, end]).into());
         self
     }
 
@@ -178,11 +156,6 @@ impl<'u, 'a> CardBuilder<'u, 'a> {
         self
     }
 
-    pub fn shadow_opacity(mut self, opacity: f32) -> Self {
-        self.shadow_opacity = opacity;
-        self
-    }
-
     pub fn hover_scale(mut self, scale: f32) -> Self {
         self.hover_scale = scale;
         self
@@ -218,16 +191,6 @@ impl<'u, 'a> CardBuilder<'u, 'a> {
         self
     }
 
-    pub fn opacity(mut self, o: f32) -> Self {
-        self.opacity = Some(o);
-        self
-    }
-
-    pub fn bg_opacity(mut self, o: f32) -> Self {
-        self.bg_opacity = Some(o);
-        self
-    }
-
     pub fn show<F>(self, f: F)
     where F: FnOnce(&mut Ui) {
         let mut container = self.ui.container()
@@ -250,15 +213,6 @@ impl<'u, 'a> CardBuilder<'u, 'a> {
         if let Some(bg) = self.bg {
             container = container.bg(bg);
         }
-        if let Some((start, end, dir)) = self.bg_gradient {
-            container = container.bg_gradient(start, end, dir);
-        }
-        if let Some(bgo) = self.bg_opacity {
-            container = container.bg_opacity(bgo);
-        }
-        if let Some(o) = self.opacity {
-            container = container.opacity(o);
-        }
         if let Some(bc) = self.border_color {
             container = container.border((bc, self.border_width));
         }
@@ -266,8 +220,7 @@ impl<'u, 'a> CardBuilder<'u, 'a> {
             container = container.radius_all(self.radius);
         }
         if let Some(sc) = self.shadow_color {
-            container = container.shadow(sc, self.shadow_offset[0], self.shadow_offset[1], self.shadow_blur)
-                .shadow_opacity(self.shadow_opacity);
+            container = container.shadow(sc, self.shadow_offset[0], self.shadow_offset[1], self.shadow_blur);
         }
         if let Some(w) = self.width {
             container = container.width(w);

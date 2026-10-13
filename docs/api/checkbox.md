@@ -79,18 +79,18 @@ pub fn id(mut self, id: impl std::hash::Hash) -> Self
 #### Method Signatures
 
 ```rust
-pub fn size(mut self, size: f32) -> Self // Default: 18.0
-pub fn gap(mut self, gap: f32) -> Self   // Default: 8.0
+pub fn box_size(mut self, size: f32) -> Self // Default: 18.0
+pub fn gap(mut self, gap: f32) -> Self      // Default: 8.0
 ```
 
 #### Description
-- `size`: Sets width and height of the checkbox box (in logical pixels).
+- `box_size`: Sets width and height of the checkbox box (in logical pixels).
 - `gap`: Horizontal spacing between the right edge of the checkbox box and the start of the label text.
 
 ```rust
 // Compact 14px checkbox with tight 6px gap:
 ui.checkbox(&mut enabled, "Snap to Grid")
-    .size(14.0)
+    .box_size(14.0)
     .gap(6.0)
     .show();
 ```
@@ -102,15 +102,15 @@ ui.checkbox(&mut enabled, "Snap to Grid")
 #### Method Signatures
 
 ```rust
-pub fn bg(mut self, bg: impl Into<Option<Color>>) -> Self
-pub fn border(mut self, border: impl Into<zenthra_core::Border>) -> Self
+pub fn bg(mut self, bg: impl Into<zenthra_core::Background>) -> Self
+pub fn border(mut self, border: impl IntoBorder) -> Self
 ```
 
 #### Unified Rules & Defaults
 - Default unchecked background: `Color::rgb(0.15, 0.15, 0.15)`.
 - Default unchecked border: `(Color::rgb(0.3, 0.3, 0.3), 1.0)`.
-- `.bg(None)` makes the unchecked box surface transparent.
-- `.border(None)` removes the border stroke.
+- `.bg(...)` accepts `Color`, `Background::Solid(...)`, `Background::Gradient(...)`, or `None` for transparency.
+- `.border(...)` accepts `(Color, width)`, `(Color, width, BorderAlignment)`, `Border`, or `None` to remove the border stroke.
 
 ```rust
 // Transparent box with crisp white outline:
@@ -162,17 +162,16 @@ pub fn radius_bottom_right(mut self, r: f32) -> Self
 pub fn radius_bottom_left(mut self, r: f32) -> Self
 
 pub fn shadow(mut self, color: Color, ox: f32, oy: f32, blur: f32) -> Self
-pub fn shadow_opacity(mut self, opacity: f32) -> Self
 ```
 
 #### Defaults
 - Default radius: `[4.0; 4]` (uniform 4px rounded corners).
+- Shadow opacity is configured directly via `Color::rgba(...)`.
 
 ```rust
 ui.checkbox(&mut opt, "Option")
     .radius_all(9.0) // Circular / radio style
-    .shadow(Color::BLACK, 0.0, 2.0, 4.0)
-    .shadow_opacity(0.3)
+    .shadow(Color::rgba(0.0, 0.0, 0.0, 0.3), 0.0, 2.0, 4.0)
     .show();
 ```
 
@@ -183,24 +182,25 @@ ui.checkbox(&mut opt, "Option")
 #### Method Signatures
 
 ```rust
-pub fn label_size(mut self, size: f32) -> Self
-pub fn font_size(self, size: f32) -> Self // Alias for .label_size()
+// Individual Typography Setters (via impl_text_style_methods!)
+pub fn size(mut self, size: f32) -> Self
+pub fn color(mut self, color: impl Into<Color>) -> Self
+pub fn font_weight(mut self, weight: impl Into<FontWeight>) -> Self
+pub fn font_family(mut self, family: impl Into<String>) -> Self
+pub fn decoration(mut self, dec: impl IntoDecoration) -> Self
 
-pub fn label_color(mut self, color: Color) -> Self
-pub fn text_color(self, color: Color) -> Self // Alias for .label_color()
-pub fn color(self, color: Color) -> Self      // Alias for .label_color()
-
+// Active Checked Label
 pub fn active_label(mut self, color: Color) -> Self
 ```
 
 #### Defaults
-- `label_size`: `14.0`
-- `label_color`: `Color::WHITE`
+- `size`: `14.0`
+- `color`: `Color::WHITE`
 - `active_label`: If set, the text smoothly transitions to this color when checked.
 
 ```rust
 ui.checkbox(&mut active, "Enable High Performance")
-    .label_color(Color::rgb(0.6, 0.6, 0.7))
+    .color(Color::rgb(0.6, 0.6, 0.7))
     .active_label(Color::rgb(0.3, 0.7, 1.0)) // Illuminates text when active
     .show();
 ```
@@ -216,7 +216,6 @@ pub fn glow(mut self, enabled: bool) -> Self
 pub fn scaling(mut self, hover: f32, pressed: f32) -> Self
 pub fn hover_bg(mut self, color: Color) -> Self
 pub fn active_bg(mut self, color: Color) -> Self
-pub fn hover_brightness(mut self, b: f32) -> Self
 ```
 
 #### Description
@@ -261,9 +260,9 @@ Clean, dark-mode settings checkbox with rounded corners:
 
 ```rust
 ui.checkbox(&mut notifications, "Enable desktop notifications")
-    .size(16.0)
+    .box_size(16.0)
     .gap(10.0)
-    .font_size(13.0)
+    .size(13.0)
     .bg(Color::rgb(0.12, 0.13, 0.17))
     .border((Color::rgb(0.24, 0.26, 0.34), 1.0))
     .check_bg(Color::rgb(0.25, 0.55, 0.98))
@@ -294,7 +293,7 @@ Vibrant cyan checkbox with animated scaling and neon glow:
 
 ```rust
 ui.checkbox(&mut turbo_mode, "Turbo Engine Boost")
-    .size(20.0)
+    .box_size(20.0)
     .check_bg(Color::rgb(0.10, 0.85, 0.95))
     .check_color(Color::rgb(0.02, 0.05, 0.10))
     .glow(true)
@@ -311,7 +310,7 @@ Dimmed inactive label that illuminates into white/accent color upon activation:
 
 ```rust
 ui.checkbox(&mut sync_enabled, "Cloud Synchronization")
-    .label_color(Color::rgb(0.50, 0.55, 0.65))
+    .color(Color::rgb(0.50, 0.55, 0.65))
     .active_label(Color::rgb(0.95, 0.98, 1.00))
     .check_bg(Color::rgb(0.30, 0.60, 1.00))
     .show();
@@ -325,9 +324,9 @@ Building a clean preferences checklist:
 
 ```rust
 ui.column().spacing(6.0).show(|ui| {
-    ui.checkbox(&mut show_grid, "Grid Overlay").size(14.0).show();
-    ui.checkbox(&mut snap_to_pixel, "Pixel Snapping").size(14.0).show();
-    ui.checkbox(&mut show_rulers, "Rulers & Guides").size(14.0).show();
+    ui.checkbox(&mut show_grid, "Grid Overlay").box_size(14.0).show();
+    ui.checkbox(&mut snap_to_pixel, "Pixel Snapping").box_size(14.0).show();
+    ui.checkbox(&mut show_rulers, "Rulers & Guides").box_size(14.0).show();
 });
 ```
 

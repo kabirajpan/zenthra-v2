@@ -43,8 +43,8 @@ In Zenthra, `Text` is versatile:
 ```rust
 // ✅ Clean, unified tag styling without extra container nesting:
 ui.text("PRO")
-    .font_size(10.0)
-    .bold()
+    .size(10.0)
+    .font_weight(FontWeight::Bold)
     .bg(Color::rgb(0.95, 0.65, 0.20))
     .border((Color::rgb(1.0, 0.8, 0.4), 1.0))
     .radius_all(3.0)
@@ -75,8 +75,8 @@ pub fn pos(mut self, x: f32, y: f32) -> Self
 
 #### Description
 - `ui.text("Label")`: Standard text constructor. Automatically hashes content and container hierarchy into a deterministic `Id`.
-- `ui.h1("Title")`: Convenience shorthand for `ui.text(content).font_size(40.0).bold()`.
-- `ui.h2("Subtitle")`: Convenience shorthand for `ui.text(content).font_size(32.0).bold()`.
+- `ui.h1("Title")`: Convenience shorthand for `ui.text(content).size(28.0).font_weight(FontWeight::Bold)`.
+- `ui.h2("Subtitle")`: Convenience shorthand for `ui.text(content).size(22.0).font_weight(FontWeight::Bold)`.
 - `.pos(x, y)`: Explicit coordinate override if placing outside automatic flow.
 
 ---
@@ -86,28 +86,12 @@ pub fn pos(mut self, x: f32, y: f32) -> Self
 #### Method Signatures
 
 ```rust
-pub fn font_size(mut self, s: f32) -> Self
-
+pub fn size(mut self, s: f32) -> Self
 pub fn color(mut self, c: Color) -> Self
-pub fn text_color(self, c: Color) -> Self // Alias for .color()
-
-pub fn weight(mut self, w: impl Into<FontWeight>) -> Self
-pub fn bold(mut self) -> Self
-pub fn bold_when(mut self, bold: bool) -> Self
-pub fn italic(mut self) -> Self
-pub fn italic_when(mut self, italic: bool) -> Self
-
-pub fn underline(mut self, underline: bool) -> Self
-pub fn underline_color(mut self, color: Color) -> Self
-
-pub fn strikethrough(mut self, strikethrough: bool) -> Self
-pub fn strikethrough_color(mut self, color: Color) -> Self
-
-pub fn family(mut self, f: impl Into<String>) -> Self
-pub fn monospace(mut self) -> Self
-
-pub fn line_height(mut self, lh: f32) -> Self
-pub fn highlight(mut self, c: Color) -> Self
+pub fn font_family(mut self, f: impl Into<String>) -> Self
+pub fn font_weight(mut self, w: impl Into<FontWeight>) -> Self
+pub fn decoration(mut self, d: impl IntoDecoration) -> Self
+pub fn ellipsis(mut self, enabled: bool) -> Self
 ```
 
 #### Defaults
@@ -121,8 +105,8 @@ pub fn highlight(mut self, c: Color) -> Self
 
 ```rust
 ui.text("Mono Code")
-    .monospace()
-    .font_size(13.0)
+    .font_family("monospace")
+    .size(13.0)
     .color(Color::rgb(0.40, 0.80, 0.60))
     .show();
 ```
@@ -159,15 +143,11 @@ ui.text("Centered Title")
 
 ```rust
 pub fn wrap(mut self, strategy: impl Into<TextWrap>) -> Self
-pub fn auto_wrap(mut self) -> Self  // TextWrap::Word
-pub fn no_wrap(mut self) -> Self    // TextWrap::None
-
 pub fn ellipsis(mut self, enabled: bool) -> Self
 ```
 
 #### Description
-- `auto_wrap()`: Wraps words automatically when they reach the available container width or `.max_width(...)`.
-- `no_wrap()`: Prevents line breaks, letting text overflow or clip horizontally.
+- `wrap(strategy)`: Sets text wrap mode (`TextWrap::Word`, `TextWrap::Character`, `TextWrap::None`).
 - `ellipsis(bool)`: Truncates overflowing text with an ellipsis (`…`).
 
 ```rust
@@ -259,7 +239,7 @@ pub fn radius_bottom_left(mut self, r: f32) -> Self
 ```rust
 // Outline Tag (Transparent Background, White Border):
 ui.text("FEATURED")
-    .font_size(11.0)
+    .size(11.0)
     .border((Color::WHITE, 1.0))
     .radius_all(4.0)
     .padding(2.0, 6.0, 2.0, 6.0)
@@ -303,7 +283,7 @@ When `.selectable(true)` is enabled:
 
 ```rust
 ui.text("Click and drag to copy this license key: 4X9B-89A1-ZZ42")
-    .monospace()
+    .font_family("monospace")
     .selectable(true)
     .show();
 ```
@@ -355,8 +335,8 @@ A high-contrast badge chip directly from [`docs/api/container.md`](./container.m
 
 ```rust
 ui.text("PRO")
-    .font_size(10.0)
-    .bold()
+    .size(10.0)
+    .font_weight(FontWeight::Bold)
     .bg(Color::rgb(0.95, 0.65, 0.20))
     .border((Color::rgb(1.0, 0.8, 0.4), 1.0))
     .radius_all(3.0)
@@ -372,7 +352,7 @@ A sleek, modern outline badge with a transparent surface and rounded pill corner
 
 ```rust
 ui.text("v2.4.0")
-    .font_size(11.0)
+    .size(11.0)
     .color(Color::rgb(0.75, 0.80, 0.90))
     .bg(None)
     .border((Color::rgb(0.35, 0.40, 0.50), 1.0))
@@ -408,10 +388,10 @@ Preventing long text titles from breaking parent container layouts:
 
 ```rust
 ui.text(&document_title)
-    .font_size(15.0)
-    .bold()
+    .size(15.0)
+    .font_weight(FontWeight::Bold)
     .width(240.0)
-    .no_wrap()
+    .wrap(TextWrap::None)
     .ellipsis(true)
     .show();
 ```
@@ -424,10 +404,9 @@ A readable, selectable paragraph block with comfortable line height and word wra
 
 ```rust
 ui.text("Zenthra provides zero-overhead GPU UI rendering with unified declarative ergonomics. All widgets adhere to consistent design tokens across immediate-mode trees.")
-    .font_size(14.0)
-    .line_height(1.4)
+    .size(14.0)
     .color(Color::rgb(0.80, 0.85, 0.92))
-    .auto_wrap()
+    .wrap(TextWrap::Word)
     .selectable(true)
     .show();
 ```

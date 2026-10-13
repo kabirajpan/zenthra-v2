@@ -39,11 +39,13 @@ fn main() {
                                     ui.container()
                                         .width(24.0)
                                         .height(24.0)
-                                        .bg_gradient(
-                                            Color::rgb(0.30, 0.55, 1.0),
-                                            Color::rgb(0.55, 0.25, 0.95),
-                                            GradientDirection::Diagonal,
-                                        )
+                                        .bg(Gradient::linear(
+                                            Direction::ToBottomRight,
+                                            [
+                                                (0.0, Color::rgb(0.30, 0.55, 1.0)),
+                                                (1.0, Color::rgb(0.55, 0.25, 0.95)),
+                                            ],
+                                        ))
                                         .radius_all(6.0)
                                         .show(|_| {});
 
@@ -477,11 +479,13 @@ fn main() {
                                                 ui.container()
                                                     .width(42.0)
                                                     .height(h)
-                                                    .bg_gradient(
-                                                        Color::rgb(0.22, 0.48, 0.95),
-                                                        Color::rgb(0.12, 0.22, 0.55),
-                                                        GradientDirection::Vertical,
-                                                    )
+                                                    .bg(Gradient::linear(
+                                                        Direction::ToBottom,
+                                                        [
+                                                            (0.0, Color::rgb(0.22, 0.48, 0.95)),
+                                                            (1.0, Color::rgb(0.12, 0.22, 0.55)),
+                                                        ],
+                                                    ))
                                                     .hover_bg(Color::rgb(0.35, 0.65, 1.0))
                                                     .radius_top(4.0)
                                                     .show(|_| {});
@@ -580,6 +584,56 @@ fn main() {
                                                     ui.container().width(14.0).height(14.0).bg(Color::rgb(0.65, 0.35, 0.95)).radius_all(3.0).show(|_| {});
                                                     ui.container().width(90.0).height(10.0).bg(Color::rgb(0.80, 0.85, 0.95)).radius_all(2.0).show(|_| {});
                                                 });
+                                        });
+                                });
+
+                            // ── WRAP & MARGIN SECTION: TAG CLOUD & FLEX FLOW ──
+                            ui.container()
+                                .fill_x()
+                                .bg(Color::rgb(0.08, 0.10, 0.14))
+                                .border((Color::rgb(0.16, 0.19, 0.26), 1.0))
+                                .radius_all(10.0)
+                                .padding_all(16.0)
+                                .margin_top(14.0)
+                                .column()
+                                .gap(12.0)
+                                .show(|ui: &mut Ui| {
+                                    ui.container().width(180.0).height(12.0).bg(Color::rgb(0.85, 0.88, 0.95)).radius_all(3.0).show(|_| {});
+
+                                    // Flex Wrap Container for Chips/Tags
+                                    ui.container()
+                                        .fill_x()
+                                        .row()
+                                        .wrap(Wrap::Wrap)
+                                        .gap(8.0)
+                                        .show(|ui: &mut Ui| {
+                                            let tag_colors = [
+                                                Color::rgb(0.20, 0.45, 0.90),
+                                                Color::rgb(0.15, 0.65, 0.40),
+                                                Color::rgb(0.80, 0.45, 0.15),
+                                                Color::rgb(0.65, 0.25, 0.85),
+                                                Color::rgb(0.25, 0.60, 0.80),
+                                                Color::rgb(0.85, 0.25, 0.45),
+                                            ];
+                                            let widths = [85.0, 110.0, 75.0, 130.0, 95.0, 120.0, 90.0, 105.0];
+                                            for (i, &w) in widths.iter().enumerate() {
+                                                let c = tag_colors[i % tag_colors.len()];
+                                                ui.container()
+                                                    .width(w)
+                                                    .height(28.0)
+                                                    .bg(Color::rgb(0.12, 0.15, 0.20))
+                                                    .border((c, 1.0))
+                                                    .radius_all(14.0)
+                                                    .margin_all(2.0)
+                                                    .padding_x(10.0)
+                                                    .row()
+                                                    .valign(Align::Center)
+                                                    .gap(6.0)
+                                                    .show(|ui: &mut Ui| {
+                                                        ui.container().width(8.0).height(8.0).bg(c).radius_all(4.0).show(|_| {});
+                                                        ui.container().width(w - 36.0).height(6.0).bg(Color::rgb(0.75, 0.80, 0.90)).radius_all(2.0).show(|_| {});
+                                                    });
+                                            }
                                         });
                                 });
                         });

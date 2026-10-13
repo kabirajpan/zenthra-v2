@@ -1,7 +1,7 @@
 // crates/zenthra-widgets/src/layout/stack.rs
 
 use crate::ui::{DrawCommand, RectDraw, Ui};
-use zenthra_core::{Color, Id, Rect, Align, BorderAlignment};
+use zenthra_core::{Color, Id, Rect, Align};
 use zenthra_render::RectInstance;
 use crate::container::Direction;
 
@@ -23,18 +23,14 @@ pub struct StackBuilder<'u, 'a> {
     valign: Align,
 
     // Styling
-    bg: Option<Color>,
-    bg_gradient: Option<(Color, Color, zenthra_core::GradientDirection)>,
+    bg: Option<zenthra_core::Background>,
     border_color: Option<Color>,
     border_width: f32,
     radius: [f32; 4],
     shadow_color: Option<Color>,
     shadow_offset: [f32; 2],
     shadow_blur: f32,
-    shadow_opacity: f32,
-    opacity: f32,
     clip: bool,
-    border_alignment: BorderAlignment,
     is_overlay: bool,
     is_absolute: bool,
 }
@@ -57,17 +53,13 @@ impl<'u, 'a> StackBuilder<'u, 'a> {
             halign: Align::Left,
             valign: Align::Top,
             bg: None,
-            bg_gradient: None,
             border_color: None,
             border_width: 0.0,
             radius: [0.0; 4],
             shadow_color: None,
             shadow_offset: [0.0, 0.0],
             shadow_blur: 0.0,
-            shadow_opacity: 1.0,
-            opacity: 1.0,
             clip: false,
-            border_alignment: BorderAlignment::Inside,
             is_overlay: false,
             is_absolute: false,
         }
@@ -97,15 +89,6 @@ impl<'u, 'a> StackBuilder<'u, 'a> {
         self
     }
 
-    pub fn full_width(mut self) -> Self {
-        self.fill_x = true;
-        self
-    }
-
-    pub fn full_height(mut self) -> Self {
-        self.fill_y = true;
-        self
-    }
 
     pub fn fill(mut self) -> Self {
         self.fill_x = true;
@@ -141,14 +124,11 @@ impl<'u, 'a> StackBuilder<'u, 'a> {
         self
     }
 
-    pub fn bg(mut self, bg: impl Into<Option<Color>>) -> Self {
-        self.bg = bg.into();
-        self
-    }
-
-    pub fn bg_gradient(mut self, start: Color, end: Color, direction: zenthra_core::GradientDirection) -> Self {
-        self.bg = Some(start);
-        self.bg_gradient = Some((start, end, direction));
+    pub fn bg(mut self, bg: impl Into<zenthra_core::Background>) -> Self {
+        match bg.into() {
+            zenthra_core::Background::None => self.bg = None,
+            other => self.bg = Some(other),
+        }
         self
     }
 
@@ -183,23 +163,8 @@ impl<'u, 'a> StackBuilder<'u, 'a> {
         self
     }
 
-    pub fn shadow_opacity(mut self, opacity: f32) -> Self {
-        self.shadow_opacity = opacity;
-        self
-    }
-
-    pub fn opacity(mut self, opacity: f32) -> Self {
-        self.opacity = opacity;
-        self
-    }
-
     pub fn clip(mut self, clip: bool) -> Self {
         self.clip = clip;
-        self
-    }
-
-    pub fn border_alignment(mut self, alignment: BorderAlignment) -> Self {
-        self.border_alignment = alignment;
         self
     }
 
@@ -361,22 +326,17 @@ impl<'u, 'a> StackBuilder<'u, 'a> {
 
         // Background / Border visual Rect
         let mut target_draws = Vec::new();
-        if let Some(bg) = self.bg {
+        if self.bg.is_some() {
             let bw = self.border_width;
             let bc = self.border_color.unwrap_or(Color::TRANSPARENT);
 
-            let (color2, gradient_params) = if let Some((_, end, dir)) = self.bg_gradient {
-                let (g_type, g_angle) = dir.to_type_and_angle();
-                (end.to_array(), [g_type, g_angle, 0.0, 0.0])
-            } else {
-                ([1.0, 1.0, 1.0, 1.0], [0.0; 4])
-            };
+            let (color, color2, _color3, _color4, gradient_params, _gradient_stops, _is_visible) = crate::style_ext::resolve_background(&self.bg);
 
             target_draws.push(DrawCommand::Rect(RectDraw {
                 instance: RectInstance {
                     pos: [ox, oy],
                     size: [w, h],
-                    color: bg.to_array(),
+                    color,
                     radius: [
                         self.radius[3], // Bottom-Left -> Top-Left
                         self.radius[2], // Bottom-Right -> Top-Right
@@ -385,22 +345,13 @@ impl<'u, 'a> StackBuilder<'u, 'a> {
                     ],
                     border_width: bw,
                     border_color: bc.to_array(),
-                    shadow_color: self.shadow_color.map(|c| {
-                        let mut a = c.to_array();
-                        a[3] *= self.shadow_opacity;
-                        a
-                    }).unwrap_or([0.0, 0.0, 0.0, 0.0]),
+                    shadow_color: self.shadow_color.map(|c| c.to_array()).unwrap_or([0.0, 0.0, 0.0, 0.0]),
                     shadow_offset: self.shadow_offset,
                     shadow_blur: self.shadow_blur,
                     clip_rect: [-100000.0, -100000.0, 2000000.0, 2000000.0],
                     grayscale: 0.0,
                     brightness: 1.0,
-                    opacity: self.opacity,
-                    border_alignment: match self.border_alignment {
-                        BorderAlignment::Inside => 0.0,
-                        BorderAlignment::Center => 0.5,
-                        BorderAlignment::Outside => 1.0,
-                    },
+                    opacity: 1.0,
                     color2,
                     gradient_params,
                     ..Default::default()

@@ -92,7 +92,7 @@ impl TextOptions {
         self
     }
 
-    pub fn font_size(mut self, size: f32) -> Self {
+    pub fn size(mut self, size: f32) -> Self {
         self.font_size = size;
         self
     }
@@ -112,17 +112,6 @@ impl TextOptions {
         self
     }
 
-    pub fn font_style(mut self, style: FontStyle) -> Self {
-        self.font_style = style;
-        self
-    }
-
-    pub fn highlight(mut self, color: Color) -> Self {
-        self.highlight_color = Some(color);
-        self
-    }
-
-
     pub fn max_width(mut self, width: f32) -> Self {
         self.max_width = Some(width);
         self
@@ -131,11 +120,6 @@ impl TextOptions {
     /// Sets the maximum height for word wrapping and vertical alignment.
     pub fn max_height(mut self, height: f32) -> Self {
         self.max_height = Some(height);
-        self
-    }
-
-    pub fn line_height(mut self, height: f32) -> Self {
-        self.line_height = height;
         self
     }
 
@@ -166,28 +150,6 @@ impl TextOptions {
 
     pub fn ellipsis(mut self, enabled: bool) -> Self {
         self.ellipsis = enabled;
-        self
-    }
-
-    pub fn underline(mut self, underline: bool) -> Self {
-        self.underline = underline;
-        self
-    }
-
-    pub fn underline_color(mut self, color: Color) -> Self {
-        self.underline = true;
-        self.underline_color = Some(color);
-        self
-    }
-
-    pub fn strikethrough(mut self, strikethrough: bool) -> Self {
-        self.strikethrough = strikethrough;
-        self
-    }
-
-    pub fn strikethrough_color(mut self, color: Color) -> Self {
-        self.strikethrough = true;
-        self.strikethrough_color = Some(color);
         self
     }
 
@@ -302,13 +264,30 @@ impl From<FontWeight> for cosmic_text::Weight {
 
 impl From<u16> for FontWeight {
     fn from(w: u16) -> Self {
-        FontWeight::Custom(w)
+        match w {
+            100 => FontWeight::Thin,
+            200 => FontWeight::ExtraLight,
+            300 => FontWeight::Light,
+            400 => FontWeight::Regular,
+            500 => FontWeight::Medium,
+            600 => FontWeight::SemiBold,
+            700 => FontWeight::Bold,
+            800 => FontWeight::ExtraBold,
+            900 => FontWeight::Black,
+            other => FontWeight::Custom(other),
+        }
+    }
+}
+
+impl From<i32> for FontWeight {
+    fn from(w: i32) -> Self {
+        (w as u16).into()
     }
 }
 
 impl From<f32> for FontWeight {
     fn from(w: f32) -> Self {
-        FontWeight::Custom(w as u16)
+        (w as u16).into()
     }
 }
 
@@ -408,7 +387,7 @@ impl TextStyle {
     }
 
     #[inline]
-    pub fn font_size(mut self, size: f32) -> Self {
+    pub fn size(mut self, size: f32) -> Self {
         self.font_size = size;
         self
     }
@@ -432,46 +411,6 @@ impl TextStyle {
     }
 
     #[inline]
-    pub fn bold(mut self) -> Self {
-        self.font_weight = FontWeight::Bold;
-        self
-    }
-
-    #[inline]
-    pub fn bold_when(mut self, bold: bool) -> Self {
-        if bold {
-            self.font_weight = FontWeight::Bold;
-        }
-        self
-    }
-
-    #[inline]
-    pub fn font_style(mut self, style: FontStyle) -> Self {
-        self.font_style = style;
-        self
-    }
-
-    #[inline]
-    pub fn italic(mut self) -> Self {
-        self.font_style = FontStyle::Italic;
-        self
-    }
-
-    #[inline]
-    pub fn italic_when(mut self, italic: bool) -> Self {
-        if italic {
-            self.font_style = FontStyle::Italic;
-        }
-        self
-    }
-
-    #[inline]
-    pub fn line_height(mut self, lh: f32) -> Self {
-        self.line_height = lh;
-        self
-    }
-
-    #[inline]
     pub fn wrap(mut self, wrap: impl Into<TextWrap>) -> Self {
         self.wrap = wrap.into();
         self
@@ -490,40 +429,8 @@ impl TextStyle {
     }
 
     #[inline]
-    pub fn highlight(mut self, color: Color) -> Self {
-        self.highlight_color = Some(color);
-        self
-    }
-
-    #[inline]
     pub fn ellipsis(mut self, ellipsis: bool) -> Self {
         self.ellipsis = ellipsis;
-        self
-    }
-
-    #[inline]
-    pub fn underline(mut self, underline: bool) -> Self {
-        self.underline = underline;
-        self
-    }
-
-    #[inline]
-    pub fn underline_color(mut self, color: Color) -> Self {
-        self.underline = true;
-        self.underline_color = Some(color);
-        self
-    }
-
-    #[inline]
-    pub fn strikethrough(mut self, strikethrough: bool) -> Self {
-        self.strikethrough = strikethrough;
-        self
-    }
-
-    #[inline]
-    pub fn strikethrough_color(mut self, color: Color) -> Self {
-        self.strikethrough = true;
-        self.strikethrough_color = Some(color);
         self
     }
 

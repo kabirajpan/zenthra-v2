@@ -1,7 +1,7 @@
 // crates/zenthra-widgets/src/button.rs
 
 use crate::ui::{DrawCommand, RectDraw, TextDraw, Ui};
-use zenthra_core::{BoxStyle, Color, EdgeInsets, Id, Rect, Role, SemanticNode, Styleable};
+use zenthra_core::{BoxStyle, Color, EdgeInsets, Id, IntoBorder, Rect, Role, SemanticNode, Styleable};
 use crate::style_ext::BoxStyleExt;
 
 pub struct ButtonBuilder<'u, 'a> {
@@ -108,8 +108,9 @@ impl<'u, 'a> ButtonBuilder<'u, 'a> {
         self
     }
 
-    pub fn hover_border(mut self, border: impl Into<zenthra_core::Border>) -> Self {
-        match border.into() {
+    pub fn hover_border(mut self, border: impl IntoBorder) -> Self {
+        let (b, _align) = border.into_border();
+        match b {
             zenthra_core::Border::None => {
                 self.hover_border_color = Some(Color::TRANSPARENT);
                 self.hover_border_width = Some(0.0);
@@ -122,8 +123,9 @@ impl<'u, 'a> ButtonBuilder<'u, 'a> {
         self
     }
 
-    pub fn active_border(mut self, border: impl Into<zenthra_core::Border>) -> Self {
-        match border.into() {
+    pub fn active_border(mut self, border: impl IntoBorder) -> Self {
+        let (b, _align) = border.into_border();
+        match b {
             zenthra_core::Border::None => {
                 self.active_border_color = Some(Color::TRANSPARENT);
                 self.active_border_width = Some(0.0);
@@ -183,7 +185,14 @@ impl<'u, 'a> ButtonBuilder<'u, 'a> {
             self.ui.render_mode_stack.push(mode);
         }
 
-        let (x, y) = self.pos.unwrap_or((self.ui.cursor_x, self.ui.cursor_y));
+        let margin_left = self.style.margin.left;
+        let _margin_right = self.style.margin.right;
+        let margin_top = self.style.margin.top;
+        let margin_bottom = self.style.margin.bottom;
+
+        let (base_x, base_y) = self.pos.unwrap_or((self.ui.cursor_x, self.ui.cursor_y));
+        let x = base_x + margin_left;
+        let y = base_y + margin_top;
 
         // 1. Measure text FIRST to get true content dimensions (no magic fallbacks)
         let mut text_w = 0.0;
@@ -199,12 +208,12 @@ impl<'u, 'a> ButtonBuilder<'u, 'a> {
         }
 
         let mut final_w = if self.style.fill_x {
-            self.ui.available_width
+            (self.ui.available_width - self.style.margin.horizontal()).max(0.0)
         } else {
             self.style.width.unwrap_or(text_w + self.style.padding.horizontal())
         };
         let mut final_h = if self.style.fill_y {
-            (self.ui.max_y - y).max(self.style.height.unwrap_or(text_h + self.style.padding.vertical()))
+            (self.ui.max_y - y - margin_bottom).max(self.style.height.unwrap_or(text_h + self.style.padding.vertical()))
         } else {
             self.style.height.unwrap_or(text_h + self.style.padding.vertical())
         };
@@ -330,7 +339,7 @@ impl<'u, 'a> ButtonBuilder<'u, 'a> {
 
         self.ui
             .record_layout(self.id, Rect::new(x, y, final_w, final_h));
-        self.ui.advance(final_w, final_h, start_draw);
+        self.ui.advance(final_w + self.style.margin.horizontal(), final_h + self.style.margin.vertical(), start_draw);
 
         if self.render_mode.is_some() {
             self.ui.render_mode_stack.pop();
@@ -381,8 +390,7 @@ mod tests {
                 .bg(Color::rgb(0.20, 0.40, 0.85))
                 .border((Color::rgb(0.30, 0.50, 0.95), 1.0))
                 .radius_all(6.0)
-                .shadow(Color::BLACK, 0.0, 2.0, 4.0)
-                .shadow_opacity(0.5)
+                .shadow(Color::rgba(0.0, 0.0, 0.0, 0.5), 0.0, 2.0, 4.0)
                 .show();
 
             assert_eq!(ui.draws.len(), 2, "Expected 1 RectDraw background and 1 TextDraw");
@@ -481,6 +489,32 @@ mod tests {
             custom_style.fill_x = true;
             let btn2 = ui.button("Custom").style(custom_style);
             assert!(btn2.style.fill_x);
+        }
+
+        // 5. Unified IntoBorder 3-tuple and typography on Button
+        {
+            let mut ui = Ui::new(
+                800, 600, 1.0, None, Vec::new(), None,
+                (0.0, 0.0), false,
+                &mut scroll_state, &mut cursor_state, &mut interaction_state,
+                None, None, false, false, 0.0,
+                &layout_cache, &mut next_layout_cache,
+                &screen_layout_cache, &mut next_screen_layout_cache,
+                &widget_window_map, &mut next_widget_window_map,
+                &image_sizes,
+            );
+
+            let btn = ui.button("Save")
+                .border((Color::GREEN, 2.0, zenthra_core::BorderAlignment::Outside))
+                .size(16.0)
+                .color(Color::YELLOW)
+                .font_weight(600);
+
+            assert_eq!(btn.style.border, zenthra_core::Border::Solid(Color::GREEN, 2.0));
+            assert_eq!(btn.style.border_alignment, zenthra_core::BorderAlignment::Outside);
+            assert_eq!(btn.text_style.font_size, 16.0);
+            assert_eq!(btn.text_style.color, Color::YELLOW);
+            assert_eq!(btn.text_style.font_weight, zenthra_text::prelude::FontWeight::SemiBold);
         }
     }
 }

@@ -27,7 +27,6 @@ pub struct CheckboxBuilder<'u, 'a, 'b> {
     glow: bool,
     hover_scale: f32,
     pressed_scale: f32,
-    hover_brightness: f32,
 
     // Interaction
     hover_bg: Option<Color>,
@@ -64,7 +63,6 @@ impl<'u, 'a, 'b> CheckboxBuilder<'u, 'a, 'b> {
         style.border = Border::Solid(Color::rgb(0.3, 0.3, 0.3), 1.0);
         style.shadow_offset = [0.0, 2.0];
         style.shadow_blur = 8.0;
-        style.shadow_opacity = 0.4;
 
         let mut text_style = zenthra_text::prelude::TextStyle::default();
         text_style.font_size = 14.0;
@@ -87,7 +85,6 @@ impl<'u, 'a, 'b> CheckboxBuilder<'u, 'a, 'b> {
             glow: false,
             hover_scale: 1.0,
             pressed_scale: 1.0,
-            hover_brightness: 1.0,
 
             hover_bg: None,
             active_bg: None,
@@ -95,7 +92,7 @@ impl<'u, 'a, 'b> CheckboxBuilder<'u, 'a, 'b> {
     }
 
     #[inline]
-    pub fn size(mut self, size: f32) -> Self {
+    pub fn box_size(mut self, size: f32) -> Self {
         self.style.width = Some(size);
         self.style.height = Some(size);
         self
@@ -116,18 +113,6 @@ impl<'u, 'a, 'b> CheckboxBuilder<'u, 'a, 'b> {
     #[inline]
     pub fn check_color(mut self, color: Color) -> Self {
         self.check_color = color;
-        self
-    }
-
-    #[inline]
-    pub fn label_size(mut self, size: f32) -> Self {
-        self.text_style.font_size = size;
-        self
-    }
-
-    #[inline]
-    pub fn label_color(mut self, color: Color) -> Self {
-        self.text_style.color = color;
         self
     }
 
@@ -159,12 +144,6 @@ impl<'u, 'a, 'b> CheckboxBuilder<'u, 'a, 'b> {
     #[inline]
     pub fn active_bg(mut self, color: Color) -> Self {
         self.active_bg = Some(color);
-        self
-    }
-
-    #[inline]
-    pub fn hover_brightness(mut self, b: f32) -> Self {
-        self.hover_brightness = b;
         self
     }
 
@@ -230,7 +209,7 @@ impl<'u, 'a, 'b> CheckboxBuilder<'u, 'a, 'b> {
         let mut text_h = 0.0;
         if let Some(fs) = self.ui.font_system.as_ref() {
             let mut adapter = zenthra_text::prelude::CosmicFontProvider::new_with_system(fs.clone());
-            let options = zenthra_text::prelude::TextOptions::new().font_size(self.text_style.font_size);
+            let options = self.text_style.to_options(0.0, 0.0, self.ui.scale_factor, self.ui.font_scale);
             let buffer = adapter.shape(&self.label, &options);
             let (cw, ch) = buffer.content_size();
             text_w = cw;
@@ -335,9 +314,6 @@ impl<'u, 'a, 'b> CheckboxBuilder<'u, 'a, 'b> {
             None,
             1.0,
         );
-        if is_hovered {
-            instance.brightness = self.hover_brightness;
-        }
         if self.style.shadow_color.is_none() && self.glow && *self.value {
             let mut sc = self.check_bg.to_array();
             sc[3] *= 0.4 * final_sel;
@@ -362,7 +338,7 @@ impl<'u, 'a, 'b> CheckboxBuilder<'u, 'a, 'b> {
 
             if let Some(fs) = self.ui.font_system.as_ref() {
                 let mut adapter = zenthra_text::prelude::CosmicFontProvider::new_with_system(fs.clone());
-                let options = zenthra_text::prelude::TextOptions::new().font_size(check_font_size);
+                let options = zenthra_text::prelude::TextOptions::new().size(check_font_size);
                 let buffer = adapter.shape(check_str, &options);
                 let (cw, ch) = buffer.content_size();
                 check_w = cw;
@@ -376,7 +352,7 @@ impl<'u, 'a, 'b> CheckboxBuilder<'u, 'a, 'b> {
                 text: check_str.to_string(),
                 pos: [cx, cy],
                 options: zenthra_text::prelude::TextOptions::new()
-                    .font_size(check_font_size)
+                    .size(check_font_size)
                     .color(self.check_color),
                 clip: [0.0, 0.0, 9999.0, 9999.0],
             }));
@@ -393,12 +369,13 @@ impl<'u, 'a, 'b> CheckboxBuilder<'u, 'a, 'b> {
             }
         }
 
+        let mut text_opts = self.text_style.to_options(lx, ly, self.ui.scale_factor, self.ui.font_scale);
+        text_opts.color = l_color;
+
         self.ui.draws.push(DrawCommand::Text(TextDraw {
             text: self.label.clone(),
             pos: [lx, ly],
-            options: zenthra_text::prelude::TextOptions::new()
-                .font_size(self.text_style.font_size)
-                .color(l_color),
+            options: text_opts,
             clip: [0.0, 0.0, 9999.0, 9999.0],
         }));
 
@@ -459,8 +436,7 @@ mod tests {
                 .bg(Color::rgb(0.12, 0.12, 0.16))
                 .border((Color::rgb(0.3, 0.35, 0.45), 1.0))
                 .radius_all(4.0)
-                .shadow(Color::BLACK, 0.0, 2.0, 6.0)
-                .shadow_opacity(0.5)
+                .shadow(Color::rgba(0.0, 0.0, 0.0, 0.5), 0.0, 2.0, 6.0)
                 .show();
 
             // Draws: 1 RectDraw (box), 1 TextDraw (label)
@@ -503,6 +479,38 @@ mod tests {
             } else {
                 panic!("Expected RectDraw for checkmark box");
             }
+        }
+
+        // 3. Unified IntoBorder and typography styling on CheckboxBuilder
+        {
+            let mut checked = false;
+            let mut ui = Ui::new(
+                800, 600, 1.0, None, Vec::new(), None,
+                (0.0, 0.0), false,
+                &mut scroll_state, &mut cursor_state, &mut interaction_state,
+                None, None, false, false, 0.0,
+                &layout_cache, &mut next_layout_cache,
+                &screen_layout_cache, &mut next_screen_layout_cache,
+                &widget_window_map, &mut next_widget_window_map,
+                &image_sizes,
+            );
+
+            let cb = ui.checkbox(&mut checked, "Accept Terms")
+                .box_size(20.0)
+                .gap(12.0)
+                .border((Color::GREEN, 2.0, zenthra_core::BorderAlignment::Inside))
+                .size(16.0)
+                .color(Color::YELLOW)
+                .font_weight(600);
+
+            assert_eq!(cb.style.width, Some(20.0));
+            assert_eq!(cb.style.height, Some(20.0));
+            assert_eq!(cb.gap, 12.0);
+            assert_eq!(cb.style.border, zenthra_core::Border::Solid(Color::GREEN, 2.0));
+            assert_eq!(cb.style.border_alignment, zenthra_core::BorderAlignment::Inside);
+            assert_eq!(cb.text_style.font_size, 16.0);
+            assert_eq!(cb.text_style.color, Color::YELLOW);
+            assert_eq!(cb.text_style.font_weight, zenthra_text::prelude::FontWeight::SemiBold);
         }
     }
 }

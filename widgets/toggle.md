@@ -25,7 +25,6 @@ ui.toggle(&mut dark_mode, "Dark Mode")
 | Method | Description |
 |---|---|
 | `.style(BoxStyle)` | Reusable BoxStyle for track box |
-| `.text_style(TextStyle)` | Reusable TextStyle for external label |
 | `.size(w, h)` / `.width(w)` / `.height(h)` | Track dimensions |
 | `.padding(f32)` / `.padding_all(f32)` | Spacing between track and thumb |
 | `.pill()` / `.square()` | Track shape presets |

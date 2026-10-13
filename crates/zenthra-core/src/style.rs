@@ -210,12 +210,9 @@ impl IntoBorder for Border {
     }
 }
 
-impl<T: IntoBorder> IntoBorder for Option<T> {
+impl IntoBorder for Option<Border> {
     fn into_border(self) -> (Border, Option<BorderAlignment>) {
-        match self {
-            Some(inner) => inner.into_border(),
-            None => (Border::None, None),
-        }
+        (self.unwrap_or(Border::None), None)
     }
 }
 
@@ -346,7 +343,6 @@ pub struct BoxStyle {
     pub shadow_color: Option<Color>,
     pub shadow_offset: [f32; 2],
     pub shadow_blur: f32,
-    pub shadow_opacity: f32,
     pub width: Option<f32>,
     pub height: Option<f32>,
     pub min_width: Option<f32>,
@@ -356,6 +352,7 @@ pub struct BoxStyle {
     pub fill_x: bool,
     pub fill_y: bool,
     pub padding: EdgeInsets,
+    pub margin: EdgeInsets,
     pub opacity: f32,
 }
 
@@ -369,7 +366,6 @@ impl BoxStyle {
             shadow_color: None,
             shadow_offset: [0.0, 0.0],
             shadow_blur: 0.0,
-            shadow_opacity: 1.0,
             width: None,
             height: None,
             min_width: None,
@@ -379,6 +375,7 @@ impl BoxStyle {
             fill_x: false,
             fill_y: false,
             padding: EdgeInsets::ZERO,
+            margin: EdgeInsets::ZERO,
             opacity: 1.0,
         }
     }
@@ -389,13 +386,11 @@ impl BoxStyle {
         [self.radius[3], self.radius[2], self.radius[1], self.radius[0]]
     }
 
-    /// Returns shadow color array with shadow_opacity multiplier applied: [r, g, b, a * opacity].
+    /// Returns shadow color array: [r, g, b, a].
     #[inline]
     pub fn gpu_shadow_color(&self) -> [f32; 4] {
         if let Some(c) = self.shadow_color {
-            let mut a = c.to_array();
-            a[3] *= self.shadow_opacity;
-            a
+            c.to_array()
         } else {
             [0.0, 0.0, 0.0, 0.0]
         }
@@ -555,6 +550,7 @@ pub trait Styleable: Sized {
     }
 
 
+
     fn width(mut self, w: f32) -> Self {
         self.box_style_mut().width = Some(w);
         self.box_style_mut().fill_x = false;
@@ -583,13 +579,6 @@ pub trait Styleable: Sized {
         self
     }
 
-    fn full_width(self) -> Self {
-        self.fill_x()
-    }
-
-    fn full_height(self) -> Self {
-        self.fill_y()
-    }
 
     fn max_width(mut self, w: f32) -> Self {
         self.box_style_mut().max_width = Some(w);
@@ -650,6 +639,48 @@ pub trait Styleable: Sized {
 
     fn padding_right(mut self, p: f32) -> Self {
         self.box_style_mut().padding.right = p;
+        self
+    }
+
+    fn margin(mut self, top: f32, right: f32, bottom: f32, left: f32) -> Self {
+        self.box_style_mut().margin = EdgeInsets { top, right, bottom, left };
+        self
+    }
+
+    fn margin_all(mut self, m: f32) -> Self {
+        self.box_style_mut().margin = EdgeInsets::all(m);
+        self
+    }
+
+    fn margin_x(mut self, m: f32) -> Self {
+        self.box_style_mut().margin.left = m;
+        self.box_style_mut().margin.right = m;
+        self
+    }
+
+    fn margin_y(mut self, m: f32) -> Self {
+        self.box_style_mut().margin.top = m;
+        self.box_style_mut().margin.bottom = m;
+        self
+    }
+
+    fn margin_top(mut self, m: f32) -> Self {
+        self.box_style_mut().margin.top = m;
+        self
+    }
+
+    fn margin_bottom(mut self, m: f32) -> Self {
+        self.box_style_mut().margin.bottom = m;
+        self
+    }
+
+    fn margin_left(mut self, m: f32) -> Self {
+        self.box_style_mut().margin.left = m;
+        self
+    }
+
+    fn margin_right(mut self, m: f32) -> Self {
+        self.box_style_mut().margin.right = m;
         self
     }
 }
