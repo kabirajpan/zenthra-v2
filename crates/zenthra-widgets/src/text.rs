@@ -342,14 +342,7 @@ impl<'u, 'a> TextBuilder<'u, 'a> {
     }
 
     pub fn draw_and_measure(&mut self) -> (f32, f32, Option<ShapedBuffer>, usize) {
-        let clip = self.clip_rect.unwrap_or_else(|| {
-            let vp = self.ui.current_viewport;
-            if vp.size.width > 0.0 && vp.size.height > 0.0 {
-                [vp.origin.x, vp.origin.y, vp.size.width, vp.size.height]
-            } else {
-                [0.0, 0.0, self.ui.available_width.max(10_000.0), (self.ui.max_y - self.start_y).max(10_000.0)]
-            }
-        });
+        let clip = self.clip_rect.unwrap_or([-100000.0, -100000.0, 2000000.0, 2000000.0]);
 
         // Use explicitly set max_width if available, otherwise fallback to explicit width or container width
         let layout_width = self.style.max_width.unwrap_or_else(|| {
@@ -363,7 +356,7 @@ impl<'u, 'a> TextBuilder<'u, 'a> {
         let (w, h, buffer) = if let Some(fs) = self.ui.font_system.as_ref() {
              let mut adapter = CosmicFontProvider::new_with_system(fs.clone());
              
-             let layout_height = self.style.max_height.unwrap_or((self.ui.max_y - self.start_y).max(self.ui.line_height * 2.0));
+             let layout_height = self.style.max_height.unwrap_or(20000.0);
              adapter.set_layout_size(layout_width, layout_height);
              
              let mut shape_opts = self.text_style.to_options(0.0, 0.0, self.ui.scale_factor, self.ui.font_scale);
@@ -645,6 +638,136 @@ mod tests {
             assert_eq!(t.text_style.font_weight, zenthra_text::prelude::FontWeight::Bold);
             assert!(t.text_style.underline);
             assert_eq!(t.text_style.font_style, zenthra_text::prelude::FontStyle::Italic);
+        }
+    }
+
+    #[test]
+    fn test_text_scroll_reproduction() {
+        let mut scroll_state = HashMap::new();
+        let mut cursor_state = HashMap::new();
+        let mut interaction_state = HashMap::new();
+        let mut layout_cache = HashMap::new();
+        let mut next_layout_cache = HashMap::new();
+        let mut screen_layout_cache = HashMap::new();
+        let mut next_screen_layout_cache = HashMap::new();
+        let widget_window_map = HashMap::new();
+        let mut next_widget_window_map = HashMap::new();
+        let image_sizes = HashMap::new();
+        let font_sys = std::sync::Arc::new(std::sync::Mutex::new(zenthra_text::prelude::FontSystem::new()));
+
+        // Frame 1
+        {
+            let mut ui = Ui::new(
+                1050, 800, 1.0, Some(font_sys.clone()), Vec::new(), None,
+                (0.0, 0.0), false,
+                &mut scroll_state, &mut cursor_state, &mut interaction_state,
+                None, None, false, false, 0.0,
+                &layout_cache, &mut next_layout_cache,
+                &screen_layout_cache, &mut next_screen_layout_cache,
+                &widget_window_map, &mut next_widget_window_map,
+                &image_sizes,
+            );
+
+            // Replicate examples/text.rs structure
+            ui.container()
+                .fill()
+                .scroll_y(true)
+                .gap(24.0)
+                .show(|ui: &mut Ui| {
+                    for i in 1..=20 {
+                        ui.container().fill_x().show(|ui: &mut Ui| {
+                            ui.text(&format!("Section {}", i)).size(20.0).show();
+                        });
+                    }
+
+                    // Section 4
+                    ui.container().fill_x().column().show(|ui: &mut Ui| {
+                        ui.text("4. Text Wrapping & Ellipsis").size(20.0).show();
+                        ui.container().row().gap(20.0).show(|ui: &mut Ui| {
+                            ui.container().width(360.0).show(|ui: &mut Ui| {
+                                ui.text("Multi-line Auto Wrap").size(12.0).show();
+                                ui.text("Zenthra computes typography layout with sub-pixel precision. When text exceeds available container width, it seamlessly breaks across word boundaries while maintaining consistent line spacing.")
+                                    .size(14.0)
+                                    .wrap(zenthra_text::prelude::TextWrap::Word)
+                                    .show();
+                            });
+                        });
+                    });
+                });
+
+            println!("FRAME 1 DRAWS: {}", ui.draws.len());
+            for (idx, d) in ui.draws.iter().enumerate() {
+                match d {
+                    DrawCommand::Text(t) => {
+                        println!("F1 Draw {}: Text '{}' pos={:?} clip={:?}", idx, t.text, t.pos, t.clip);
+                    }
+                    DrawCommand::Rect(r) => {
+                        println!("F1 Draw {}: Rect pos={:?} size={:?} clip={:?}", idx, r.instance.pos, r.instance.size, r.instance.clip_rect);
+                    }
+                    _ => {}
+                }
+            }
+        }
+
+        // Frame 2 with scroll
+        layout_cache = next_layout_cache;
+        next_layout_cache = HashMap::new();
+        screen_layout_cache = next_screen_layout_cache;
+        next_screen_layout_cache = HashMap::new();
+        // Simulate scroll_y = 400.0 on root container
+        let root_id = Id::from_u64(1);
+        scroll_state.insert(root_id, (0.0, 400.0));
+
+        {
+            let mut ui = Ui::new(
+                1050, 800, 1.0, Some(font_sys.clone()), Vec::new(), None,
+                (0.0, 0.0), false,
+                &mut scroll_state, &mut cursor_state, &mut interaction_state,
+                None, None, false, false, 0.0,
+                &layout_cache, &mut next_layout_cache,
+                &screen_layout_cache, &mut next_screen_layout_cache,
+                &widget_window_map, &mut next_widget_window_map,
+                &image_sizes,
+            );
+
+            ui.container()
+                .fill()
+                .scroll_y(true)
+                .gap(24.0)
+                .show(|ui: &mut Ui| {
+                    for i in 1..=20 {
+                        ui.container().fill_x().show(|ui: &mut Ui| {
+                            ui.text(&format!("Section {}", i)).size(20.0).show();
+                        });
+                    }
+
+                    // Section 4
+                    ui.container().fill_x().column().show(|ui: &mut Ui| {
+                        ui.text("4. Text Wrapping & Ellipsis").size(20.0).show();
+                        ui.container().row().gap(20.0).show(|ui: &mut Ui| {
+                            ui.container().width(360.0).show(|ui: &mut Ui| {
+                                ui.text("Multi-line Auto Wrap").size(12.0).show();
+                                ui.text("Zenthra computes typography layout with sub-pixel precision. When text exceeds available container width, it seamlessly breaks across word boundaries while maintaining consistent line spacing.")
+                                    .size(14.0)
+                                    .wrap(zenthra_text::prelude::TextWrap::Word)
+                                    .show();
+                            });
+                        });
+                    });
+                });
+
+            println!("FRAME 2 DRAWS: {}", ui.draws.len());
+            for (idx, d) in ui.draws.iter().enumerate() {
+                match d {
+                    DrawCommand::Text(t) => {
+                        println!("F2 Draw {}: Text '{}' pos={:?} clip={:?}", idx, t.text, t.pos, t.clip);
+                    }
+                    DrawCommand::Rect(r) => {
+                        println!("F2 Draw {}: Rect pos={:?} size={:?} clip={:?}", idx, r.instance.pos, r.instance.size, r.instance.clip_rect);
+                    }
+                    _ => {}
+                }
+            }
         }
     }
 }

@@ -343,7 +343,7 @@ impl<'u, 'a> ContainerBuilder<'u, 'a> {
         let min_height = self.style.min_height;
         let max_height = self.style.max_height;
 
-        let actual_clip = self.clip.unwrap_or(width.is_some() || height.is_some() || self.scroll_x || self.scroll_y);
+        let actual_clip = self.clip.unwrap_or(self.scroll_x || self.scroll_y);
 
         self.start_x = self.ui.cursor_x;
         self.start_y = self.ui.cursor_y;
@@ -395,6 +395,8 @@ impl<'u, 'a> ContainerBuilder<'u, 'a> {
         };
         let avail_h = if let Some(h) = height {
             h - padding_top - padding_bottom - 2.0 * border_width
+        } else if self.scroll_y || prev_max_y >= 50_000.0 {
+            100_000.0
         } else {
             (prev_max_y - oy - padding_top - padding_bottom - 2.0 * border_width - margin_bottom).max(0.0)
         };
@@ -402,7 +404,11 @@ impl<'u, 'a> ContainerBuilder<'u, 'a> {
         // Important: If we are absolute, our internal boundary is NOT capped by prev_max_x.
         // This allows us to have a full width even at the edge of the screen.
         self.ui.max_x = ox + padding_left + border_width + avail_w;
-        self.ui.max_y = oy + padding_top + border_width + avail_h;
+        self.ui.max_y = if self.scroll_y || prev_max_y >= 50_000.0 {
+            100_000.0
+        } else {
+            oy + padding_top + border_width + avail_h
+        };
 
         self.ui.semantic_stack.push(id);
         let role = self.role.unwrap_or(zenthra_core::Role::Container);
