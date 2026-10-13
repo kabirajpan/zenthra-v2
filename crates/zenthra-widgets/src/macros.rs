@@ -1,5 +1,88 @@
 // crates/zenthra-widgets/src/macros.rs
 
+/// Re-export IntoBorder from zenthra_core as the canonical single source of truth.
+pub use zenthra_core::IntoBorder;
+
+/// Visual text embellishments and styles for `.decoration(...)`
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum TextDecoration {
+    Underline,
+    Strikethrough,
+    Italic,
+    Highlight(zenthra_core::Color),
+    LineHeight(f32),
+}
+
+/// Trait to support single decoration, tuple `(Decoration, Color)`, or arrays `[...]`
+pub trait IntoDecoration {
+    fn apply_decoration(self, style: &mut zenthra_text::prelude::TextStyle);
+}
+
+impl IntoDecoration for TextDecoration {
+    fn apply_decoration(self, style: &mut zenthra_text::prelude::TextStyle) {
+        match self {
+            TextDecoration::Underline => {
+                style.underline = true;
+            }
+            TextDecoration::Strikethrough => {
+                style.strikethrough = true;
+            }
+            TextDecoration::Italic => {
+                style.font_style = zenthra_text::prelude::FontStyle::Italic;
+            }
+            TextDecoration::Highlight(c) => {
+                style.highlight_color = Some(c);
+            }
+            TextDecoration::LineHeight(lh) => {
+                style.line_height = lh;
+            }
+        }
+    }
+}
+
+impl IntoDecoration for (TextDecoration, zenthra_core::Color) {
+    fn apply_decoration(self, style: &mut zenthra_text::prelude::TextStyle) {
+        match self.0 {
+            TextDecoration::Underline => {
+                style.underline = true;
+                style.underline_color = Some(self.1);
+            }
+            TextDecoration::Strikethrough => {
+                style.strikethrough = true;
+                style.strikethrough_color = Some(self.1);
+            }
+            TextDecoration::Highlight(_) => {
+                style.highlight_color = Some(self.1);
+            }
+            other => other.apply_decoration(style),
+        }
+    }
+}
+
+impl<T: IntoDecoration, const N: usize> IntoDecoration for [T; N] {
+    fn apply_decoration(self, style: &mut zenthra_text::prelude::TextStyle) {
+        for item in self {
+            item.apply_decoration(style);
+        }
+    }
+}
+
+impl<T: IntoDecoration> IntoDecoration for Vec<T> {
+    fn apply_decoration(self, style: &mut zenthra_text::prelude::TextStyle) {
+        for item in self {
+            item.apply_decoration(style);
+        }
+    }
+}
+
+impl<T: IntoDecoration + Copy> IntoDecoration for &[T] {
+    fn apply_decoration(self, style: &mut zenthra_text::prelude::TextStyle) {
+        for &item in self {
+            item.apply_decoration(style);
+        }
+    }
+}
+
 /// Implements layout dimension builder methods (`width`, `height`, `fill_x`, `fill_y`, etc.) on a builder struct with `self.style`.
 #[macro_export]
 macro_rules! impl_dimensions {
@@ -230,62 +313,12 @@ macro_rules! impl_visuals {
             }
 
             #[inline]
-            pub fn bg_gradient(
-                mut self,
-                start: zenthra_core::Color,
-                end: zenthra_core::Color,
-                direction: zenthra_core::GradientDirection,
-            ) -> Self {
-                let (dir_type, angle) = direction.to_type_and_angle();
-                if dir_type == 2.0 {
-                    self.style.bg = Some(zenthra_core::Background::Gradient(
-                        zenthra_core::Gradient::radial(zenthra_core::Align::Center, [start, end]),
-                    ));
-                } else {
-                    self.style.bg = Some(zenthra_core::Background::Gradient(
-                        zenthra_core::Gradient::linear(angle.to_degrees(), [start, end]),
-                    ));
+            pub fn border(mut self, border: impl $crate::macros::IntoBorder) -> Self {
+                let (b, align) = border.into_border();
+                self.style.border = b;
+                if let Some(align) = align {
+                    self.style.border_alignment = align;
                 }
-                self
-            }
-
-            #[inline]
-            pub fn bg_opacity(mut self, opacity: f32) -> Self {
-                if let Some(ref mut bg) = self.style.bg {
-                    match bg {
-                        zenthra_core::Background::Solid(ref mut c) => c.a = opacity,
-                        zenthra_core::Background::Gradient(ref mut g) => match g {
-                            zenthra_core::Gradient::Linear { ref mut stops, .. } => {
-                                for s in stops.iter_mut() {
-                                    s.color.a *= opacity;
-                                }
-                            }
-                            zenthra_core::Gradient::Radial { ref mut stops, .. } => {
-                                for s in stops.iter_mut() {
-                                    s.color.a *= opacity;
-                                }
-                            }
-                            zenthra_core::Gradient::Mesh { ref mut points } => {
-                                for p in points.iter_mut() {
-                                    p.1.a *= opacity;
-                                }
-                            }
-                        },
-                        zenthra_core::Background::None => {}
-                    }
-                }
-                self
-            }
-
-            #[inline]
-            pub fn border(mut self, border: impl Into<zenthra_core::Border>) -> Self {
-                self.style.border = border.into();
-                self
-            }
-
-            #[inline]
-            pub fn border_alignment(mut self, alignment: zenthra_core::BorderAlignment) -> Self {
-                self.style.border_alignment = alignment;
                 self
             }
 
@@ -294,18 +327,6 @@ macro_rules! impl_visuals {
                 self.style.shadow_color = Some(color);
                 self.style.shadow_offset = [x, y];
                 self.style.shadow_blur = blur;
-                self
-            }
-
-            #[inline]
-            pub fn shadow_opacity(mut self, opacity: f32) -> Self {
-                self.style.shadow_opacity = opacity;
-                self
-            }
-
-            #[inline]
-            pub fn opacity(mut self, o: f32) -> Self {
-                self.style.opacity = o;
                 self
             }
         }
@@ -350,6 +371,11 @@ macro_rules! impl_font_style_methods {
             }
 
             #[inline]
+            pub fn size(self, size: f32) -> Self {
+                self.font_size(size)
+            }
+
+            #[inline]
             pub fn color(mut self, color: zenthra_core::Color) -> Self {
                 self.text_style.color = color;
                 self
@@ -361,14 +387,14 @@ macro_rules! impl_font_style_methods {
             }
 
             #[inline]
-            pub fn family(mut self, family: impl Into<String>) -> Self {
+            pub fn font_family(mut self, family: impl Into<String>) -> Self {
                 self.text_style.font_family = Some(family.into());
                 self
             }
 
             #[inline]
-            pub fn font_family(self, family: impl Into<String>) -> Self {
-                self.family(family)
+            pub fn family(self, family: impl Into<String>) -> Self {
+                self.font_family(family)
             }
 
             #[inline]
@@ -378,14 +404,14 @@ macro_rules! impl_font_style_methods {
             }
 
             #[inline]
-            pub fn weight(mut self, weight: impl Into<zenthra_text::prelude::FontWeight>) -> Self {
+            pub fn font_weight(mut self, weight: impl Into<zenthra_text::prelude::FontWeight>) -> Self {
                 self.text_style.font_weight = weight.into();
                 self
             }
 
             #[inline]
-            pub fn font_weight(self, weight: impl Into<zenthra_text::prelude::FontWeight>) -> Self {
-                self.weight(weight)
+            pub fn weight(self, weight: impl Into<zenthra_text::prelude::FontWeight>) -> Self {
+                self.font_weight(weight)
             }
 
             #[inline]
@@ -460,7 +486,7 @@ macro_rules! impl_text_wrap_methods {
     };
 }
 
-/// Implements text decoration builder methods (ellipsis, underline, strikethrough, highlight)
+/// Implements text decoration builder methods (decoration, ellipsis, underline, strikethrough, highlight)
 #[macro_export]
 macro_rules! impl_text_decorations {
     ($builder:ident) => {
@@ -468,6 +494,12 @@ macro_rules! impl_text_decorations {
     };
     ($builder:ident, $($lt:lifetime),+) => {
         impl<$($lt),+> $builder<$($lt),+> {
+            #[inline]
+            pub fn decoration(mut self, d: impl $crate::macros::IntoDecoration) -> Self {
+                d.apply_decoration(&mut self.text_style);
+                self
+            }
+
             #[inline]
             pub fn highlight(mut self, color: zenthra_core::Color) -> Self {
                 self.text_style.highlight_color = Some(color);

@@ -199,6 +199,62 @@ pub enum BorderAlignment {
     Outside,
 }
 
+/// Conversions for unified border styling (`(Color, width)`, `(Color, width, BorderAlignment)`, `Border`, etc.)
+pub trait IntoBorder {
+    fn into_border(self) -> (Border, Option<BorderAlignment>);
+}
+
+impl IntoBorder for Border {
+    fn into_border(self) -> (Border, Option<BorderAlignment>) {
+        (self, None)
+    }
+}
+
+impl<T: IntoBorder> IntoBorder for Option<T> {
+    fn into_border(self) -> (Border, Option<BorderAlignment>) {
+        match self {
+            Some(inner) => inner.into_border(),
+            None => (Border::None, None),
+        }
+    }
+}
+
+impl IntoBorder for Color {
+    fn into_border(self) -> (Border, Option<BorderAlignment>) {
+        (Border::solid(self, 1.0), None)
+    }
+}
+
+impl IntoBorder for (Color, f32) {
+    fn into_border(self) -> (Border, Option<BorderAlignment>) {
+        (Border::solid(self.0, self.1), None)
+    }
+}
+
+impl IntoBorder for (Color, f64) {
+    fn into_border(self) -> (Border, Option<BorderAlignment>) {
+        (Border::solid(self.0, self.1 as f32), None)
+    }
+}
+
+impl IntoBorder for (Color, f32, BorderAlignment) {
+    fn into_border(self) -> (Border, Option<BorderAlignment>) {
+        (Border::solid(self.0, self.1), Some(self.2))
+    }
+}
+
+impl IntoBorder for (Color, f64, BorderAlignment) {
+    fn into_border(self) -> (Border, Option<BorderAlignment>) {
+        (Border::solid(self.0, self.1 as f32), Some(self.2))
+    }
+}
+
+impl IntoBorder for (Border, BorderAlignment) {
+    fn into_border(self) -> (Border, Option<BorderAlignment>) {
+        (self.0, Some(self.1))
+    }
+}
+
 pub mod blur {
     #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
     pub enum Type {
@@ -428,50 +484,12 @@ pub trait Styleable: Sized {
         self
     }
 
-    fn bg_gradient(mut self, start: Color, end: Color, direction: GradientDirection) -> Self {
-        let (dir_type, angle) = direction.to_type_and_angle();
-        if dir_type == 2.0 {
-            self.box_style_mut().bg = Some(crate::gradient::Background::Gradient(crate::gradient::Gradient::radial(
-                Align::Center,
-                [start, end],
-            )));
-        } else {
-            self.box_style_mut().bg = Some(crate::gradient::Background::Gradient(crate::gradient::Gradient::linear(
-                angle.to_degrees(),
-                [start, end],
-            )));
+    fn border(mut self, border: impl IntoBorder) -> Self {
+        let (b, align) = border.into_border();
+        self.box_style_mut().border = b;
+        if let Some(align) = align {
+            self.box_style_mut().border_alignment = align;
         }
-        self
-    }
-
-    fn bg_opacity(mut self, opacity: f32) -> Self {
-        if let Some(ref mut bg) = self.box_style_mut().bg {
-            match bg {
-                crate::gradient::Background::Solid(ref mut c) => c.a = opacity,
-                crate::gradient::Background::Gradient(ref mut g) => match g {
-                    crate::gradient::Gradient::Linear { ref mut stops, .. } => {
-                        for s in stops.iter_mut() { s.color.a *= opacity; }
-                    }
-                    crate::gradient::Gradient::Radial { ref mut stops, .. } => {
-                        for s in stops.iter_mut() { s.color.a *= opacity; }
-                    }
-                    crate::gradient::Gradient::Mesh { ref mut points } => {
-                        for p in points.iter_mut() { p.1.a *= opacity; }
-                    }
-                },
-                crate::gradient::Background::None => {}
-            }
-        }
-        self
-    }
-
-    fn border(mut self, border: impl Into<Border>) -> Self {
-        self.box_style_mut().border = border.into();
-        self
-    }
-
-    fn border_alignment(mut self, alignment: BorderAlignment) -> Self {
-        self.box_style_mut().border_alignment = alignment;
         self
     }
 
@@ -536,15 +554,6 @@ pub trait Styleable: Sized {
         self
     }
 
-    fn shadow_opacity(mut self, opacity: f32) -> Self {
-        self.box_style_mut().shadow_opacity = opacity;
-        self
-    }
-
-    fn opacity(mut self, opacity: f32) -> Self {
-        self.box_style_mut().opacity = opacity;
-        self
-    }
 
     fn width(mut self, w: f32) -> Self {
         self.box_style_mut().width = Some(w);

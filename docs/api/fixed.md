@@ -21,47 +21,40 @@ It lists:
 
 ### Active Macro Catalog
 
-| Macro | Method | Status | Notes |
-| :--- | :--- | :---: | :--- |
-| `impl_dimensions` | `.width(w: f32)` | **Keep** | Canonical explicit width setter. |
-| `impl_dimensions` | `.height(h: f32)` | **Keep** | Canonical explicit height setter. |
-| `impl_dimensions` | `.fill_x()` | **Keep** | Canonical horizontal expansion trigger. |
-| `impl_dimensions` | `.fill_y()` | **Keep** | Canonical vertical expansion trigger. |
-| `impl_dimensions` | `.fill()` | **Keep** | Canonical dual-axis expansion shorthand. |
-| `impl_dimensions` | `.min_width(w)` / `.max_width(w)` | **Keep** | Canonical min/max width constraints. |
-| `impl_dimensions` | `.min_height(h)` / `.max_height(h)` | **Keep** | Canonical min/max height constraints. |
-| `impl_padding` | `.padding(t, r, b, l)` | **Keep** | Canonical 4-edge padding setter. |
-| `impl_padding` | `.padding_all(p)` | **Keep** | Canonical uniform padding setter. |
-| `impl_padding` | `.padding_x(p)` / `.padding_y(p)` | **Keep** | Canonical horizontal/vertical padding setters. |
-| `impl_padding` | `.padding_top/bottom/left/right(p)` | **Keep** | Canonical individual edge setters. |
-| `impl_radius` | `.radius(tl, tr, br, bl)` | **Keep** | Canonical 4-corner radius setter. |
-| `impl_radius` | `.radius_all(r)` | **Keep** | Canonical uniform radius setter. |
-| `impl_radius` | `.radius_top/bottom/left/right(r)` | **Keep** | Canonical paired corner setters. |
-| `impl_radius` | Individual corner setters (`radius_top_left`, etc.) | **Keep** | Canonical individual corner setters. |
-| `impl_visuals` | `.style(BoxStyle)` | **Keep** | Canonical raw `BoxStyle` replacement. |
-| `impl_visuals` | `.bg(impl Into<Background>)` | **Keep** | Unified background setter (`Solid`, `Gradient`, `None`). |
-| `impl_visuals` | `.bg_gradient(start, end, dir)` | **Remove** | **Legacy Duplicate**: `.bg(Gradient::linear(...))` handles this cleanly without magic direction enum. |
-| `impl_visuals` | `.bg_opacity(opacity: f32)` | **Keep** | Direct alpha adjustment for background. |
-| `impl_visuals` | `.border(impl Into<Border>)` | **Keep** | Unified border setter (`(Color, width)`, `Border::Solid`, `Border::None`). |
-| `impl_visuals` | `.border_alignment(alignment)` | **Keep** | Border inside/center/outside positioning. |
-| `impl_visuals` | `.shadow(color, x, y, blur)` | **Keep** | Canonical drop shadow setter. |
-| `impl_visuals` | `.shadow_opacity(opacity)` | **Keep** | Canonical shadow alpha setter. |
-| `impl_visuals` | `.opacity(o: f32)` | **Keep** | Composite opacity factor. |
-| `impl_font_style_methods` | `.font_size(size: f32)` | **Keep** | Canonical font size setter. |
-| `impl_font_style_methods` | `.color(Color)` | **Keep** | Canonical text color setter. |
-| `impl_font_style_methods` | `.text_color(Color)` | **Keep** | Ergonomic alias for `.color(Color)`. |
-| `impl_font_style_methods` | `.family(...)` / `.font_family(...)` | **Keep** | Font family specification. |
-| `impl_font_style_methods` | `.monospace()` | **Keep** | Monospace font family shorthand. |
-| `impl_font_style_methods` | `.weight(...)` / `.font_weight(...)` | **Keep** | Font weight specification. |
-| `impl_font_style_methods` | `.bold()` / `.bold_when(bool)` | **Keep** | Shorthand typography weight toggles. |
-| `impl_font_style_methods` | `.font_style(...)` / `.italic()` / `.italic_when(bool)` | **Keep** | Typography style toggles. |
-| `impl_font_style_methods` | `.line_height(lh: f32)` | **Keep** | Multiplier for line box height. |
-| `impl_text_wrap_methods` | `.wrap(TextWrap)` | **Keep** | Canonical text wrap strategy. |
-| `impl_text_wrap_methods` | `.auto_wrap()` / `.no_wrap()` | **Keep** | Canonical wrap shorthands (`Word` vs `None`). |
-| `impl_text_decorations` | `.highlight(Color)` | **Keep** | Background text highlight color. |
-| `impl_text_decorations` | `.ellipsis(bool)` | **Keep** | Truncation with trailing dots. |
-| `impl_text_decorations` | `.underline(bool)` / `.underline_color(Color)` | **Keep** | Underline text decoration. |
-| `impl_text_decorations` | `.strikethrough(bool)` / `.strikethrough_color(Color)` | **Keep** | Strikethrough text decoration. |
+| Macro | Method | Status | Lock | Notes |
+| :--- | :--- | :---: | :---: | :--- |
+| `impl_dimensions` | `.width(w: f32)` | **Keep** | 🔒 Locked | Canonical explicit width setter. |
+| `impl_dimensions` | `.height(h: f32)` | **Keep** | 🔒 Locked | Canonical explicit height setter. |
+| `impl_dimensions` | `.fill_x()` | **Keep** | 🔒 Locked | Canonical horizontal expansion trigger. |
+| `impl_dimensions` | `.fill_y()` | **Keep** | 🔒 Locked | Canonical vertical expansion trigger. |
+| `impl_dimensions` | `.fill()` | **Keep** | 🔒 Locked | Canonical dual-axis expansion shorthand. |
+| `impl_dimensions` | `.min_width(w)` / `.max_width(w)` | **Keep** | 🔒 Locked | Canonical min/max width constraints. |
+| `impl_dimensions` | `.min_height(h)` / `.max_height(h)` | **Keep** | 🔒 Locked | Canonical min/max height constraints. |
+| `impl_padding` | `.padding(t, r, b, l)` | **Keep** | 🔒 Locked | Canonical 4-edge padding setter. |
+| `impl_padding` | `.padding_all(p)` | **Keep** | 🔒 Locked | Canonical uniform padding setter. |
+| `impl_padding` | `.padding_x(p)` / `.padding_y(p)` | **Keep** | 🔒 Locked | Canonical horizontal/vertical padding setters. |
+| `impl_padding` | `.padding_top/bottom/left/right(p)` | **Keep** | 🔒 Locked | Canonical individual edge setters. |
+| `impl_radius` | `.radius(tl, tr, br, bl)` | **Keep** | 🔒 Locked | Canonical 4-corner radius setter. |
+| `impl_radius` | `.radius_all(r)` | **Keep** | 🔒 Locked | Canonical uniform radius setter. |
+| `impl_radius` | `.radius_top/bottom/left/right(r)` | **Keep** | 🔒 Locked | Canonical paired corner setters. |
+| `impl_radius` | Individual corner setters (`radius_top_left`, etc.) | **Keep** | 🔒 Locked | Canonical individual corner setters. |
+| `impl_visuals` | `.style(BoxStyle)` | **Keep** | 🔒 Locked | Canonical raw `BoxStyle` replacement. |
+| `impl_visuals` | `.bg(impl Into<Background>)` | **Keep** | 🔒 Locked | Unified background setter (`Solid`, `Gradient`, `None`). |
+| `impl_visuals` | `.bg_gradient(start, end, dir)` | **Remove** | Pending | Legacy Duplicate: `.bg(Gradient::linear(...))` handles this cleanly. |
+| `impl_visuals` | `.bg_opacity(opacity: f32)` | **Keep** | 🔒 Locked | Direct alpha adjustment for background. |
+| `impl_visuals` | `.border(impl Into<Border>)` | **Keep** | 🔒 Locked | Unified border setter (`(Color, width)`, `Border::Solid`, `Border::None`). |
+| `impl_visuals` | `.border_alignment(alignment)` | **Keep** | Review | Border inside/center/outside positioning. |
+| `impl_visuals` | `.shadow(color, x, y, blur)` | **Keep** | 🔒 Locked | Canonical drop shadow setter. |
+| `impl_visuals` | `.shadow_opacity(opacity)` | **Keep** | 🔒 Locked | Canonical shadow alpha setter. |
+| `impl_visuals` | `.opacity(o: f32)` | **Keep** | 🔒 Locked | Composite opacity factor. |
+| `impl_font_style_methods` | **`.size(size: f32)`** | **Keep** | 🔒 **Locked** | Canonical font size in points. Prefix-free, no collision. |
+| `impl_font_style_methods` | **`.color(Color)`** | **Keep** | 🔒 **Locked** | Canonical text glyph color. Canonical single method. |
+| `impl_font_style_methods` | `.font(&str)` / `.font_family(&str)` | **Keep** | Review | Font family specification. |
+| `impl_font_style_methods` | `.weight(...)` / `.bold()` | **Keep** | Review | Weight specification. |
+| `impl_font_style_methods` | `.line_height(lh: f32)` | **Keep** | Review | Multiplier for line box height. |
+| `impl_text_wrap_methods` | `.wrap(TextWrap)` | **Keep** | 🔒 Locked | Canonical text wrap strategy. |
+| `impl_text_decorations` | `.ellipsis(bool)` | **Keep** | 🔒 Locked | Truncation with trailing dots. |
+| `impl_text_decorations` | `.decoration(TextDecoration)` | **Keep** | Review | Unified text decoration (Italic, Underline, Strikethrough, Highlight). |
 
 ---
 

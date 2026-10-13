@@ -21,7 +21,7 @@ pub use id::Id;
 pub use rect::{Point, Rect, Size};
 pub use render_mode::RenderMode;
 pub use response::Response;
-pub use style::{Border, BorderRadius, EdgeInsets, Align, BorderAlignment, BackdropFilter, Filter, blur, Placement, PopoverAlign, GradientDirection, BoxStyle, Styleable};
+pub use style::{Border, BorderRadius, EdgeInsets, Align, BorderAlignment, BackdropFilter, Filter, blur, Placement, PopoverAlign, GradientDirection, BoxStyle, Styleable, IntoBorder};
 pub use widget::Widget;
 pub use image::{ImageSource, ObjectFit};
 pub use gradient::{Gradient, Direction, ColorStop, Background, IntoStops, IntoAnchor, IntoMeshPoints};

@@ -244,8 +244,9 @@ impl<'u, 'a> ContainerBuilder<'u, 'a> {
         self
     }
 
-    pub fn active_border(mut self, border: impl Into<zenthra_core::Border>) -> Self {
-        match border.into() {
+    pub fn active_border(mut self, border: impl crate::macros::IntoBorder) -> Self {
+        let (b, _align) = border.into_border();
+        match b {
             zenthra_core::Border::None => {
                 self.active_border_color = Some(Color::TRANSPARENT);
                 self.active_border_width = Some(0.0);
@@ -301,8 +302,9 @@ impl<'u, 'a> ContainerBuilder<'u, 'a> {
         self
     }
 
-    pub fn hover_border(mut self, border: impl Into<zenthra_core::Border>) -> Self {
-        match border.into() {
+    pub fn hover_border(mut self, border: impl crate::macros::IntoBorder) -> Self {
+        let (b, _align) = border.into_border();
+        match b {
             zenthra_core::Border::None => {
                 self.hover_border_color = Some(Color::TRANSPARENT);
                 self.hover_border_width = Some(0.0);
@@ -1565,11 +1567,9 @@ mod tests {
         // 1. Inherent/Styleable builder methods write directly to self.style
         let c = ui.container()
             .bg(Color::RED)
-            .border((Color::BLUE, 2.0))
-            .border_alignment(BorderAlignment::Outside)
+            .border((Color::BLUE, 2.0, BorderAlignment::Outside))
             .radius(10.0, 20.0, 30.0, 40.0)
-            .shadow(Color::BLACK, 5.0, 5.0, 15.0)
-            .shadow_opacity(0.8)
+            .shadow(Color::rgba(0.0, 0.0, 0.0, 0.8), 5.0, 5.0, 15.0)
             .padding(8.0, 12.0, 16.0, 20.0)
             .width(250.0)
             .height(150.0);
@@ -1583,10 +1583,9 @@ mod tests {
         assert_eq!(c.style.radius, [10.0, 20.0, 30.0, 40.0]);
         // GPU RectInstance expects [bl, br, tr, tl] = [40.0, 30.0, 20.0, 10.0]
         assert_eq!(c.style.gpu_radius(), [40.0, 30.0, 20.0, 10.0]);
-        assert_eq!(c.style.shadow_color, Some(Color::BLACK));
+        assert_eq!(c.style.shadow_color, Some(Color::rgba(0.0, 0.0, 0.0, 0.8)));
         assert_eq!(c.style.shadow_offset, [5.0, 5.0]);
         assert_eq!(c.style.shadow_blur, 15.0);
-        assert_eq!(c.style.shadow_opacity, 0.8);
         assert_eq!(c.style.padding.top, 8.0);
         assert_eq!(c.style.padding.right, 12.0);
         assert_eq!(c.style.padding.bottom, 16.0);
@@ -1624,8 +1623,7 @@ mod tests {
             .bg(Color::rgb(0.1, 0.2, 0.3))
             .border((Color::WHITE, 1.5))
             .radius_all(12.0)
-            .shadow(Color::rgba(0.0, 0.0, 0.0, 0.5), 0.0, 4.0, 8.0)
-            .shadow_opacity(0.5)
+            .shadow(Color::rgba(0.0, 0.0, 0.0, 0.25), 0.0, 4.0, 8.0)
             .width(200.0)
             .height(100.0)
             .show(|_| {});
@@ -1642,7 +1640,7 @@ mod tests {
         assert_eq!(rect_draw.border_color, Color::WHITE.to_array());
         assert_eq!(rect_draw.shadow_offset, [0.0, 4.0]);
         assert_eq!(rect_draw.shadow_blur, 8.0);
-        assert_eq!(rect_draw.shadow_color, [0.0, 0.0, 0.0, 0.25]); // 0.5 alpha * 0.5 shadow_opacity
+        assert_eq!(rect_draw.shadow_color, [0.0, 0.0, 0.0, 0.25]); // Direct alpha from Color::rgba
 
         // 4. Container with ONLY border (no bg) still renders border cleanly
         ui.draws.clear();

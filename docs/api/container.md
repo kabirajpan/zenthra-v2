@@ -1,6 +1,6 @@
 # Container API Specification & Unified Styling Architecture
 
-`Container` is the foundational structural and aesthetic building block in Zenthra. It provides layout flow (row, column, stack), dimensional sizing, inner padding, clipping, scrolling, and visual decoration (backgrounds, borders, corner radii, shadows, and opacity).
+`Container` is the foundational structural and aesthetic building block in Zenthra. It provides layout flow (row, column, stack), dimensional sizing, inner padding, clipping, scrolling, and visual decoration (backgrounds, borders, corner radii, and drop shadows).
 
 Furthermore, the styling conventions established by `Container` serve as the **canonical design blueprint** for all other interactive widgets in Zenthra (`Input`, `DragValue`, `Button`, `TextArea`, `Dropdown`, `Text`).
 
@@ -72,51 +72,39 @@ This single rule applies identically to `Container`, `Input`, `DragValue`, `Butt
 
 ### 2.1 Backgrounds & Gradients
 
-The container background can be a solid color, a linear/radial gradient, or completely transparent.
+The container background can be a solid color, a linear/radial gradient, or completely transparent. Opacity/transparency is configured directly on the color using `Color::rgba(...)` or `Color::with_alpha(...)`.
 
 #### Method Signatures
 
 ```rust
-/// Sets the background using a Color or Background enum.
+/// Sets the background using a Color, Gradient, or Background enum.
 /// Pass `None` or `Color::TRANSPARENT` to render a completely transparent container.
 pub fn bg(mut self, b: impl Into<Option<Background>>) -> Self
-
-/// Configures a multi-color gradient background.
-pub fn bg_gradient(
-    mut self, 
-    start: Color, 
-    end: Color, 
-    direction: GradientDirection
-) -> Self
-
-/// Applies an alpha multiplier to the container's background without altering children.
-pub fn bg_opacity(mut self, opacity: f32) -> Self
 ```
 
 #### Code Examples
 
 ```rust
-// 1. Solid Color Background
+// 1. Solid Color Background (with optional alpha)
 ui.container()
-    .bg(Color::rgb(0.10, 0.11, 0.15))
+    .bg(Color::rgba(0.10, 0.11, 0.15, 0.95))
     .show(|ui| { ... });
 
 // 2. Linear Gradient (Horizontal or Vertical)
 ui.container()
-    .bg_gradient(
+    .bg(Gradient::linear(
         Color::rgb(0.15, 0.25, 0.45),
         Color::rgb(0.05, 0.08, 0.15),
         GradientDirection::Vertical
-    )
+    ))
     .show(|ui| { ... });
 
 // 3. Radial Gradient (Focused highlight)
 ui.container()
-    .bg_gradient(
+    .bg(Gradient::radial(
         Color::rgb(0.30, 0.45, 0.85),
         Color::rgb(0.08, 0.09, 0.12),
-        GradientDirection::Radial
-    )
+    ))
     .show(|ui| { ... });
 
 // 4. Transparent Layout Shell (Default)
@@ -134,12 +122,13 @@ Borders outline the container boundary with pixel-perfect anti-aliased geometry.
 #### Method Signatures
 
 ```rust
-/// Sets the border color and stroke width in logical pixels.
-/// Accepts either a tuple `(Color, f32)` or `None`.
-pub fn border(mut self, border: impl Into<Option<(Color, f32)>>) -> Self
-
-/// Explicitly controls how the border stroke aligns relative to the container geometry.
-pub fn border_alignment(mut self, alignment: BorderAlignment) -> Self
+/// Sets the border styling.
+/// Accepts:
+/// - `(Color, f32)` or `(Color, f64)`
+/// - `(Color, f32, BorderAlignment)` or `(Color, f64, BorderAlignment)`
+/// - `Border` or `(Border, BorderAlignment)`
+/// - `None` or `Option<Border>`
+pub fn border(mut self, border: impl IntoBorder) -> Self
 ```
 
 #### Border Alignments
@@ -153,18 +142,22 @@ pub fn border_alignment(mut self, alignment: BorderAlignment) -> Self
 #### Code Examples
 
 ```rust
-// 1. Standard 1px Subtle Border
+// 1. Standard 1px Subtle Border (Default Inside Alignment)
 ui.container()
     .border((Color::rgb(0.20, 0.23, 0.32), 1.0))
     .show(|ui| { ... });
 
-// 2. Thick Accent Border
+// 2. Thick Accent Border with Explicit Alignment (Unified 3-Tuple)
 ui.container()
-    .border((Color::rgb(0.35, 0.58, 0.98), 2.0))
-    .border_alignment(BorderAlignment::Inside)
+    .border((Color::rgb(0.35, 0.58, 0.98), 2.0, BorderAlignment::Inside))
     .show(|ui| { ... });
 
-// 3. Explicitly Borderless
+// 3. Selection Focus Ring (Outside Alignment)
+ui.container()
+    .border((Color::BLUE, 2.0, BorderAlignment::Outside))
+    .show(|ui| { ... });
+
+// 4. Explicitly Borderless
 ui.container()
     .border(None)
     .show(|ui| { ... });
@@ -240,13 +233,8 @@ Drop shadows provide visual depth, separating elevated panels, modals, and toolt
 ```rust
 /// Applies an outer drop shadow.
 /// Parameters: (color, offset_x, offset_y, blur_radius)
+/// Shadow transparency is configured directly using `Color::rgba(...)`.
 pub fn shadow(mut self, color: Color, x: f32, y: f32, blur: f32) -> Self
-
-/// Global opacity multiplier for the drop shadow without modifying color channels.
-pub fn shadow_opacity(mut self, opacity: f32) -> Self
-
-/// Sets the master opacity for the container and all of its drawn children (0.0 to 1.0).
-pub fn opacity(mut self, o: f32) -> Self
 ```
 
 #### Code Examples
@@ -631,17 +619,13 @@ Styling across Zenthra is backed by **`BoxStyle`** (`zenthra_core::BoxStyle`), p
 
 ```rust
 // The Universal BoxStyle Contract:
-.bg(...)            // Color, Gradient, or None
-.bg_gradient(...)   // Multi-stop linear or radial gradients
-.bg_opacity(...)    // Alpha scaling multiplier
-.border(...)        // (Color, width) or None
-.border_alignment(...) // Inside, Center, Outside
+.bg(...)            // Color, Gradient, or None (alpha via Color::rgba)
+.border(...)        // (Color, width), (Color, width, alignment), or None
 .radius_all(...)    // Unified corner radius in pixels
 .radius(...)        // Explicit [top_left, top_right, bottom_right, bottom_left]
 .radius_top(...)    // [r, r, 0, 0]
 .radius_bottom(...) // [0, 0, r, r]
-.shadow(...)        // Drop shadow (Color, ox, oy, blur)
-.shadow_opacity(...)// Shadow opacity factor
+.shadow(...)        // Drop shadow (Color, ox, oy, blur) with rgba transparency
 .padding(...)       // Inner spacing (top, right, bottom, left)
 .padding_all(...)   // Uniform padding
 .padding_x(...)     // Left & right padding

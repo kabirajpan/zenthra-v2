@@ -501,9 +501,7 @@ mod tests {
                 .bg(Color::rgb(0.95, 0.65, 0.20))
                 .border((Color::rgb(1.0, 0.8, 0.4), 1.0))
                 .radius_all(3.0)
-                .padding(2.0, 6.0, 2.0, 6.0)
-                .shadow(Color::BLACK, 0.0, 2.0, 4.0)
-                .shadow_opacity(0.5)
+                .shadow(Color::rgba(0.0, 0.0, 0.0, 0.5), 0.0, 2.0, 4.0)
                 .show();
 
             assert_eq!(ui.draws.len(), 2, "Expected 1 RectDraw background and 1 TextDraw");
@@ -619,6 +617,32 @@ mod tests {
             let s3 = find_word_start(text, 20);
             let e3 = find_word_end(text, 20);
             assert_eq!(&text[s3..e3], "typography");
+        }
+
+        // 6. Test unified font styling and decoration macros
+        {
+            let mut ui = Ui::new(
+                800, 600, 1.0, None, Vec::new(), None,
+                (0.0, 0.0), false,
+                &mut scroll_state, &mut cursor_state, &mut interaction_state,
+                None, None, false, false, 0.0,
+                &layout_cache, &mut next_layout_cache,
+                &screen_layout_cache, &mut next_screen_layout_cache,
+                &widget_window_map, &mut next_widget_window_map,
+                &image_sizes,
+            );
+
+            let t = ui.text("Hello Zenthra")
+                .size(18.0)
+                .color(Color::BLUE)
+                .font_weight(700)
+                .decoration([crate::macros::TextDecoration::Underline, crate::macros::TextDecoration::Italic]);
+
+            assert_eq!(t.text_style.font_size, 18.0);
+            assert_eq!(t.text_style.color, Color::BLUE);
+            assert_eq!(t.text_style.font_weight, zenthra_text::prelude::FontWeight::Bold);
+            assert!(t.text_style.underline);
+            assert_eq!(t.text_style.font_style, zenthra_text::prelude::FontStyle::Italic);
         }
     }
 }
