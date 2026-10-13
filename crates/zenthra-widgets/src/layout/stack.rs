@@ -141,8 +141,8 @@ impl<'u, 'a> StackBuilder<'u, 'a> {
         self
     }
 
-    pub fn bg(mut self, bg: Color) -> Self {
-        self.bg = Some(bg);
+    pub fn bg(mut self, bg: impl Into<Option<Color>>) -> Self {
+        self.bg = bg.into();
         self
     }
 
@@ -152,9 +152,17 @@ impl<'u, 'a> StackBuilder<'u, 'a> {
         self
     }
 
-    pub fn border(mut self, color: Color, width: f32) -> Self {
-        self.border_color = Some(color);
-        self.border_width = width;
+    pub fn border(mut self, border: impl Into<zenthra_core::Border>) -> Self {
+        match border.into() {
+            zenthra_core::Border::None => {
+                self.border_color = None;
+                self.border_width = 0.0;
+            }
+            zenthra_core::Border::Solid(c, w) => {
+                self.border_color = Some(c);
+                self.border_width = w;
+            }
+        }
         self
     }
 

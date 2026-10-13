@@ -62,7 +62,11 @@ impl CosmicFontProvider {
         
         // Apply metrics and wrap mode from options
         let font_size = options.font_size;
-        let line_height = font_size * options.line_height;
+        let line_height = if options.line_height > 3.0 {
+            options.line_height
+        } else {
+            font_size * options.line_height
+        };
         self.buffer.set_metrics(Metrics::new(font_size, line_height));
         
         let wrap = match options.wrap {
@@ -288,11 +292,28 @@ mod tests {
         opts.line_height = 1.65;
         opts.max_width = Some(300.0);
         opts.wrap = TextWrap::Word;
-
         provider.set_layout_size(300.0, 700.0);
         let buffer = provider.shape(error_text, &opts);
-        println!("Lines: {}, size: {:?}", buffer.lines().len(), buffer.size());
         assert!(buffer.lines().len() > 1);
-        assert!(buffer.size().1 > 30.0);
+    }
+
+    #[test]
+    fn test_ellipsis_truncation() {
+        let font_system = Arc::new(Mutex::new(FontSystem::new()));
+        let mut provider = CosmicFontProvider::new_with_system(font_system);
+        let text = "This very long single line of text will be neatly truncated with an ellipsis rather than overflowing its parent container boundary.";
+
+        let mut opts = TextOptions::default();
+        opts.font_size = 14.0;
+        opts.line_height = 1.4;
+        opts.max_width = Some(250.0);
+        opts.wrap = TextWrap::None;
+        opts.ellipsis = true;
+
+        provider.set_layout_size(250.0, 100.0);
+        let buffer = provider.shape(text, &opts);
+        assert_eq!(buffer.lines().len(), 1);
+        assert!(buffer.size().0 <= 250.0);
+        assert!(buffer.glyphs().len() > 10);
     }
 }

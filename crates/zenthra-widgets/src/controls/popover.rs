@@ -186,14 +186,22 @@ impl<'u, 'a> PopoverBuilder<'u, 'a> {
         self
     }
 
-    pub fn bg(mut self, color: Color) -> Self {
-        self.bg = Some(color);
+    pub fn bg(mut self, bg: impl Into<Option<Color>>) -> Self {
+        self.bg = bg.into();
         self
     }
 
-    pub fn border(mut self, color: Color, width: f32) -> Self {
-        self.border_color = Some(color);
-        self.border_width = width;
+    pub fn border(mut self, border: impl Into<zenthra_core::Border>) -> Self {
+        match border.into() {
+            zenthra_core::Border::None => {
+                self.border_color = None;
+                self.border_width = 0.0;
+            }
+            zenthra_core::Border::Solid(c, w) => {
+                self.border_color = Some(c);
+                self.border_width = w;
+            }
+        }
         self
     }
 
@@ -273,7 +281,14 @@ impl<'u, 'a> PopoverBuilder<'u, 'a> {
         let content_w = self.width;
         let content_h = estimated_h;
         let mut clicked_inside = false;
-        let is_hovered = self.ui.mouse_in_rect(pos_x, pos_y, content_w, content_h);
+        let is_content_hovered = self.ui.mouse_in_rect(pos_x, pos_y, content_w, content_h);
+        let is_anchor_hovered = self.ui.mouse_in_rect(
+            anchor_rect.origin.x,
+            anchor_rect.origin.y,
+            anchor_rect.size.width,
+            anchor_rect.size.height,
+        );
+        let is_hovered = is_content_hovered || is_anchor_hovered;
 
         // 4. Render as an overlay container
         let bg_color = self.bg.unwrap_or(Color::rgb(0.10, 0.10, 0.12));
@@ -306,7 +321,7 @@ impl<'u, 'a> PopoverBuilder<'u, 'a> {
                 .overlay()
                 .width(content_w)
                 .bg(bg_color)
-                .border(border_color, border_width)
+                .border((border_color, border_width))
                 .radius(radius[0], radius[1], radius[2], radius[3])
                 .padding(padding[0], padding[1], padding[2], padding[3])
                 .column();
@@ -340,6 +355,20 @@ impl<'u, 'a> PopoverBuilder<'u, 'a> {
             clicked: clicked_inside,
             pressed: false,
             submitted: false,
+            changed: false,
         }
+    }
+
+    /// Renders the popover and automatically dismisses `is_open` when clicking outside both the popover and trigger anchor.
+    pub fn show_toggle<F>(self, is_open: &mut bool, f: F) -> Response
+    where
+        F: FnOnce(&mut Ui),
+    {
+        let clicked = self.ui.clicked;
+        let resp = self.show(f);
+        if clicked && !resp.hovered {
+            *is_open = false;
+        }
+        resp
     }
 }

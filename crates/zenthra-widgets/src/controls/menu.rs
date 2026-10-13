@@ -4,6 +4,29 @@ use crate::ui::{DrawCommand, RectDraw, TextDraw, Ui};
 use zenthra_core::{Color, Id, Rect, Response, Role, SemanticNode};
 use zenthra_render::RectInstance;
 
+pub const ACTIVE_MENU_KEY: Id = Id::from_u64(999999900);
+pub const ACTIVE_SUBMENU_KEY: Id = Id::from_u64(999999901);
+pub const HOVER_FLAG_KEY: Id = Id::from_u64(999999902);
+pub const MENU_DEPTH_KEY: Id = Id::from_u64(999999903);
+pub const DEEP_SUBMENU_BASE_KEY: u64 = 999999910;
+
+#[inline]
+pub fn get_submenu_key(sub_depth: usize) -> Id {
+    if sub_depth <= 1 {
+        ACTIVE_SUBMENU_KEY
+    } else {
+        Id::from_u64(DEEP_SUBMENU_BASE_KEY + (sub_depth as u64 - 2))
+    }
+}
+
+pub fn close_all_menus(ui: &mut Ui) {
+    ui.interaction_state.insert(ACTIVE_MENU_KEY, 0.0);
+    ui.interaction_state.insert(ACTIVE_SUBMENU_KEY, 0.0);
+    for d in 0..20 {
+        ui.interaction_state.insert(Id::from_u64(DEEP_SUBMENU_BASE_KEY + d), 0.0);
+    }
+}
+
 fn get_theme_color(ui: &Ui, base_id: u64, default: Color) -> Color {
     let r = ui.interaction_state.get(&Id::from_u64(base_id)).copied();
     let g = ui.interaction_state.get(&Id::from_u64(base_id + 1)).copied();
@@ -20,26 +43,39 @@ fn get_theme_color(ui: &Ui, base_id: u64, default: Color) -> Color {
 pub struct MenuBarBuilder<'u, 'a> {
     ui: &'u mut Ui<'a>,
     bg: Option<Color>,
+    height: f32,
+    padding_x: f32,
 }
 
 impl<'u, 'a> MenuBarBuilder<'u, 'a> {
     pub fn new(ui: &'u mut Ui<'a>) -> Self {
-        Self { ui, bg: None }
+        Self {
+            ui,
+            bg: None,
+            height: 30.0,
+            padding_x: 8.0,
+        }
     }
 
-    pub fn bg(mut self, color: Color) -> Self {
-        self.bg = Some(color);
+    pub fn bg(mut self, bg: impl Into<Option<Color>>) -> Self {
+        self.bg = bg.into();
+        self
+    }
+
+    pub fn height(mut self, h: f32) -> Self {
+        self.height = h;
+        self
+    }
+
+    pub fn padding_x(mut self, p: f32) -> Self {
+        self.padding_x = p;
         self
     }
 
     pub fn show<F>(self, f: F)
     where F: FnOnce(&mut Ui) {
-        let active_menu_key = Id::from_u64(999999900);
-        let active_submenu_key = Id::from_u64(999999901);
-        let hover_flag_key = Id::from_u64(999999902);
-
-        // Reset hover flag for this frame
-        self.ui.interaction_state.insert(hover_flag_key, 0.0);
+        // Reset menu depth for this frame
+        self.ui.interaction_state.insert(MENU_DEPTH_KEY, 0.0);
 
         // Render the horizontal menu bar container
         let menu_bar_bg = self.bg.unwrap_or_else(|| {
@@ -52,27 +88,15 @@ impl<'u, 'a> MenuBarBuilder<'u, 'a> {
         });
 
         self.ui.container()
-            .full_width()
-            .height(30.0)
+            .fill_x()
+            .height(self.height)
             .bg(menu_bar_bg)
             .row()
-            .padding_left(8.0)
-            .padding_right(8.0)
+            .padding_left(self.padding_x)
+            .padding_right(self.padding_x)
             .show(|ui| {
                 f(ui);
             });
-
-        // Click outside (light dismiss) handling
-        let clicked = self.ui.clicked;
-        let active_menu_id = self.ui.interaction_state.get(&active_menu_key).copied().map(|v| v as u64).unwrap_or(0);
-        let hover_flag = self.ui.interaction_state.get(&hover_flag_key).copied().unwrap_or(0.0) > 0.5;
-
-        if active_menu_id != 0 && clicked && !hover_flag {
-            self.ui.interaction_state.insert(active_menu_key, 0.0);
-            self.ui.interaction_state.insert(active_submenu_key, 0.0);
-            self.ui.clicked = false;
-            self.ui.needs_redraw = true;
-        }
     }
 }
 
@@ -84,6 +108,20 @@ pub struct MenuBuilder<'u, 'a> {
     align: zenthra_core::PopoverAlign,
     gap: f32,
     menu_width: f32,
+    item_height: f32,
+    is_submenu: Option<bool>,
+
+    // Style properties
+    text_color: Option<Color>,
+    hover_text_color: Option<Color>,
+    bg_color: Option<Color>,
+    hover_bg_color: Option<Color>,
+    popup_bg: Option<Color>,
+    popup_border: Option<(Color, f32)>,
+    font_size: f32,
+    radius: f32,
+    padding_x: f32,
+    icon: Option<String>,
 }
 
 impl<'u, 'a> MenuBuilder<'u, 'a> {
@@ -103,6 +141,18 @@ impl<'u, 'a> MenuBuilder<'u, 'a> {
             align: zenthra_core::PopoverAlign::Start,
             gap: 2.0,
             menu_width: 270.0,
+            item_height: 26.0,
+            is_submenu: None,
+            text_color: None,
+            hover_text_color: None,
+            bg_color: None,
+            hover_bg_color: None,
+            popup_bg: None,
+            popup_border: None,
+            font_size: 13.0,
+            radius: 4.0,
+            padding_x: 10.0,
+            icon: None,
         }
     }
 
@@ -126,27 +176,107 @@ impl<'u, 'a> MenuBuilder<'u, 'a> {
         self
     }
 
+    pub fn height(mut self, height: f32) -> Self {
+        self.item_height = height;
+        self
+    }
+
+    pub fn color(mut self, color: Color) -> Self {
+        self.text_color = Some(color);
+        self
+    }
+
+    pub fn text_color(mut self, color: Color) -> Self {
+        self.text_color = Some(color);
+        self
+    }
+
+    pub fn hover_text_color(mut self, color: Color) -> Self {
+        self.hover_text_color = Some(color);
+        self
+    }
+
+    pub fn bg(mut self, bg: impl Into<Option<Color>>) -> Self {
+        self.bg_color = bg.into();
+        self
+    }
+
+    pub fn hover_bg(mut self, bg: impl Into<Option<Color>>) -> Self {
+        self.hover_bg_color = bg.into();
+        self
+    }
+
+    pub fn popup_bg(mut self, bg: impl Into<Option<Color>>) -> Self {
+        self.popup_bg = bg.into();
+        self
+    }
+
+    pub fn popup_border(mut self, border: impl Into<zenthra_core::Border>) -> Self {
+        match border.into() {
+            zenthra_core::Border::None => {
+                self.popup_border = Some((Color::TRANSPARENT, 0.0));
+            }
+            zenthra_core::Border::Solid(c, w) => {
+                self.popup_border = Some((c, w));
+            }
+        }
+        self
+    }
+
+    pub fn font_size(mut self, size: f32) -> Self {
+        self.font_size = size;
+        self
+    }
+
+    pub fn radius(mut self, r: f32) -> Self {
+        self.radius = r;
+        self
+    }
+
+    pub fn padding_x(mut self, p: f32) -> Self {
+        self.padding_x = p;
+        self
+    }
+
+    pub fn icon(mut self, icon: impl Into<String>) -> Self {
+        self.icon = Some(icon.into());
+        self
+    }
+
+    pub fn submenu(mut self, is_sub: bool) -> Self {
+        self.is_submenu = Some(is_sub);
+        self
+    }
+
     pub fn show<F>(self, f: F)
     where F: FnOnce(&mut Ui) {
-        let active_menu_key = Id::from_u64(999999900);
-        let active_submenu_key = Id::from_u64(999999901);
-        let hover_flag_key = Id::from_u64(999999902);
+        let depth = self.ui.interaction_state.get(&MENU_DEPTH_KEY).copied().unwrap_or(0.0) as usize;
+        let is_sub = self.is_submenu.unwrap_or(depth > 0);
 
-        let active_menu_id = self.ui.interaction_state.get(&active_menu_key).copied().map(|v| v as u64).unwrap_or(0);
+        if is_sub {
+            self.show_submenu(depth, f);
+        } else {
+            self.show_toplevel(f);
+        }
+    }
+
+    fn show_toplevel<F>(self, f: F)
+    where F: FnOnce(&mut Ui) {
+        let active_menu_id = self.ui.interaction_state.get(&ACTIVE_MENU_KEY).copied().map(|v| v as u64).unwrap_or(0);
         let is_currently_active = active_menu_id == self.id.raw();
 
         let (x, y) = (self.ui.cursor_x, self.ui.cursor_y);
+        let icon_extra_w = if self.icon.is_some() { 20.0 } else { 0.0 };
         let mut text_w = self.label.len() as f32 * 7.0;
         if let Some(fs) = self.ui.font_system.as_ref() {
             let mut adapter = zenthra_text::prelude::CosmicFontProvider::new_with_system(fs.clone());
-            let options = zenthra_text::prelude::TextOptions::new().font_size(13.0);
+            let options = zenthra_text::prelude::TextOptions::new().font_size(self.font_size);
             adapter.set_layout_size(1000.0, 100.0);
             let buffer = adapter.shape(&self.label, &options);
             text_w = buffer.size().0;
         }
-        let padding_x = 10.0;
-        let w = text_w + padding_x * 2.0;
-        let h = 26.0;
+        let w = text_w + icon_extra_w + self.padding_x * 2.0;
+        let h = self.item_height;
 
         let (actual_ox, actual_oy, actual_w, actual_h) = if let Some((rect, _)) = self.ui.get_recorded_layout(self.id) {
             (
@@ -162,24 +292,30 @@ impl<'u, 'a> MenuBuilder<'u, 'a> {
         let is_hovered = self.ui.is_hovered(self.id, actual_ox, actual_oy, actual_w, actual_h);
 
         if is_hovered {
-            self.ui.interaction_state.insert(hover_flag_key, 1.0);
+            self.ui.interaction_state.insert(HOVER_FLAG_KEY, 1.0);
         }
 
-        // Auto-expand on hover if menu bar is active
+        // Auto-expand on hover if a top-level menu is already active
         if is_hovered && active_menu_id != 0 && !is_currently_active {
-            self.ui.interaction_state.insert(active_menu_key, self.id.raw() as f32);
-            self.ui.interaction_state.remove(&active_submenu_key);
+            self.ui.interaction_state.insert(ACTIVE_MENU_KEY, self.id.raw() as f32);
+            self.ui.interaction_state.remove(&ACTIVE_SUBMENU_KEY);
+            for d in 0..20 {
+                self.ui.interaction_state.remove(&Id::from_u64(DEEP_SUBMENU_BASE_KEY + d));
+            }
             self.ui.needs_redraw = true;
         }
 
         // Toggle on click
         if self.ui.clicked && is_hovered {
             if is_currently_active {
-                self.ui.interaction_state.insert(active_menu_key, 0.0);
+                self.ui.interaction_state.insert(ACTIVE_MENU_KEY, 0.0);
             } else {
-                self.ui.interaction_state.insert(active_menu_key, self.id.raw() as f32);
+                self.ui.interaction_state.insert(ACTIVE_MENU_KEY, self.id.raw() as f32);
             }
-            self.ui.interaction_state.remove(&active_submenu_key);
+            self.ui.interaction_state.remove(&ACTIVE_SUBMENU_KEY);
+            for d in 0..20 {
+                self.ui.interaction_state.remove(&Id::from_u64(DEEP_SUBMENU_BASE_KEY + d));
+            }
             self.ui.consume_click();
             self.ui.needs_redraw = true;
         }
@@ -193,7 +329,13 @@ impl<'u, 'a> MenuBuilder<'u, 'a> {
         let theme_bg_panel = get_theme_color(self.ui, 999999940, Color::rgb(1.0 / 255.0, 1.0 / 255.0, 1.0 / 255.0));
         let theme_border = get_theme_color(self.ui, 999999930, Color::rgb(3.0 / 255.0, 3.0 / 255.0, 3.0 / 255.0));
 
-        let bg_color = if is_light_theme {
+        let bg_color = if let Some(custom) = self.bg_color {
+            if is_currently_active || is_hovered {
+                self.hover_bg_color.unwrap_or(custom)
+            } else {
+                custom
+            }
+        } else if is_light_theme {
             if is_currently_active {
                 Color::rgb(0.80, 0.80, 0.85)
             } else if is_hovered {
@@ -203,17 +345,23 @@ impl<'u, 'a> MenuBuilder<'u, 'a> {
             }
         } else {
             if is_currently_active || is_hovered {
-                theme_highlight
+                self.hover_bg_color.unwrap_or(theme_highlight)
             } else {
                 Color::TRANSPARENT
             }
         };
 
-        let text_color = if is_light_theme {
+        let text_color = if let Some(custom) = self.text_color {
+            if is_currently_active || is_hovered {
+                self.hover_text_color.unwrap_or(custom)
+            } else {
+                custom
+            }
+        } else if is_light_theme {
             Color::rgb(0.1, 0.1, 0.15)
         } else {
             if is_currently_active || is_hovered {
-                theme_accent
+                self.hover_text_color.unwrap_or(theme_accent)
             } else {
                 theme_text_primary
             }
@@ -225,15 +373,27 @@ impl<'u, 'a> MenuBuilder<'u, 'a> {
                 pos: [x, y + 2.0],
                 size: [w, h],
                 color: bg_color.to_array(),
-                radius: [3.0; 4],
+                radius: [self.radius; 4],
                 ..Default::default()
             }
         }));
 
+        let text_start_x = if let Some(icon) = &self.icon {
+            self.ui.draws.push(DrawCommand::Text(TextDraw {
+                text: icon.clone(),
+                pos: [x + self.padding_x, y + (h - self.font_size) / 2.0],
+                options: zenthra_text::prelude::TextOptions::new().font_size(self.font_size).color(text_color),
+                clip: [x, y, w, h + 4.0],
+            }));
+            x + self.padding_x + 18.0
+        } else {
+            x + (w - text_w) / 2.0
+        };
+
         self.ui.draws.push(DrawCommand::Text(TextDraw {
             text: self.label.clone(),
-            pos: [x + (w - text_w) / 2.0, y + 6.0],
-            options: zenthra_text::prelude::TextOptions::new().font_size(13.0).color(text_color),
+            pos: [text_start_x, y + (h - self.font_size) / 2.0],
+            options: zenthra_text::prelude::TextOptions::new().font_size(self.font_size).color(text_color),
             clip: [x, y, w, h + 4.0],
         }));
 
@@ -249,7 +409,7 @@ impl<'u, 'a> MenuBuilder<'u, 'a> {
             // Check if popup is hovered
             if let Some(rect) = self.ui.screen_layout_cache.get(&popup_id) {
                 if self.ui.mouse_in_rect(rect.origin.x, rect.origin.y, rect.size.width, rect.size.height) {
-                    self.ui.interaction_state.insert(hover_flag_key, 1.0);
+                    self.ui.interaction_state.insert(HOVER_FLAG_KEY, 1.0);
                 }
             }
 
@@ -260,17 +420,21 @@ impl<'u, 'a> MenuBuilder<'u, 'a> {
             let prev_child_sizes = std::mem::take(&mut self.ui.child_sizes);
             let prev_child_origins = std::mem::take(&mut self.ui.child_origins);
 
-            let popup_bg = if is_light_theme {
-                Color::WHITE
-            } else {
-                theme_bg_panel
-            };
+            let popup_bg = self.popup_bg.unwrap_or_else(|| {
+                if is_light_theme {
+                    Color::WHITE
+                } else {
+                    theme_bg_panel
+                }
+            });
 
-            let popup_border = if is_light_theme {
-                Color::rgb(0.8, 0.8, 0.85)
-            } else {
-                theme_border
-            };
+            let (popup_border, popup_border_w) = self.popup_border.unwrap_or_else(|| {
+                if is_light_theme {
+                    (Color::rgb(0.8, 0.8, 0.85), 1.0)
+                } else {
+                    (theme_border, 1.0)
+                }
+            });
 
             let anchor_rect = Rect::new(actual_ox, actual_oy, actual_w, actual_h);
             let estimated_h = self.ui.screen_layout_cache.get(&popup_id).map(|r| r.size.height).unwrap_or(200.0);
@@ -291,25 +455,27 @@ impl<'u, 'a> MenuBuilder<'u, 'a> {
                     .raw_id(popup_id)
                     .absolute(popup_x, popup_y)
                     .overlay()
-                    .clip(false)
+                    .no_clip()
                     .width(self.menu_width)
-                    .radius_all(4.0)
+                    .radius_all(self.radius)
                     .padding(4.0, 4.0, 4.0, 4.0)
                     .column();
 
                 if is_glassmorphism {
                     container = container
                         .bg(popup_bg.with_alpha(0.65))
-                        .border(popup_border.with_alpha(0.08), 1.0)
+                        .border((popup_border.with_alpha(0.08), popup_border_w))
                         .backdrop_filter(zenthra_core::BackdropFilter::new().blur(15.0, zenthra_core::style::blur::Type::Glassmorphism));
                 } else {
                     container = container
                         .bg(popup_bg)
-                        .border(popup_border, 1.0);
+                        .border((popup_border, popup_border_w));
                 }
 
                 container.show(|ui| {
+                    ui.interaction_state.insert(MENU_DEPTH_KEY, 1.0);
                     f(ui);
+                    ui.interaction_state.insert(MENU_DEPTH_KEY, 0.0);
                 });
             });
 
@@ -325,50 +491,33 @@ impl<'u, 'a> MenuBuilder<'u, 'a> {
             self.ui.id_log = prev_id_log;
             self.ui.child_sizes = prev_child_sizes;
             self.ui.child_origins = prev_child_origins;
-        }
-    }
-}
 
-pub struct SubMenuBuilder<'u, 'a> {
-    ui: &'u mut Ui<'a>,
-    label: String,
-    id: Id,
-    width: f32,
-}
+            // Outside-click dismissal for menus
+            if self.ui.clicked && !is_hovered {
+                let popup_hovered = self.ui.screen_layout_cache.get(&popup_id)
+                    .map(|r| self.ui.mouse_in_rect(r.origin.x, r.origin.y, r.size.width, r.size.height))
+                    .unwrap_or(false);
+                let hover_flag = self.ui.interaction_state.get(&HOVER_FLAG_KEY).copied().unwrap_or(0.0) > 0.5;
 
-impl<'u, 'a> SubMenuBuilder<'u, 'a> {
-    pub fn new(ui: &'u mut Ui<'a>, label: &str) -> Self {
-        let mut hasher = std::collections::hash_map::DefaultHasher::new();
-        use std::hash::{Hash, Hasher};
-        label.hash(&mut hasher);
-        if let Some(parent) = ui.semantic_stack.last() {
-            parent.hash(&mut hasher);
-        }
-        let id = Id::from_u64((hasher.finish() & 0x7FFFFF) + 1);
-        Self {
-            ui,
-            label: label.to_string(),
-            id,
-            width: 262.0,
+                if !popup_hovered && !hover_flag {
+                    close_all_menus(self.ui);
+                    self.ui.needs_redraw = true;
+                }
+            }
         }
     }
 
-    pub fn width(mut self, width: f32) -> Self {
-        self.width = width;
-        self
-    }
-
-    pub fn show<F>(self, f: F)
+    fn show_submenu<F>(self, depth: usize, f: F)
     where F: FnOnce(&mut Ui) {
-        let active_submenu_key = Id::from_u64(999999901);
-        let hover_flag_key = Id::from_u64(999999902);
+        let sub_depth = depth.max(1);
+        let active_key = get_submenu_key(sub_depth);
 
-        let active_submenu_id = self.ui.interaction_state.get(&active_submenu_key).copied().map(|v| v as u64).unwrap_or(0);
+        let active_submenu_id = self.ui.interaction_state.get(&active_key).copied().map(|v| v as u64).unwrap_or(0);
         let is_currently_active = active_submenu_id == self.id.raw();
 
         let (x, y) = (self.ui.cursor_x, self.ui.cursor_y);
-        let w = self.width;
-        let h = 26.0;
+        let w = self.menu_width.min(262.0);
+        let h = self.item_height;
 
         let (actual_ox, actual_oy, actual_w, actual_h) = if let Some((rect, _)) = self.ui.get_recorded_layout(self.id) {
             (
@@ -384,15 +533,27 @@ impl<'u, 'a> SubMenuBuilder<'u, 'a> {
         let is_hovered = self.ui.is_hovered(self.id, actual_ox, actual_oy, actual_w, actual_h);
 
         if is_hovered {
-            self.ui.interaction_state.insert(hover_flag_key, 1.0);
+            self.ui.interaction_state.insert(HOVER_FLAG_KEY, 1.0);
         }
 
-        // Open and toggle sub menu on click (not hover)
+        // Switch on hover if a sibling submenu at this depth is already open
+        if is_hovered && active_submenu_id != 0 && !is_currently_active {
+            self.ui.interaction_state.insert(active_key, self.id.raw() as f32);
+            for d in (sub_depth + 1)..=20 {
+                self.ui.interaction_state.remove(&get_submenu_key(d));
+            }
+            self.ui.needs_redraw = true;
+        }
+
+        // Open and toggle sub menu on click
         if self.ui.clicked && is_hovered {
             if is_currently_active {
-                self.ui.interaction_state.insert(active_submenu_key, 0.0);
+                self.ui.interaction_state.insert(active_key, 0.0);
             } else {
-                self.ui.interaction_state.insert(active_submenu_key, self.id.raw() as f32);
+                self.ui.interaction_state.insert(active_key, self.id.raw() as f32);
+            }
+            for d in (sub_depth + 1)..=20 {
+                self.ui.interaction_state.remove(&get_submenu_key(d));
             }
             self.ui.consume_click();
             self.ui.needs_redraw = true;
@@ -408,7 +569,13 @@ impl<'u, 'a> SubMenuBuilder<'u, 'a> {
         let theme_bg_panel = get_theme_color(self.ui, 999999940, Color::rgb(1.0 / 255.0, 1.0 / 255.0, 1.0 / 255.0));
         let theme_border = get_theme_color(self.ui, 999999930, Color::rgb(3.0 / 255.0, 3.0 / 255.0, 3.0 / 255.0));
 
-        let bg_color = if is_light_theme {
+        let bg_color = if let Some(custom) = self.bg_color {
+            if is_currently_active || is_hovered {
+                self.hover_bg_color.unwrap_or(custom)
+            } else {
+                custom
+            }
+        } else if is_light_theme {
             if is_currently_active || is_hovered {
                 Color::rgb(0.90, 0.90, 0.95)
             } else {
@@ -416,17 +583,23 @@ impl<'u, 'a> SubMenuBuilder<'u, 'a> {
             }
         } else {
             if is_currently_active || is_hovered {
-                theme_highlight
+                self.hover_bg_color.unwrap_or(theme_highlight)
             } else {
                 Color::TRANSPARENT
             }
         };
 
-        let text_color = if is_light_theme {
+        let text_color = if let Some(custom) = self.text_color {
+            if is_currently_active || is_hovered {
+                self.hover_text_color.unwrap_or(custom)
+            } else {
+                custom
+            }
+        } else if is_light_theme {
             Color::rgb(0.1, 0.1, 0.15)
         } else {
             if is_currently_active || is_hovered {
-                theme_accent
+                self.hover_text_color.unwrap_or(theme_accent)
             } else {
                 theme_text_primary
             }
@@ -449,21 +622,33 @@ impl<'u, 'a> SubMenuBuilder<'u, 'a> {
                 pos: [x, y],
                 size: [w, h],
                 color: bg_color.to_array(),
-                radius: [4.0; 4],
+                radius: [self.radius; 4],
                 ..Default::default()
             }
         }));
 
+        let text_start_x = if let Some(icon) = &self.icon {
+            self.ui.draws.push(DrawCommand::Text(TextDraw {
+                text: icon.clone(),
+                pos: [x + 8.0, y + (h - self.font_size) / 2.0],
+                options: zenthra_text::prelude::TextOptions::new().font_size(self.font_size).color(text_color),
+                clip: [x, y, w, h],
+            }));
+            x + 28.0
+        } else {
+            x + 8.0
+        };
+
         self.ui.draws.push(DrawCommand::Text(TextDraw {
             text: self.label.clone(),
-            pos: [x + 8.0, y + 6.0],
-            options: zenthra_text::prelude::TextOptions::new().font_size(13.0).color(text_color),
-            clip: [x, y, w, h],
+            pos: [text_start_x, y + (h - self.font_size) / 2.0],
+            options: zenthra_text::prelude::TextOptions::new().font_size(self.font_size).color(text_color),
+            clip: [x, y, w - 24.0, h],
         }));
 
         self.ui.draws.push(DrawCommand::Text(TextDraw {
             text: crate::icons::NF_FA_CHEVRON_RIGHT.to_string(),
-            pos: [x + w - 20.0, y + 7.0],
+            pos: [x + w - 20.0, y + (h - 10.0) / 2.0],
             options: zenthra_text::prelude::TextOptions::new().font_size(10.0).color(chevron_color),
             clip: [x, y, w, h],
         }));
@@ -475,12 +660,12 @@ impl<'u, 'a> SubMenuBuilder<'u, 'a> {
         self.ui.advance(w, h, start_draw);
 
         if is_currently_active {
-            let sub_popup_id = Id::from_u64((self.id.raw() << 8) | 11);
+            let sub_popup_id = Id::from_u64((self.id.raw() << 8) | (11 + sub_depth as u64));
 
             // Check if sub-popup is hovered
             if let Some(rect) = self.ui.screen_layout_cache.get(&sub_popup_id) {
                 if self.ui.mouse_in_rect(rect.origin.x, rect.origin.y, rect.size.width, rect.size.height) {
-                    self.ui.interaction_state.insert(hover_flag_key, 1.0);
+                    self.ui.interaction_state.insert(HOVER_FLAG_KEY, 1.0);
                 }
             }
 
@@ -491,17 +676,21 @@ impl<'u, 'a> SubMenuBuilder<'u, 'a> {
             let prev_child_sizes = std::mem::take(&mut self.ui.child_sizes);
             let prev_child_origins = std::mem::take(&mut self.ui.child_origins);
 
-            let popup_bg = if is_light_theme {
-                Color::WHITE
-            } else {
-                theme_bg_panel
-            };
+            let popup_bg = self.popup_bg.unwrap_or_else(|| {
+                if is_light_theme {
+                    Color::WHITE
+                } else {
+                    theme_bg_panel
+                }
+            });
 
-            let popup_border = if is_light_theme {
-                Color::rgb(0.8, 0.8, 0.85)
-            } else {
-                theme_border
-            };
+            let (popup_border, popup_border_w) = self.popup_border.unwrap_or_else(|| {
+                if is_light_theme {
+                    (Color::rgb(0.8, 0.8, 0.85), 1.0)
+                } else {
+                    (theme_border, 1.0)
+                }
+            });
 
             let sub_w = w + 12.0;
             let sub_x = if actual_ox + actual_w + sub_w > self.ui.width as f32 {
@@ -509,32 +698,37 @@ impl<'u, 'a> SubMenuBuilder<'u, 'a> {
             } else {
                 actual_ox + actual_w - 2.0
             };
-            let sub_y = (actual_oy - 4.0).max(4.0);
+
+            let estimated_h = self.ui.screen_layout_cache.get(&sub_popup_id).map(|r| r.size.height).unwrap_or(150.0);
+            let max_y = (self.ui.height as f32 - estimated_h - 8.0).max(4.0);
+            let sub_y = (actual_oy - 4.0).min(max_y).max(4.0);
 
             self.ui.overlay(|ui| {
                 let mut container = ui.container()
                     .raw_id(sub_popup_id)
                     .absolute(sub_x, sub_y)
                     .overlay()
-                    .clip(false)
+                    .no_clip()
                     .width(sub_w)
-                    .radius_all(4.0)
+                    .radius_all(self.radius)
                     .padding(4.0, 4.0, 4.0, 4.0)
                     .column();
 
                 if is_glassmorphism {
                     container = container
                         .bg(popup_bg.with_alpha(0.65))
-                        .border(popup_border.with_alpha(0.08), 1.0)
+                        .border((popup_border.with_alpha(0.08), popup_border_w))
                         .backdrop_filter(zenthra_core::BackdropFilter::new().blur(15.0, zenthra_core::style::blur::Type::Glassmorphism));
                 } else {
                     container = container
                         .bg(popup_bg)
-                        .border(popup_border, 1.0);
+                        .border((popup_border, popup_border_w));
                 }
 
                 container.show(|ui| {
+                    ui.interaction_state.insert(MENU_DEPTH_KEY, (sub_depth + 1) as f32);
                     f(ui);
+                    ui.interaction_state.insert(MENU_DEPTH_KEY, sub_depth as f32);
                 });
             });
 
@@ -554,11 +748,20 @@ impl<'u, 'a> SubMenuBuilder<'u, 'a> {
     }
 }
 
+
 pub struct MenuItemBuilder<'u, 'a> {
     ui: &'u mut Ui<'a>,
     label: String,
     shortcut: Option<String>,
     id: Id,
+    height: f32,
+    text_color: Option<Color>,
+    hover_text_color: Option<Color>,
+    bg_color: Option<Color>,
+    hover_bg_color: Option<Color>,
+    font_size: f32,
+    radius: f32,
+    icon: Option<String>,
 }
 
 impl<'u, 'a> MenuItemBuilder<'u, 'a> {
@@ -575,6 +778,14 @@ impl<'u, 'a> MenuItemBuilder<'u, 'a> {
             label: label.to_string(),
             shortcut: None,
             id,
+            height: 26.0,
+            text_color: None,
+            hover_text_color: None,
+            bg_color: None,
+            hover_bg_color: None,
+            font_size: 13.0,
+            radius: 3.0,
+            icon: None,
         }
     }
 
@@ -583,12 +794,55 @@ impl<'u, 'a> MenuItemBuilder<'u, 'a> {
         self
     }
 
-    pub fn show(self) -> Response {
-        let hover_flag_key = Id::from_u64(999999902);
+    pub fn height(mut self, h: f32) -> Self {
+        self.height = h;
+        self
+    }
 
+    pub fn color(mut self, color: Color) -> Self {
+        self.text_color = Some(color);
+        self
+    }
+
+    pub fn text_color(mut self, color: Color) -> Self {
+        self.text_color = Some(color);
+        self
+    }
+
+    pub fn hover_text_color(mut self, color: Color) -> Self {
+        self.hover_text_color = Some(color);
+        self
+    }
+
+    pub fn bg(mut self, bg: impl Into<Option<Color>>) -> Self {
+        self.bg_color = bg.into();
+        self
+    }
+
+    pub fn hover_bg(mut self, bg: impl Into<Option<Color>>) -> Self {
+        self.hover_bg_color = bg.into();
+        self
+    }
+
+    pub fn font_size(mut self, size: f32) -> Self {
+        self.font_size = size;
+        self
+    }
+
+    pub fn radius(mut self, r: f32) -> Self {
+        self.radius = r;
+        self
+    }
+
+    pub fn icon(mut self, icon: impl Into<String>) -> Self {
+        self.icon = Some(icon.into());
+        self
+    }
+
+    pub fn show(self) -> Response {
         let (x, y) = (self.ui.cursor_x, self.ui.cursor_y);
         let w = 262.0;
-        let h = 26.0;
+        let h = self.height;
 
         let (actual_ox, actual_oy, actual_w, actual_h) = if let Some((rect, _)) = self.ui.get_recorded_layout(self.id) {
             (
@@ -604,7 +858,19 @@ impl<'u, 'a> MenuItemBuilder<'u, 'a> {
         let is_hovered = self.ui.is_hovered(self.id, actual_ox, actual_oy, actual_w, actual_h);
 
         if is_hovered {
-            self.ui.interaction_state.insert(hover_flag_key, 1.0);
+            self.ui.interaction_state.insert(HOVER_FLAG_KEY, 1.0);
+
+            // If a sibling regular menu item is hovered, close any open submenus at or deeper than this depth
+            let depth = self.ui.interaction_state.get(&MENU_DEPTH_KEY).copied().unwrap_or(0.0) as usize;
+            if depth > 0 {
+                for d in depth..=20 {
+                    let key = get_submenu_key(d);
+                    if self.ui.interaction_state.get(&key).copied().unwrap_or(0.0) != 0.0 {
+                        self.ui.interaction_state.insert(key, 0.0);
+                        self.ui.needs_redraw = true;
+                    }
+                }
+            }
         }
 
         let is_light_theme = self.ui.interaction_state.get(&Id::from_u64(999999999)).copied().unwrap_or(0.0) > 0.5;
@@ -614,7 +880,13 @@ impl<'u, 'a> MenuItemBuilder<'u, 'a> {
         let theme_text_primary = get_theme_color(self.ui, 999999960, Color::rgb(224.0 / 255.0, 224.0 / 255.0, 224.0 / 255.0));
         let theme_text_muted = get_theme_color(self.ui, 999999950, Color::rgb(136.0 / 255.0, 136.0 / 255.0, 136.0 / 255.0));
 
-        let bg_color = if is_light_theme {
+        let bg_color = if let Some(custom) = self.bg_color {
+            if is_hovered {
+                self.hover_bg_color.unwrap_or(custom)
+            } else {
+                custom
+            }
+        } else if is_light_theme {
             if is_hovered {
                 Color::rgb(0.9, 0.9, 0.95)
             } else {
@@ -622,17 +894,23 @@ impl<'u, 'a> MenuItemBuilder<'u, 'a> {
             }
         } else {
             if is_hovered {
-                theme_highlight
+                self.hover_bg_color.unwrap_or(theme_highlight)
             } else {
                 Color::TRANSPARENT
             }
         };
 
-        let text_color = if is_light_theme {
+        let text_color = if let Some(custom) = self.text_color {
+            if is_hovered {
+                self.hover_text_color.unwrap_or(custom)
+            } else {
+                custom
+            }
+        } else if is_light_theme {
             Color::rgb(0.1, 0.1, 0.15)
         } else {
             if is_hovered {
-                theme_accent
+                self.hover_text_color.unwrap_or(theme_accent)
             } else {
                 theme_text_primary
             }
@@ -655,22 +933,34 @@ impl<'u, 'a> MenuItemBuilder<'u, 'a> {
                 pos: [x, y],
                 size: [w, h],
                 color: bg_color.to_array(),
-                radius: [3.0; 4],
+                radius: [self.radius; 4],
                 ..Default::default()
             }
         }));
 
+        let text_start_x = if let Some(icon) = &self.icon {
+            self.ui.draws.push(DrawCommand::Text(TextDraw {
+                text: icon.clone(),
+                pos: [x + 8.0, y + (h - self.font_size) / 2.0],
+                options: zenthra_text::prelude::TextOptions::new().font_size(self.font_size).color(text_color),
+                clip: [x, y, w, h],
+            }));
+            x + 28.0
+        } else {
+            x + 8.0
+        };
+
         self.ui.draws.push(DrawCommand::Text(TextDraw {
             text: self.label.clone(),
-            pos: [x + 8.0, y + 6.0],
-            options: zenthra_text::prelude::TextOptions::new().font_size(13.0).color(text_color),
-            clip: [x, y, w, h],
+            pos: [text_start_x, y + (h - self.font_size) / 2.0],
+            options: zenthra_text::prelude::TextOptions::new().font_size(self.font_size).color(text_color),
+            clip: [x, y, w - 80.0, h],
         }));
 
         if let Some(sh) = self.shortcut {
             self.ui.draws.push(DrawCommand::Text(TextDraw {
                 text: sh,
-                pos: [x + w - 80.0, y + 6.0],
+                pos: [x + w - 80.0, y + (h - 12.0) / 2.0],
                 options: zenthra_text::prelude::TextOptions::new().font_size(12.0).color(shortcut_color),
                 clip: [x, y, w, h],
             }));
@@ -685,10 +975,7 @@ impl<'u, 'a> MenuItemBuilder<'u, 'a> {
         let clicked = self.ui.clicked && is_hovered;
         if clicked {
             // Close all menus upon item selection
-            let active_menu_key = Id::from_u64(999999900);
-            let active_submenu_key = Id::from_u64(999999901);
-            self.ui.interaction_state.insert(active_menu_key, 0.0);
-            self.ui.interaction_state.insert(active_submenu_key, 0.0);
+            close_all_menus(self.ui);
             self.ui.consume_click();
             self.ui.needs_redraw = true;
         }
@@ -698,6 +985,7 @@ impl<'u, 'a> MenuItemBuilder<'u, 'a> {
             hovered: is_hovered,
             pressed: is_hovered && self.ui.mouse_down,
             submitted: false,
+            changed: false,
         }
     }
 }

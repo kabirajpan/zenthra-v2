@@ -257,13 +257,21 @@ impl<'u, 'a> ImageBuilder<'u, 'a> {
         self.radius[2] = r;
         self
     }
-    pub fn border(mut self, color: Color, width: f32) -> Self {
-        self.border_color = color;
-        self.border_width = width;
+    pub fn border(mut self, border: impl Into<zenthra_core::Border>) -> Self {
+        match border.into() {
+            zenthra_core::Border::None => {
+                self.border_color = Color::TRANSPARENT;
+                self.border_width = 0.0;
+            }
+            zenthra_core::Border::Solid(c, w) => {
+                self.border_color = c;
+                self.border_width = w;
+            }
+        }
         self
     }
-    pub fn bg(mut self, color: Color) -> Self {
-        self.bg = color;
+    pub fn bg(mut self, bg: impl Into<Option<Color>>) -> Self {
+        self.bg = bg.into().unwrap_or(Color::TRANSPARENT);
         self
     }
     pub fn opacity(mut self, alpha: f32) -> Self {
@@ -340,8 +348,15 @@ impl<'u, 'a> ImageBuilder<'u, 'a> {
         self.hover_grayscale = Some(amount);
         self
     }
-    pub fn hover_border(mut self, color: Color) -> Self {
-        self.hover_border = Some(color);
+    pub fn hover_border(mut self, border: impl Into<zenthra_core::Border>) -> Self {
+        match border.into() {
+            zenthra_core::Border::None => {
+                self.hover_border = None;
+            }
+            zenthra_core::Border::Solid(c, _) => {
+                self.hover_border = Some(c);
+            }
+        }
         self
     }
     pub fn active_opacity(mut self, alpha: f32) -> Self {
@@ -566,6 +581,7 @@ impl<'u, 'a> ImageBuilder<'u, 'a> {
             hovered: is_hovered,
             pressed: is_pressed,
             submitted: false,
+            changed: false,
         }
     }
 }

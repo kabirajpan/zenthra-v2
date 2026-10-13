@@ -1,3 +1,7 @@
+#[macro_use]
+pub mod macros;
+pub mod style_ext;
+
 pub mod button;
 pub mod container;
 pub mod input;
@@ -20,11 +24,12 @@ pub use slider::SliderBuilder;
 pub use progress_bar::ProgressBarBuilder;
 pub use text::TextBuilder;
 pub use text_area::TextAreaBuilder;
-pub use ui::Ui;
+pub use ui::{Ui, overlay_key};
 pub use window::FloatingWindowBuilder;
 pub use controls::*;
 pub use containers::{CardBuilder, PanelBuilder};
 pub use layout::StackBuilder;
-pub use zenthra_core::GradientDirection;
+pub use zenthra_core::{BoxStyle, GradientDirection, Styleable};
 pub mod icons;
 pub use image::ImageBuilder;
+pub use style_ext::{resolve_background, BoxStyleExt};

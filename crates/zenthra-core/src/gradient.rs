@@ -291,20 +291,32 @@ impl Gradient {
 }
 
 /// Unified Background model for widgets: Solid Color or Gradient
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Default)]
 pub enum Background {
+    #[default]
+    None,
     Solid(Color),
     Gradient(Gradient),
 }
 
 impl From<Color> for Background {
     fn from(c: Color) -> Self {
-        Background::Solid(c)
+        if c.a == 0.0 {
+            Background::None
+        } else {
+            Background::Solid(c)
+        }
     }
 }
 
 impl From<Gradient> for Background {
     fn from(g: Gradient) -> Self {
         Background::Gradient(g)
+    }
+}
+
+impl From<Option<Background>> for Background {
+    fn from(opt: Option<Background>) -> Self {
+        opt.unwrap_or(Background::None)
     }
 }

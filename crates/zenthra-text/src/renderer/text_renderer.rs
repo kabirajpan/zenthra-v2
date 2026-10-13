@@ -136,8 +136,13 @@ impl TextRenderer {
     
     fn calculate_visual_shift(&self, buffer: &ShapedBuffer, options: &TextOptions) -> f32 {
         let font_size = options.font_size;
-        let lh = options.line_height;
-        let visual_ascent = font_size * (0.8 + (lh - 1.0) / 2.0);
+        let actual_lh = if options.line_height > 3.0 {
+            options.line_height
+        } else {
+            (font_size * options.line_height).max(font_size)
+        };
+        let half_leading = (actual_lh - font_size).max(0.0) / 2.0;
+        let visual_ascent = font_size * 0.85 + half_leading;
         let first_line_y = buffer.lines().first().map(|l| l.y).unwrap_or(visual_ascent);
         visual_ascent - first_line_y
     }

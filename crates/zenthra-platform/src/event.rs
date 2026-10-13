@@ -1,5 +1,5 @@
 use winit::event::{MouseButton, ElementState, TouchPhase};
-use winit::keyboard::KeyCode;
+pub use winit::keyboard::KeyCode;
 
 #[derive(Debug, Clone)]
 pub enum PlatformEvent {

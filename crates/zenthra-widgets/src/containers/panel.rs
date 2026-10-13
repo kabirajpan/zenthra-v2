@@ -11,7 +11,8 @@ pub struct PanelBuilder<'u, 'a, 'b> {
     width: Option<f32>,
     height: Option<f32>,
     padding: f32,
-    bg: Option<Color>,
+    bg: Option<zenthra_core::Background>,
+    border: Option<zenthra_core::Border>,
     border_color: Option<Color>,
     border_width: f32,
     radius: f32,
@@ -19,7 +20,7 @@ pub struct PanelBuilder<'u, 'a, 'b> {
     // Header properties
     title: Option<String>,
     subtitle: Option<String>,
-    header_bg: Option<Color>,
+    header_bg: Option<zenthra_core::Background>,
     header_padding: f32,
     
     // Collapsing state
@@ -46,6 +47,7 @@ impl<'u, 'a, 'b> PanelBuilder<'u, 'a, 'b> {
             height: None,
             padding: 0.0,
             bg: None,
+            border: None,
             border_color: None,
             border_width: 0.0,
             radius: 0.0,
@@ -113,14 +115,27 @@ impl<'u, 'a, 'b> PanelBuilder<'u, 'a, 'b> {
         self
     }
 
-    pub fn bg(mut self, bg: Color) -> Self {
-        self.bg = Some(bg);
+    pub fn bg(mut self, bg: impl Into<zenthra_core::Background>) -> Self {
+        match bg.into() {
+            zenthra_core::Background::None => self.bg = None,
+            other => self.bg = Some(other),
+        }
         self
     }
 
-    pub fn border(mut self, color: Color, width: f32) -> Self {
-        self.border_color = Some(color);
-        self.border_width = width;
+    pub fn border(mut self, border: impl Into<zenthra_core::Border>) -> Self {
+        let b = border.into();
+        match &b {
+            zenthra_core::Border::None => {
+                self.border_color = None;
+                self.border_width = 0.0;
+            }
+            zenthra_core::Border::Solid(c, w) => {
+                self.border_color = Some(*c);
+                self.border_width = *w;
+            }
+        }
+        self.border = Some(b);
         self
     }
 
@@ -129,8 +144,16 @@ impl<'u, 'a, 'b> PanelBuilder<'u, 'a, 'b> {
         self
     }
 
-    pub fn header_bg(mut self, color: Color) -> Self {
-        self.header_bg = Some(color);
+    pub fn radius_all(mut self, r: f32) -> Self {
+        self.radius = r;
+        self
+    }
+
+    pub fn header_bg(mut self, bg: impl Into<zenthra_core::Background>) -> Self {
+        match bg.into() {
+            zenthra_core::Background::None => self.header_bg = None,
+            other => self.header_bg = Some(other),
+        }
         self
     }
 
@@ -173,8 +196,10 @@ impl<'u, 'a, 'b> PanelBuilder<'u, 'a, 'b> {
         if let Some((start, end, dir)) = self.bg_gradient {
             panel_container = panel_container.bg_gradient(start, end, dir);
         }
-        if let Some(bc) = self.border_color {
-            panel_container = panel_container.border(bc, self.border_width);
+        if let Some(b) = self.border {
+            panel_container = panel_container.border(b);
+        } else if let Some(bc) = self.border_color {
+            panel_container = panel_container.border((bc, self.border_width));
         }
         if self.radius != 0.0 {
             panel_container = panel_container.radius_all(self.radius);
@@ -199,7 +224,7 @@ impl<'u, 'a, 'b> PanelBuilder<'u, 'a, 'b> {
                 let header_id = Id::from_u64(self.id.raw().wrapping_add(9000000));
                 let mut header_container = ui.container()
                     .id(header_id)
-                    .full_width()
+                    .fill_x()
                     .row()
                     .halign(Align::SpaceBetween)
                     .valign(Align::Center)
@@ -222,13 +247,13 @@ impl<'u, 'a, 'b> PanelBuilder<'u, 'a, 'b> {
                         .column()
                         .show(|ui: &mut Ui| {
                             if let Some(ref t) = self.title {
-                                ui.text(t).size(14.0).bold().color(Color::WHITE).show();
+                                ui.text(t).font_size(14.0).bold().color(Color::WHITE).show();
                             }
                             if let Some(ref s) = self.subtitle {
                                 if self.title.is_some() {
                                     ui.spacing(2.0);
                                 }
-                                ui.text(s).size(11.0).color(Color::rgb(0.55, 0.55, 0.65)).show();
+                                ui.text(s).font_size(11.0).color(Color::rgb(0.55, 0.55, 0.65)).show();
                             }
                         });
 
@@ -239,7 +264,7 @@ impl<'u, 'a, 'b> PanelBuilder<'u, 'a, 'b> {
                         } else {
                             crate::icons::NF_FA_CHEVRON_DOWN
                         };
-                        ui.text(chevron).size(12.0).color(Color::rgb(0.6, 0.6, 0.7)).show();
+                        ui.text(chevron).font_size(12.0).color(Color::rgb(0.6, 0.6, 0.7)).show();
                     }
                 });
 
@@ -260,7 +285,7 @@ impl<'u, 'a, 'b> PanelBuilder<'u, 'a, 'b> {
                 // If header is present, we draw a thin divider line
                 if has_header {
                     let mut div = ui.container()
-                        .full_width()
+                        .fill_x()
                         .height(1.0);
                     if let Some(bc) = self.border_color {
                         div = div.bg(bc);
@@ -269,7 +294,7 @@ impl<'u, 'a, 'b> PanelBuilder<'u, 'a, 'b> {
                 }
 
                 ui.container()
-                    .full_width()
+                    .fill_x()
                     .column()
                     .padding_all(self.padding)
                     .show(f);

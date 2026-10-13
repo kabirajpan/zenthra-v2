@@ -11,8 +11,8 @@ members = [
     "crates/zenthra-input",
     "crates/zenthra-platform",
     "crates/zenthra-theme",
-    "examples/window_test_mobile",
 ]
+default-members = ["crates/zenthra"]
 resolver = "2"
 
 [workspace.package]

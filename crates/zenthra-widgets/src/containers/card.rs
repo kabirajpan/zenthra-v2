@@ -31,6 +31,9 @@ pub struct CardBuilder<'u, 'a> {
     hover_scale: f32,
     hover_bg: Option<zenthra_core::Background>,
     hover_border_color: Option<Color>,
+    hover_border: Option<zenthra_core::Border>,
+    active_bg: Option<zenthra_core::Background>,
+    active_border: Option<zenthra_core::Border>,
     
     // Backdrop Filter
     backdrop_filter: Option<zenthra_core::BackdropFilter>,
@@ -62,6 +65,9 @@ impl<'u, 'a> CardBuilder<'u, 'a> {
             hover_scale: 1.0,
             hover_bg: None,
             hover_border_color: None,
+            hover_border: None,
+            active_bg: None,
+            active_border: None,
             backdrop_filter: None,
             opacity: None,
             bg_opacity: None,
@@ -109,7 +115,10 @@ impl<'u, 'a> CardBuilder<'u, 'a> {
     }
 
     pub fn bg(mut self, bg: impl Into<zenthra_core::Background>) -> Self {
-        self.bg = Some(bg.into());
+        match bg.into() {
+            zenthra_core::Background::None => self.bg = None,
+            other => self.bg = Some(other),
+        }
         self
     }
 
@@ -138,13 +147,26 @@ impl<'u, 'a> CardBuilder<'u, 'a> {
         self
     }
 
-    pub fn border(mut self, color: Color, width: f32) -> Self {
-        self.border_color = Some(color);
-        self.border_width = width;
+    pub fn border(mut self, border: impl Into<zenthra_core::Border>) -> Self {
+        match border.into() {
+            zenthra_core::Border::None => {
+                self.border_color = None;
+                self.border_width = 0.0;
+            }
+            zenthra_core::Border::Solid(c, w) => {
+                self.border_color = Some(c);
+                self.border_width = w;
+            }
+        }
         self
     }
 
     pub fn radius(mut self, r: f32) -> Self {
+        self.radius = r;
+        self
+    }
+
+    pub fn radius_all(mut self, r: f32) -> Self {
         self.radius = r;
         self
     }
@@ -171,8 +193,23 @@ impl<'u, 'a> CardBuilder<'u, 'a> {
         self
     }
 
+    pub fn hover_border(mut self, border: impl Into<zenthra_core::Border>) -> Self {
+        self.hover_border = Some(border.into());
+        self
+    }
+
     pub fn hover_border_color(mut self, color: Color) -> Self {
         self.hover_border_color = Some(color);
+        self
+    }
+
+    pub fn active_bg(mut self, bg: impl Into<zenthra_core::Background>) -> Self {
+        self.active_bg = Some(bg.into());
+        self
+    }
+
+    pub fn active_border(mut self, border: impl Into<zenthra_core::Border>) -> Self {
+        self.active_border = Some(border.into());
         self
     }
 
@@ -223,7 +260,7 @@ impl<'u, 'a> CardBuilder<'u, 'a> {
             container = container.opacity(o);
         }
         if let Some(bc) = self.border_color {
-            container = container.border(bc, self.border_width);
+            container = container.border((bc, self.border_width));
         }
         if self.radius != 0.0 {
             container = container.radius_all(self.radius);
@@ -241,8 +278,16 @@ impl<'u, 'a> CardBuilder<'u, 'a> {
         if let Some(hb) = self.hover_bg {
             container = container.hover_bg(hb);
         }
-        if let Some(hbc) = self.hover_border_color {
-            container = container.hover_border(hbc, self.border_width);
+        if let Some(hb) = self.hover_border {
+            container = container.hover_border(hb);
+        } else if let Some(hbc) = self.hover_border_color {
+            container = container.hover_border((hbc, self.border_width));
+        }
+        if let Some(abg) = self.active_bg {
+            container = container.active_bg(abg);
+        }
+        if let Some(ab) = self.active_border {
+            container = container.active_border(ab);
         }
         if self.hover_scale != 1.0 {
             container = container.hover_scale(self.hover_scale);

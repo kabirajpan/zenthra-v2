@@ -21,19 +21,36 @@ The `TextArea` is a multi-line text editor designed for long-form content, code 
 ### Sizing & Layout
 | Method | Description |
 |--------|-------------|
-| `.width(f32)` | Sets the width (Default is `300.0`). |
-| `.height(f32)` | Sets the fixed height (Enables scrolling if text is longer). |
-| `.full_width()` | Expands to fill available horizontal space. |
-| `.wrap(TextWrap)` | `Word`, `Character`, or `None`. |
-| `.scrollable(bool)` | Enables/disables vertical scrolling. |
+| `.width(f32)` | Sets the fixed width (Default is `300.0`). |
+| `.height(f32)` | Sets the fixed height. |
+| `.max_height(f32)` | Auto-grows up to this maximum height before scrolling. |
+| `.full_width()` / `.fill_x()` | Expands to fill available horizontal space. |
+| `.fill_y()` | Expands to fill available vertical space. |
+| `.padding(t, r, b, l)` | Spacing outside the editor (box padding). |
+| `.padding_all(f32)`, `.padding_x(f32)`, `.padding_y(f32)` | Directional padding shortcuts. |
+| `.text_padding(t, r, b, l)` | Spacing between text and the box edge. |
+| `.wrap(TextWrap)` | `TextWrap::Word`, `TextWrap::Glyph`, or `TextWrap::None`. |
+| `.auto_wrap()` / `.no_wrap()` | Wrap shortcuts. |
+| `.scrollable(bool)` | Enables/disables vertical and horizontal scrolling. |
 
-### Visuals
+### Visuals & Styling
 | Method | Description |
 |--------|-------------|
-| `.bg(Color)` | The background color of the text area. |
-| `.size(f32)` | The font size of the text. |
-| `.line_height(f32)` | The spacing between lines (Default is `1.2`). |
-| `.padding(...)` / `.text_padding(...)` | Control spacing around the editor and text. |
+| `.style(BoxStyle)` | Applies a complete, reusable `BoxStyle` theme. |
+| `.text_style(TextStyle)` | Applies a complete, reusable `TextStyle` typography theme. |
+| `.bg(...)` | Solid color or gradient background surface (`None` for transparent). |
+| `.border(...)` | Border color and width (`(Color, f32)` or `Border::Solid`). |
+| `.focus_border(...)` | Custom border displayed when the text area has active focus. |
+| `.radius(...)` / `.radius_all(f32)` | Corner radii. |
+| `.shadow(...)` / `.shadow_opacity(f32)` | Elevation drop shadow. |
+| `.size(f32)` / `.font_size(f32)` | Font size of the text. |
+| `.color(Color)` / `.text_color(Color)` | Color of the text. |
+| `.line_height(f32)` | Line height multiplier (Default is `1.2`). |
+| `.bold()`, `.italic()`, `.monospace()` | Typography style shortcuts. |
+| `.font_family(...)` | Custom font family name. |
+| `.highlight(Color)` | Color of the selection highlight. |
+| `.placeholder(...)` | Placeholder hint text when buffer is empty. |
+| `.submit_on_enter(bool)` | When true, pressing `Enter` submits rather than creating a newline. |
 
 ## Smart Navigation
 

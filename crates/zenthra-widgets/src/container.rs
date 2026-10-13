@@ -1,6 +1,8 @@
 use crate::ui::{DrawCommand, RectDraw, Ui};
-use zenthra_core::{Color, Align, BorderAlignment};
-use zenthra_render::RectInstance;
+pub use zenthra_core::BorderAlignment;
+use zenthra_core::{Align, BoxStyle, Color, Styleable};
+use crate::style_ext::BoxStyleExt;
+pub use crate::style_ext::resolve_background;
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum Direction {
@@ -34,35 +36,16 @@ pub struct ContainerBuilder<'u, 'a> {
     start_y: f32,
     pos_x: Option<f32>,
     pos_y: Option<f32>,
-    width: Option<f32>,
-    height: Option<f32>,
-    fill_x: bool,
-    fill_y: bool,
-    padding_top: f32,
-    padding_bottom: f32,
-    padding_left: f32,
-    padding_right: f32,
+    pub style: BoxStyle,
     gap: f32,
-    bg: Option<zenthra_core::Background>,
-    pub bg_gradient: Option<(Color, Color, zenthra_core::GradientDirection)>,
-    border_color: Option<Color>,
-    border_width: f32,
-    shadow_blur: f32,
-    shadow_color: Option<Color>,
-    shadow_offset: [f32; 2],
-    shadow_opacity: f32,
-    opacity: f32,
     render_mode: Option<zenthra_core::RenderMode>,
-    max_width: Option<f32>,
-    max_height: Option<f32>,
-    min_width: Option<f32>,
-    min_height: Option<f32>,
     scroll_x: bool,
     scroll_y: bool,
+    show_scrollbar_x: bool,
+    show_scrollbar_y: bool,
+    wheel_fallback_x: bool,
     clip: Option<bool>,
     pub id: zenthra_core::Id,
-    radius: [f32; 4],
-    border_alignment: BorderAlignment,
     is_absolute: bool,
     is_overlay: bool,
     hover_bg: Option<zenthra_core::Background>,
@@ -79,7 +62,25 @@ pub struct ContainerBuilder<'u, 'a> {
     backdrop_filter: Option<zenthra_core::BackdropFilter>,
     draggable_window: bool,
     pub role: Option<zenthra_core::Role>,
+    pub custom_id: bool,
+    pub interactive: bool,
+    pub cursor: Option<crate::text::CursorIcon>,
 }
+
+impl<'u, 'a> Styleable for ContainerBuilder<'u, 'a> {
+    #[inline]
+    fn box_style_mut(&mut self) -> &mut BoxStyle {
+        &mut self.style
+    }
+
+    #[inline]
+    fn box_style(&self) -> &BoxStyle {
+        &self.style
+    }
+}
+
+// Single-source macro generates all BoxStyle builder methods (.width, .height, .padding, .radius, .bg, .border, .shadow, etc.)
+impl_box_style_methods!(ContainerBuilder);
 
 impl<'u, 'a> ContainerBuilder<'u, 'a> {
     pub fn new(ui: &'u mut Ui<'a>) -> Self {
@@ -94,39 +95,23 @@ impl<'u, 'a> ContainerBuilder<'u, 'a> {
             child_sizes: Vec::new(),
             child_ranges: Vec::new(),
             child_origins: Vec::new(),
+            custom_id: false,
+            interactive: false,
+            cursor: None,
             start_x: 0.0,
             start_y: 0.0,
             pos_x: None,
             pos_y: None,
-            width: None,
-            height: None,
-            fill_x: false,
-            fill_y: false,
-            padding_top: 0.0,
-            padding_bottom: 0.0,
-            padding_left: 0.0,
-            padding_right: 0.0,
+            style: BoxStyle::new(),
             gap: 0.0,
-            bg: None,
-            bg_gradient: None,
-            border_color: None,
-            border_width: 0.0,
-            shadow_blur: 0.0,
-            shadow_color: None,
-            shadow_offset: [0.0, 0.0],
-            shadow_opacity: 0.0,
-            opacity: 1.0,
             render_mode: None,
-            max_width: None,
-            max_height: None,
-            min_width: None,
-            min_height: None,
             scroll_x: false,
             scroll_y: false,
+            show_scrollbar_x: true,
+            show_scrollbar_y: true,
+            wheel_fallback_x: true,
             clip: None,
             id,
-            radius: [0.0; 4],
-            border_alignment: BorderAlignment::Inside,
             is_absolute: false,
             is_overlay: false,
             hover_bg: None,
@@ -157,68 +142,45 @@ impl<'u, 'a> ContainerBuilder<'u, 'a> {
         self.pos_y = Some(y);
         self
     }
-    pub fn width(mut self, w: f32) -> Self {
-        self.width = Some(w);
-        self
-    }
-    pub fn height(mut self, h: f32) -> Self {
-        self.height = Some(h);
-        self
-    }
-    pub fn fill_x(mut self) -> Self {
-        self.fill_x = true;
-        self
-    }
-    pub fn fill_y(mut self) -> Self {
-        self.fill_y = true;
-        self
-    }
-    pub fn fill(mut self) -> Self {
-        self.fill_x = true;
-        self.fill_y = true;
-        self
-    }
-    pub fn full_width(mut self) -> Self {
-        self.fill_x = true;
-        self
-    }
-    pub fn full_height(mut self) -> Self {
-        self.fill_y = true;
-        self
-    }
-    pub fn max_width(mut self, w: f32) -> Self {
-        self.max_width = Some(w);
-        self
-    }
-    pub fn max_height(mut self, h: f32) -> Self {
-        self.max_height = Some(h);
-        self
-    }
-    pub fn min_width(mut self, w: f32) -> Self {
-        self.min_width = Some(w);
-        self
-    }
-    pub fn min_height(mut self, h: f32) -> Self {
-        self.min_height = Some(h);
-        self
-    }
-    pub fn scrollable(mut self, x: bool, y: bool) -> Self {
-        self.scroll_x = x;
-        self.scroll_y = y;
+    pub fn scroll(mut self, enabled: bool) -> Self {
+        self.scroll_x = enabled;
+        self.scroll_y = enabled;
+        if enabled { self.clip = Some(true); }
         self
     }
     pub fn draggable_window(mut self, drag: bool) -> Self {
         self.draggable_window = drag;
         self
     }
-    pub fn scroll_x(mut self, e: bool) -> Self {
-        self.scroll_x = e;
-        if e { self.clip = Some(true); }
+    pub fn scroll_x(mut self, enabled: bool) -> Self {
+        self.scroll_x = enabled;
+        if enabled { self.clip = Some(true); }
         self
     }
-    pub fn scroll_y(mut self, e: bool) -> Self {
-        self.scroll_y = e;
-        if e { self.clip = Some(true); }
+    pub fn scroll_y(mut self, enabled: bool) -> Self {
+        self.scroll_y = enabled;
+        if enabled { self.clip = Some(true); }
+        self
+    }
+    /// Whether to visually draw the horizontal scrollbar thumb (default: true).
+    pub fn show_scrollbar_x(mut self, show: bool) -> Self {
+        self.show_scrollbar_x = show;
+        self
+    }
+    /// Whether to visually draw the vertical scrollbar thumb (default: true).
+    pub fn show_scrollbar_y(mut self, show: bool) -> Self {
+        self.show_scrollbar_y = show;
+        self
+    }
+    /// Hide both horizontal and vertical scrollbar thumbs while keeping scrolling behavior.
+    pub fn hide_scrollbars(mut self) -> Self {
+        self.show_scrollbar_x = false;
+        self.show_scrollbar_y = false;
+        self
+    }
+    /// Whether standard vertical mouse wheel scrolls this container horizontally when scroll_x is true and scroll_y is false (default: true).
+    pub fn wheel_fallback_x(mut self, enabled: bool) -> Self {
+        self.wheel_fallback_x = enabled;
         self
     }
     /// Force clip the overflowing content bounds of this container regardless of scrolling state
@@ -226,47 +188,10 @@ impl<'u, 'a> ContainerBuilder<'u, 'a> {
         self.clip = Some(enabled);
         self
     }
-    pub fn padding(mut self, t: f32, r: f32, b: f32, l: f32) -> Self {
-        self.padding_top = t;
-        self.padding_bottom = b;
-        self.padding_left = l;
-        self.padding_right = r;
+    pub fn no_clip(mut self) -> Self {
+        self.clip = Some(false);
         self
     }
-    pub fn padding_all(mut self, p: f32) -> Self {
-        self.padding_top = p;
-        self.padding_bottom = p;
-        self.padding_left = p;
-        self.padding_right = p;
-        self
-    }
-    pub fn padding_x(mut self, p: f32) -> Self {
-        self.padding_left = p;
-        self.padding_right = p;
-        self
-    }
-    pub fn padding_y(mut self, p: f32) -> Self {
-        self.padding_top = p;
-        self.padding_bottom = p;
-        self
-    }
-    pub fn padding_top(mut self, p: f32) -> Self {
-        self.padding_top = p;
-        self
-    }
-    pub fn padding_bottom(mut self, p: f32) -> Self {
-        self.padding_bottom = p;
-        self
-    }
-    pub fn padding_left(mut self, p: f32) -> Self {
-        self.padding_left = p;
-        self
-    }
-    pub fn padding_right(mut self, p: f32) -> Self {
-        self.padding_right = p;
-        self
-    }
-
 
     pub fn row(mut self) -> Self {
         self.direction = Direction::Row;
@@ -304,16 +229,6 @@ impl<'u, 'a> ContainerBuilder<'u, 'a> {
         self
     }
 
-    pub fn radius(mut self, tl: f32, tr: f32, br: f32, bl: f32) -> Self {
-        self.radius = [tl, tr, br, bl];
-        self
-    }
-
-    pub fn radius_all(mut self, r: f32) -> Self {
-        self.radius = [r, r, r, r];
-        self
-    }
-
     pub fn halign(mut self, align: Align) -> Self {
         self.halign = align;
         self
@@ -324,60 +239,22 @@ impl<'u, 'a> ContainerBuilder<'u, 'a> {
         self
     }
 
-    pub fn radius_top_left(mut self, r: f32) -> Self {
-        self.radius[0] = r;
-        self
-    }
-    pub fn radius_top_right(mut self, r: f32) -> Self {
-        self.radius[1] = r;
-        self
-    }
-    pub fn radius_bottom_right(mut self, r: f32) -> Self {
-        self.radius[2] = r;
-        self
-    }
-    pub fn radius_bottom_left(mut self, r: f32) -> Self {
-        self.radius[3] = r;
-        self
-    }
-
-    pub fn radius_top(mut self, r: f32) -> Self {
-        self.radius[0] = r;
-        self.radius[1] = r;
-        self
-    }
-    pub fn radius_bottom(mut self, r: f32) -> Self {
-        self.radius[2] = r;
-        self.radius[3] = r;
-        self
-    }
-    pub fn radius_left(mut self, r: f32) -> Self {
-        self.radius[0] = r;
-        self.radius[3] = r;
-        self
-    }
-    pub fn radius_right(mut self, r: f32) -> Self {
-        self.radius[1] = r;
-        self.radius[2] = r;
-        self
-    }
-    pub fn radius_x(mut self, r: f32) -> Self {
-        self.radius = [r, r, r, r];
-        self
-    }
-    pub fn radius_y(mut self, r: f32) -> Self {
-        self.radius = [r, r, r, r];
-        self
-    }
-
     pub fn active_bg(mut self, color: impl Into<zenthra_core::Background>) -> Self {
         self.active_bg = Some(color.into());
         self
     }
 
-    pub fn active_border(mut self, color: Color, width: f32) -> Self {
-        self.active_border_color = Some(color);
-        self.active_border_width = Some(width);
+    pub fn active_border(mut self, border: impl Into<zenthra_core::Border>) -> Self {
+        match border.into() {
+            zenthra_core::Border::None => {
+                self.active_border_color = Some(Color::TRANSPARENT);
+                self.active_border_width = Some(0.0);
+            }
+            zenthra_core::Border::Solid(c, w) => {
+                self.active_border_color = Some(c);
+                self.active_border_width = Some(w);
+            }
+        }
         self
     }
 
@@ -390,66 +267,6 @@ impl<'u, 'a> ContainerBuilder<'u, 'a> {
         self.gap = g;
         self
     }
-    pub fn bg(mut self, b: impl Into<zenthra_core::Background>) -> Self {
-        self.bg = Some(b.into());
-        self
-    }
-    pub fn bg_gradient(mut self, start: Color, end: Color, direction: zenthra_core::GradientDirection) -> Self {
-        let (dir_type, angle) = direction.to_type_and_angle();
-        if dir_type == 2.0 {
-            self.bg = Some(zenthra_core::Background::Gradient(zenthra_core::Gradient::radial(
-                zenthra_core::Align::Center,
-                [start, end],
-            )));
-        } else {
-            self.bg = Some(zenthra_core::Background::Gradient(zenthra_core::Gradient::linear(
-                angle.to_degrees(),
-                [start, end],
-            )));
-        }
-        self.bg_gradient = Some((start, end, direction));
-        self
-    }
-
-    pub fn bg_opacity(mut self, opacity: f32) -> Self {
-        if let Some(ref mut bg) = self.bg {
-            match bg {
-                zenthra_core::Background::Solid(ref mut c) => c.a = opacity,
-                zenthra_core::Background::Gradient(ref mut g) => match g {
-                    zenthra_core::Gradient::Linear { ref mut stops, .. } => {
-                        for s in stops.iter_mut() { s.color.a *= opacity; }
-                    }
-                    zenthra_core::Gradient::Radial { ref mut stops, .. } => {
-                        for s in stops.iter_mut() { s.color.a *= opacity; }
-                    }
-                    zenthra_core::Gradient::Mesh { ref mut points } => {
-                        for p in points.iter_mut() { p.1.a *= opacity; }
-                    }
-                }
-            }
-        }
-        self
-    }
-    pub fn border(mut self, c: Color, w: f32) -> Self {
-        self.border_color = Some(c);
-        self.border_width = w;
-        self
-    }
-    pub fn shadow(mut self, color: Color, x: f32, y: f32, blur: f32) -> Self {
-        self.shadow_color = Some(color);
-        self.shadow_offset = [x, y];
-        self.shadow_blur = blur;
-        self
-    }
-
-    pub fn shadow_opacity(mut self, opacity: f32) -> Self {
-        self.shadow_opacity = opacity;
-        self
-    }
-    pub fn opacity(mut self, o: f32) -> Self {
-        self.opacity = o;
-        self
-    }
 
     pub fn id(mut self, id: impl std::hash::Hash) -> Self {
         let mut hasher = std::collections::hash_map::DefaultHasher::new();
@@ -459,11 +276,23 @@ impl<'u, 'a> ContainerBuilder<'u, 'a> {
             parent.hash(&mut hasher);
         }
         self.id = zenthra_core::Id::from_u64(hasher.finish());
+        self.custom_id = true;
         self
     }
 
     pub fn raw_id(mut self, id: zenthra_core::Id) -> Self {
         self.id = id;
+        self.custom_id = true;
+        self
+    }
+
+    pub fn interactive(mut self, interactive: bool) -> Self {
+        self.interactive = interactive;
+        self
+    }
+
+    pub fn cursor(mut self, icon: crate::text::CursorIcon) -> Self {
+        self.cursor = Some(icon);
         self
     }
 
@@ -472,19 +301,22 @@ impl<'u, 'a> ContainerBuilder<'u, 'a> {
         self
     }
 
-    pub fn hover_border(mut self, color: Color, width: f32) -> Self {
-        self.hover_border_color = Some(color);
-        self.hover_border_width = Some(width);
+    pub fn hover_border(mut self, border: impl Into<zenthra_core::Border>) -> Self {
+        match border.into() {
+            zenthra_core::Border::None => {
+                self.hover_border_color = Some(Color::TRANSPARENT);
+                self.hover_border_width = Some(0.0);
+            }
+            zenthra_core::Border::Solid(c, w) => {
+                self.hover_border_color = Some(c);
+                self.hover_border_width = Some(w);
+            }
+        }
         self
     }
 
     pub fn hover_scale(mut self, scale: f32) -> Self {
         self.hover_scale = scale;
-        self
-    }
-
-    pub fn border_alignment(mut self, alignment: BorderAlignment) -> Self {
-        self.border_alignment = alignment;
         self
     }
 
@@ -571,20 +403,29 @@ impl<'u, 'a> ContainerBuilder<'u, 'a> {
         self
     }
 
-    pub fn clickable(mut self, clickable: bool) -> Self {
-        if clickable && self.role.is_none() {
-            self.role = Some(zenthra_core::Role::Button);
-        }
-        self
-    }
 
     pub fn show<F>(mut self, f: F) -> zenthra_core::Response
     where
         F: FnOnce(&mut Ui),
     {
-        // 1. Capture the start position and own ID
+        // 1. Capture style values and own ID
         let id = self.id;
-        let actual_clip = self.clip.unwrap_or(self.width.is_some() || self.height.is_some() || self.scroll_x || self.scroll_y);
+        let width = self.style.width;
+        let height = self.style.height;
+        let padding_left = self.style.padding.left;
+        let padding_right = self.style.padding.right;
+        let padding_top = self.style.padding.top;
+        let padding_bottom = self.style.padding.bottom;
+        let border_width = self.style.border_width();
+        let border_color = self.style.border_color();
+        let fill_x = self.style.fill_x;
+        let fill_y = self.style.fill_y;
+        let min_width = self.style.min_width;
+        let max_width = self.style.max_width;
+        let min_height = self.style.min_height;
+        let max_height = self.style.max_height;
+
+        let actual_clip = self.clip.unwrap_or(width.is_some() || height.is_some() || self.scroll_x || self.scroll_y);
 
         self.start_x = self.ui.cursor_x;
         self.start_y = self.ui.cursor_y;
@@ -613,11 +454,11 @@ impl<'u, 'a> ContainerBuilder<'u, 'a> {
         let _id_log_start_idx = self.ui.id_log.len();
 
         // Set child environment
-        if let Some(w) = self.width {
-            self.ui.max_x = (ox + w - self.padding_right).min(prev_max_x);
+        if let Some(w) = width {
+            self.ui.max_x = (ox + w - padding_right).min(prev_max_x);
         }
-        if let Some(h) = self.height {
-            self.ui.max_y = (oy + h - self.padding_bottom).min(prev_max_y);
+        if let Some(h) = height {
+            self.ui.max_y = (oy + h - padding_bottom).min(prev_max_y);
         }
 
         self.ui.direction = self.direction;
@@ -629,21 +470,21 @@ impl<'u, 'a> ContainerBuilder<'u, 'a> {
             self.ui.needs_redraw = true;
         }
 
-        let avail_w = if let Some(w) = self.width {
-            w - self.padding_left - self.padding_right - 2.0 * self.border_width
+        let avail_w = if let Some(w) = width {
+            w - padding_left - padding_right - 2.0 * border_width
         } else {
-            (prev_max_x - ox - self.padding_left - self.padding_right - 2.0 * self.border_width).max(0.0)
+            (prev_max_x - ox - padding_left - padding_right - 2.0 * border_width).max(0.0)
         };
-        let avail_h = if let Some(h) = self.height {
-            h - self.padding_top - self.padding_bottom - 2.0 * self.border_width
+        let avail_h = if let Some(h) = height {
+            h - padding_top - padding_bottom - 2.0 * border_width
         } else {
-            (prev_max_y - oy - self.padding_top - self.padding_bottom - 2.0 * self.border_width).max(0.0)
+            (prev_max_y - oy - padding_top - padding_bottom - 2.0 * border_width).max(0.0)
         };
 
         // Important: If we are absolute, our internal boundary is NOT capped by prev_max_x.
         // This allows us to have a full width even at the edge of the screen.
-        self.ui.max_x = ox + self.padding_left + self.border_width + avail_w;
-        self.ui.max_y = oy + self.padding_top + self.border_width + avail_h;
+        self.ui.max_x = ox + padding_left + border_width + avail_w;
+        self.ui.max_y = oy + padding_top + border_width + avail_h;
 
         self.ui.semantic_stack.push(id);
         let role = self.role.unwrap_or(zenthra_core::Role::Container);
@@ -666,8 +507,8 @@ impl<'u, 'a> ContainerBuilder<'u, 'a> {
         self.ui.offset_y -= sy;
         self.ui.available_width = avail_w;
 
-        self.ui.base_x = ox + self.padding_left + self.border_width;
-        self.ui.base_y = oy + self.padding_top + self.border_width;
+        self.ui.base_x = ox + padding_left + border_width;
+        self.ui.base_y = oy + padding_top + border_width;
         self.ui.cursor_x = self.ui.base_x;
         self.ui.cursor_y = self.ui.base_y;
 
@@ -683,7 +524,7 @@ impl<'u, 'a> ContainerBuilder<'u, 'a> {
 
         // -- Run Children --
         if self.is_overlay {
-            let key = zenthra_core::Id::from_u64((id.raw() << 8) | 99);
+            let key = crate::ui::overlay_key(id);
             self.ui.interaction_state.insert(key, 1.0);
             self.ui.active_overlays.push(id);
             self.ui.active_overlay_stack.push(id);
@@ -737,7 +578,7 @@ impl<'u, 'a> ContainerBuilder<'u, 'a> {
                 // not single-row distributed (SpaceBetween/SpaceAround), not fixed-height, and children exceed available width.
                 let should_wrap = self.direction == Direction::Row
                     && !self.scroll_x
-                    && self.height.is_none()
+                    && height.is_none()
                     && self.halign != Align::SpaceBetween
                     && self.halign != Align::SpaceAround
                     && (avail_w > 0.0)
@@ -755,29 +596,29 @@ impl<'u, 'a> ContainerBuilder<'u, 'a> {
             _ => self.layout_wrap(ox, oy, avail_w, avail_h, &mut target_positions),
         };
 
-        let mut w = if self.fill_x {
+        let mut w = if fill_x {
             self.ui.max_x - ox  // use parent's right boundary, not global window width
         } else {
-            self.width.unwrap_or(content_w + self.padding_left + self.padding_right + 2.0 * self.border_width)
+            width.unwrap_or(content_w + padding_left + padding_right + 2.0 * border_width)
         };
         
-        if let Some(mw) = self.max_width { w = w.min(mw); }
-        if let Some(mw) = self.min_width { w = w.max(mw); }
+        if let Some(mw) = max_width { w = w.min(mw); }
+        if let Some(mw) = min_width { w = w.max(mw); }
 
-        let mut h = if self.fill_y {
+        let mut h = if fill_y {
             self.ui.max_y - oy  // use parent's bottom boundary, not global window height
         } else {
-            self.height.unwrap_or(content_h + self.padding_top + self.padding_bottom + 2.0 * self.border_width)
+            height.unwrap_or(content_h + padding_top + padding_bottom + 2.0 * border_width)
         };
 
-        if let Some(mh) = self.max_height { h = h.min(mh); }
-        if let Some(mh) = self.min_height { h = h.max(mh); }
+        if let Some(mh) = max_height { h = h.min(mh); }
+        if let Some(mh) = min_height { h = h.max(mh); }
 
         let draw_start = self.ui.draws.len();
         self.ui.record_layout(id, zenthra_core::Rect::new(ox, oy, w, h));
 
-        let max_sx = (content_w + self.padding_left + self.padding_right - w).max(0.0);
-        let max_sy = (content_h + self.padding_top + self.padding_bottom - h).max(0.0);
+        let max_sx = (content_w + padding_left + padding_right - w).max(0.0);
+        let max_sy = (content_h + padding_top + padding_bottom - h).max(0.0);
 
         let (actual_ox, actual_oy, actual_w, actual_h) = if self.is_absolute || self.pos_x.is_some() || self.pos_y.is_some() {
             (ox + prev_global_ox, oy + prev_global_oy, w, h)
@@ -795,10 +636,39 @@ impl<'u, 'a> ContainerBuilder<'u, 'a> {
             prev_viewport.contains(zenthra_core::Point::new(self.ui.mouse_x, self.ui.mouse_y))
         };
 
-        let container_hover = mouse_in_parent && self.ui.mouse_in_rect(actual_ox, actual_oy, actual_w, actual_h) && !self.ui.is_occluded(id, self.ui.mouse_x, self.ui.mouse_y);
-        let container_active = container_hover && self.ui.mouse_down;
+        let can_interact = self.ui.can_interact(id);
+        let raw_hover = mouse_in_parent && self.ui.mouse_in_rect(actual_ox, actual_oy, actual_w, actual_h) && !self.ui.is_occluded(id, self.ui.mouse_x, self.ui.mouse_y);
+        let container_hover = raw_hover && can_interact;
 
-        let mut final_scale = 1.0;
+        if container_hover {
+            if let Some(cursor) = self.cursor {
+                self.ui.cursor_icon = cursor;
+            }
+        }
+
+        let is_interactive = self.role == Some(zenthra_core::Role::Button)
+            || self.interactive
+            || self.draggable_window
+            || self.scroll_x
+            || self.scroll_y
+            || self.cursor.is_some()
+            || self.hover_bg.is_some()
+            || self.hover_border_color.is_some()
+            || self.active_bg.is_some()
+            || self.active_border_color.is_some();
+
+        let container_active = if self.ui.mouse_down {
+            if self.ui.active_widget_id == Some(id) {
+                true
+            } else if self.ui.active_widget_id.is_none() && raw_hover && is_interactive {
+                self.ui.active_widget_id = Some(id);
+                true
+            } else {
+                false
+            }
+        } else {
+            false
+        };
 
         let (scroll_x, scroll_y) = if self.scroll_x || self.scroll_y {
             let (mut sx, mut sy) = *self.ui.scroll_state.get(&id).unwrap_or(&(0.0, 0.0));
@@ -827,8 +697,8 @@ impl<'u, 'a> ContainerBuilder<'u, 'a> {
                             }
                             consumed = true;
                         }
-                        // Fallback: standard vertical wheel scrolls horizontal-only viewports
-                        if self.scroll_x && !self.scroll_y && *delta_y != 0.0 && *delta_x == 0.0 {
+                        // Fallback: standard vertical wheel scrolls horizontal-only viewports (if allowed)
+                        if self.wheel_fallback_x && self.scroll_x && !self.scroll_y && *delta_y != 0.0 && *delta_x == 0.0 {
                             let can_left = sx > 0.0 && *delta_y > 0.0;
                             let can_right = sx < max_sx && *delta_y < 0.0;
                             if can_left || can_right {
@@ -848,7 +718,7 @@ impl<'u, 'a> ContainerBuilder<'u, 'a> {
             
             sx = sx.clamp(0.0, max_sx);
             sy = sy.clamp(0.0, max_sy);
-            
+
             self.ui.scroll_state.insert(id, (sx, sy));
             (sx, sy)
         } else {
@@ -893,12 +763,7 @@ impl<'u, 'a> ContainerBuilder<'u, 'a> {
                     y:           oy,
                     width:       w,
                     height:      h,
-                    radius:      [
-                        self.radius[3], // TL
-                        self.radius[2], // TR
-                        self.radius[1], // BR
-                        self.radius[0], // BL
-                    ],
+                    radius:      self.style.gpu_radius(),
                     blur_radius,
                     clip_rect: clip,
                     brightness,
@@ -916,12 +781,7 @@ impl<'u, 'a> ContainerBuilder<'u, 'a> {
                 y:           oy,
                 width:       w,
                 height:      h,
-                radius:      [
-                    self.radius[3], // TL
-                    self.radius[2], // TR
-                    self.radius[1], // BR
-                    self.radius[0], // BL
-                ],
+                radius:      self.style.gpu_radius(),
                 blur_radius,
                 clip_rect: clip,
                 brightness: 1.12,
@@ -953,12 +813,7 @@ impl<'u, 'a> ContainerBuilder<'u, 'a> {
                 y:           oy,
                 width:       w,
                 height:      h,
-                radius:      [
-                    self.radius[3], // TL
-                    self.radius[2], // TR
-                    self.radius[1], // BR
-                    self.radius[0], // BL
-                ],
+                radius:      self.style.gpu_radius(),
                 blur_radius,
                 shader_id,
                 clip_rect: clip,
@@ -977,75 +832,41 @@ impl<'u, 'a> ContainerBuilder<'u, 'a> {
             }
         }
 
-        // Background
-        let base_bg = self.bg.clone().or_else(|| {
-            if self.hover_bg.is_some() || self.active_bg.is_some() {
-                Some(zenthra_core::Background::Solid(Color::TRANSPARENT))
-            } else {
-                None
-            }
-        });
-        if let Some(mut bg_style) = base_bg {
-            let mut bw = self.border_width;
-            let mut bc = self.border_color.unwrap_or(Color::TRANSPARENT);
-
-            if container_active {
-                bg_style = self.active_bg.clone().or_else(|| self.hover_bg.clone()).unwrap_or(bg_style);
-                bw = self.active_border_width.or(self.hover_border_width).unwrap_or(bw);
-                bc = self.active_border_color.or(self.hover_border_color).unwrap_or(bc);
-                final_scale = self.active_scale;
+        // Background, Border & Shadow (Single source via BoxStyleExt)
+        {
+            let (effective_bg, effective_bw, effective_bc, final_scale) = if container_active {
+                (
+                    self.active_bg.as_ref().or(self.hover_bg.as_ref()).or(self.style.bg.as_ref()),
+                    self.active_border_width.or(self.hover_border_width).unwrap_or(border_width),
+                    self.active_border_color.or(self.hover_border_color).or(border_color),
+                    self.active_scale,
+                )
             } else if container_hover {
-                bg_style = self.hover_bg.clone().unwrap_or(bg_style);
-                bw = self.hover_border_width.unwrap_or(bw);
-                bc = self.hover_border_color.unwrap_or(bc);
-                final_scale = self.hover_scale;
-            }
+                (
+                    self.hover_bg.as_ref().or(self.style.bg.as_ref()),
+                    self.hover_border_width.unwrap_or(border_width),
+                    self.hover_border_color.or(border_color),
+                    self.hover_scale,
+                )
+            } else {
+                (
+                    self.style.bg.as_ref(),
+                    border_width,
+                    border_color,
+                    1.0,
+                )
+            };
 
-            let (c1, c2, c3, c4, gradient_params, gradient_stops, is_bg_visible) =
-                resolve_background(&Some(bg_style));
-
-            let has_visible_draw = is_bg_visible || bc.a > 0.0 || self.shadow_color.is_some();
-            if has_visible_draw {
-                let visual_w = w * final_scale;
-                let visual_h = h * final_scale;
-                let visual_ox = ox - (visual_w - w) / 2.0;
-                let visual_oy = oy - (visual_h - h) / 2.0;
-
-                let rect_inst = RectInstance {
-                    pos: [visual_ox, visual_oy],
-                    size: [visual_w, visual_h],
-                    color: c1,
-                    radius: [
-                        self.radius[3], // Bottom-Left -> Top-Left
-                        self.radius[2], // Bottom-Right -> Top-Right
-                        self.radius[1], // Top-Right -> Bottom-Right
-                        self.radius[0], // Top-Left -> Bottom-Left
-                    ],
-                    border_width: bw,
-                    border_color: bc.to_array(),
-                    shadow_color: self.shadow_color.map(|c| {
-                        let mut a = c.to_array();
-                        a[3] *= self.shadow_opacity;
-                        a
-                    }).unwrap_or([0.0, 0.0, 0.0, 0.0]),
-                    shadow_offset: self.shadow_offset,
-                    shadow_blur: self.shadow_blur,
-                    clip_rect: [-100000.0, -100000.0, 2000000.0, 2000000.0],
-                    grayscale: 0.0,
-                    brightness: 1.0,
-                    opacity: self.opacity,
-                    border_alignment: match self.border_alignment {
-                        BorderAlignment::Inside => 0.0,
-                        BorderAlignment::Center => 0.5,
-                        BorderAlignment::Outside => 1.0,
-                    },
-                    color2: c2,
-                    color3: c3,
-                    color4: c4,
-                    gradient_params,
-                    gradient_stops,
-                };
-
+            if let Some(rect_inst) = self.style.build_rect_styled(
+                ox,
+                oy,
+                w,
+                h,
+                effective_bg,
+                effective_bc,
+                Some(effective_bw),
+                final_scale,
+            ) {
                 if push_overlay {
                     self.ui.overlays.push(DrawCommand::Rect(RectDraw { instance: rect_inst }));
                 } else {
@@ -1063,7 +884,7 @@ impl<'u, 'a> ContainerBuilder<'u, 'a> {
                 self.children_draws
                     .get(*start)
                     .map(|d| draw_origin(d))
-                    .unwrap_or((ox + self.padding_left + self.border_width, oy + self.padding_top + self.border_width))
+                    .unwrap_or((ox + padding_left + border_width, oy + padding_top + border_width))
             });
 
             let dx = tx - origin_x;
@@ -1142,8 +963,8 @@ impl<'u, 'a> ContainerBuilder<'u, 'a> {
             let bar_margin = 2.0;
 
             // Vertical Scrollbar
-            if self.scroll_y && max_sy > 0.0 {
-                let thumb_h = (h / (content_h + self.padding_top + self.padding_bottom)) * h;
+            if self.show_scrollbar_y && self.scroll_y && max_sy > 0.0 {
+                let thumb_h = (h / (content_h + padding_top + padding_bottom)) * h;
                 let thumb_h = thumb_h.max(20.0);
                 let scroll_ratio = scroll_y / max_sy;
                 let is_hover = !self.ui.resize_active
@@ -1185,7 +1006,7 @@ impl<'u, 'a> ContainerBuilder<'u, 'a> {
                     
                     // Use layout coordinates (ox, oy) for drawing so they are shifted by parents correctly.
                     // But interaction uses actual_ox/actual_oy (screen space).
-                    let visual_thumb_x = ox + w - bar_thickness - bar_margin - self.border_width;
+                    let visual_thumb_x = ox + w - bar_thickness - bar_margin - border_width;
                     let visual_thumb_y = oy + (h - thumb_h) * scroll_ratio;
 
                     let draw = crate::ui::DrawCommand::OverlayRect(crate::ui::OverlayRectDraw {
@@ -1201,8 +1022,8 @@ impl<'u, 'a> ContainerBuilder<'u, 'a> {
             }
 
             // Horizontal Scrollbar
-            if self.scroll_x && max_sx > 0.0 {
-                let thumb_w = (w / (content_w + self.padding_left + self.padding_right)) * w;
+            if self.show_scrollbar_x && self.scroll_x && max_sx > 0.0 {
+                let thumb_w = (w / (content_w + padding_left + padding_right)) * w;
                 let thumb_w = thumb_w.max(20.0);
                 let scroll_ratio = scroll_x / max_sx;
                 let is_hover = !self.ui.resize_active
@@ -1242,7 +1063,7 @@ impl<'u, 'a> ContainerBuilder<'u, 'a> {
                     };
                     
                     let visual_thumb_x = ox + (w - thumb_w) * scroll_ratio;
-                    let visual_thumb_y = oy + h - bar_thickness - bar_margin - self.border_width;
+                    let visual_thumb_y = oy + h - bar_thickness - bar_margin - border_width;
 
                     let draw = crate::ui::DrawCommand::OverlayRect(crate::ui::OverlayRectDraw {
                         x: visual_thumb_x,
@@ -1286,6 +1107,7 @@ impl<'u, 'a> ContainerBuilder<'u, 'a> {
             hovered: container_hover,
             pressed: container_active,
             submitted: false,
+            changed: false,
         }
     }
 
@@ -1320,8 +1142,8 @@ impl<'u, 'a> ContainerBuilder<'u, 'a> {
             }
         };
 
-        let real_w = if self.width.is_some() || self.fill_x { inner_w } else { content_w };
-        let real_h = if self.height.is_some() || self.fill_y { inner_h } else { content_h };
+        let real_w = if self.style.width.is_some() || self.style.fill_x { inner_w } else { content_w };
+        let real_h = if self.style.height.is_some() || self.style.fill_y { inner_h } else { content_h };
 
         match self.target_halign_valign(ox, oy, real_w, real_h, content_w, content_h, targets) {
             (w, h) => (w, h),
@@ -1329,11 +1151,14 @@ impl<'u, 'a> ContainerBuilder<'u, 'a> {
     }
     
     fn target_halign_valign(&self, ox: f32, oy: f32, real_w: f32, real_h: f32, content_w: f32, content_h: f32, targets: &mut [(f32, f32)]) -> (f32, f32) {
+        let padding_left = self.style.padding.left;
+        let padding_top = self.style.padding.top;
+        let border_width = self.style.border_width();
         let n = self.child_sizes.len();
         match self.direction {
             Direction::Row => {
                 let extra = (real_w - content_w).max(0.0);
-                let mut cx = ox + self.padding_left + self.border_width + match self.halign {
+                let mut cx = ox + padding_left + border_width + match self.halign {
                     Align::Left => 0.0,
                     Align::Center => extra / 2.0,
                     Align::Right => extra,
@@ -1347,7 +1172,7 @@ impl<'u, 'a> ContainerBuilder<'u, 'a> {
                     _ => self.gap,
                 };
                 for (i, (cw, ch)) in self.child_sizes.iter().enumerate() {
-                    let cy = oy + self.padding_top + self.border_width + match self.valign {
+                    let cy = oy + padding_top + border_width + match self.valign {
                         Align::Top => 0.0,
                         Align::Center => (real_h - ch) / 2.0,
                         Align::Bottom => real_h - ch,
@@ -1359,7 +1184,7 @@ impl<'u, 'a> ContainerBuilder<'u, 'a> {
             }
             Direction::Column => {
                 let extra = (real_h - content_h).max(0.0);
-                let mut cy = oy + self.padding_top + self.border_width + match self.valign {
+                let mut cy = oy + padding_top + border_width + match self.valign {
                     Align::Top => 0.0,
                     Align::Center => extra / 2.0,
                     Align::Bottom => extra,
@@ -1373,7 +1198,7 @@ impl<'u, 'a> ContainerBuilder<'u, 'a> {
                     _ => self.gap,
                 };
                 for (i, (cw, ch)) in self.child_sizes.iter().enumerate() {
-                    let cx = ox + self.padding_left + self.border_width + match self.halign {
+                    let cx = ox + padding_left + border_width + match self.halign {
                         Align::Left => 0.0,
                         Align::Center => (real_w - cw) / 2.0,
                         Align::Right => real_w - cw,
@@ -1385,12 +1210,12 @@ impl<'u, 'a> ContainerBuilder<'u, 'a> {
             }
             Direction::Stack => {
                 for (i, (cw, ch)) in self.child_sizes.iter().enumerate() {
-                    let cx = ox + self.padding_left + self.border_width + match self.halign {
+                    let cx = ox + padding_left + border_width + match self.halign {
                         Align::Center => (real_w - cw).max(0.0) / 2.0,
                         Align::Right => real_w - cw,
                         _ => 0.0,
                     };
-                    let cy = oy + self.padding_top + self.border_width + match self.valign {
+                    let cy = oy + padding_top + border_width + match self.valign {
                         Align::Center => (real_h - ch).max(0.0) / 2.0,
                         Align::Bottom => real_h - ch,
                         _ => 0.0,
@@ -1410,6 +1235,12 @@ impl<'u, 'a> ContainerBuilder<'u, 'a> {
         inner_h: f32,
         targets: &mut [(f32, f32)],
     ) -> (f32, f32) {
+        let padding_left = self.style.padding.left;
+        let padding_top = self.style.padding.top;
+        let border_width = self.style.border_width();
+        let has_width = self.style.width.is_some() || self.style.fill_x;
+        let has_height = self.style.height.is_some() || self.style.fill_y;
+
         let n = self.child_sizes.len();
         if n == 0 { return (0.0, 0.0); }
 
@@ -1449,18 +1280,18 @@ impl<'u, 'a> ContainerBuilder<'u, 'a> {
                     row.iter().map(|&i| self.child_sizes[i].0).sum::<f32>() + self.gap * (row.len().saturating_sub(1)) as f32
                 }).fold(0.0f32, f32::max);
 
-                let real_h = if self.height.is_some() || self.fill_y { inner_h } else { total_h };
-                let real_w = if self.width.is_some() || self.fill_x { inner_w } else { max_row_w };
+                let real_h = if has_height { inner_h } else { total_h };
+                let real_w = if has_width { inner_w } else { max_row_w };
 
                 let mut cy = if cross_reversed {
-                    oy + self.padding_top + self.border_width + match self.valign {
+                    oy + padding_top + border_width + match self.valign {
                         Align::Top => total_h,
                         Align::Center => (real_h + total_h) / 2.0,
                         Align::Bottom => real_h,
                         _ => total_h,
                     }
                 } else {
-                    oy + self.padding_top + self.border_width + match self.valign {
+                    oy + padding_top + border_width + match self.valign {
                         Align::Center => (real_h - total_h).max(0.0) / 2.0,
                         Align::Bottom => (real_h - total_h).max(0.0),
                         _ => 0.0,
@@ -1474,14 +1305,14 @@ impl<'u, 'a> ContainerBuilder<'u, 'a> {
                     if cross_reversed { cy -= row_h; }
 
                     let mut cx = if main_reversed {
-                        ox + self.padding_left + self.border_width + match self.halign {
+                        ox + padding_left + border_width + match self.halign {
                             Align::Left => row_content_w,
                             Align::Center => (real_w + row_content_w) / 2.0,
                             Align::Right => real_w,
                             _ => row_content_w,
                         }
                     } else {
-                        ox + self.padding_left + self.border_width + match self.halign {
+                        ox + padding_left + border_width + match self.halign {
                             Align::Left => 0.0,
                             Align::Center => extra / 2.0,
                             Align::Right => extra,
@@ -1539,18 +1370,18 @@ impl<'u, 'a> ContainerBuilder<'u, 'a> {
                     col.iter().map(|&i| self.child_sizes[i].1).sum::<f32>() + self.gap * (col.len().saturating_sub(1)) as f32
                 }).fold(0.0f32, f32::max);
 
-                let real_w = if self.width.is_some() || self.fill_x { inner_w } else { total_w };
-                let real_h = if self.height.is_some() || self.fill_y { inner_h } else { max_col_h };
+                let real_w = if has_width { inner_w } else { total_w };
+                let real_h = if has_height { inner_h } else { max_col_h };
 
                 let mut cx = if cross_reversed {
-                    ox + self.padding_left + self.border_width + match self.halign {
+                    ox + padding_left + border_width + match self.halign {
                         Align::Left => total_w,
                         Align::Center => (real_w + total_w) / 2.0,
                         Align::Right => real_w,
                         _ => total_w,
                     }
                 } else {
-                    ox + self.padding_left + self.border_width + match self.halign {
+                    ox + padding_left + border_width + match self.halign {
                         Align::Center => (real_w - total_w).max(0.0) / 2.0,
                         Align::Right => (real_w - total_w).max(0.0),
                         _ => 0.0,
@@ -1564,14 +1395,14 @@ impl<'u, 'a> ContainerBuilder<'u, 'a> {
                     if cross_reversed { cx -= col_w; }
 
                     let mut cy = if main_reversed {
-                        oy + self.padding_top + self.border_width + match self.valign {
+                        oy + padding_top + border_width + match self.valign {
                             Align::Top => col_content_h,
                             Align::Center => (real_h + col_content_h) / 2.0,
                             Align::Bottom => real_h,
                             _ => col_content_h,
                         }
                     } else {
-                        oy + self.padding_top + self.border_width + match self.valign {
+                        oy + padding_top + border_width + match self.valign {
                             Align::Top => 0.0,
                             Align::Center => extra / 2.0,
                             Align::Bottom => extra,
@@ -1606,12 +1437,12 @@ impl<'u, 'a> ContainerBuilder<'u, 'a> {
                 let w = self.child_sizes.iter().map(|(w, _)| *w).fold(0.0f32, f32::max);
                 let h = self.child_sizes.iter().map(|(_, h)| *h).fold(0.0f32, f32::max);
                 for (i, (cw, ch)) in self.child_sizes.iter().enumerate() {
-                    let cx = ox + self.padding_left + self.border_width + match self.halign {
+                    let cx = ox + padding_left + border_width + match self.halign {
                         Align::Center => (inner_w - cw).max(0.0) / 2.0,
                         Align::Right => inner_w - cw,
                         _ => 0.0,
                     };
-                    let cy = oy + self.padding_top + self.border_width + match self.valign {
+                    let cy = oy + padding_top + border_width + match self.valign {
                         Align::Center => (inner_h - ch).max(0.0) / 2.0,
                         Align::Bottom => inner_h - ch,
                         _ => 0.0,
@@ -1701,83 +1532,146 @@ fn intersect_rects(a: [f32; 4], b: [f32; 4]) -> [f32; 4] {
     [x1, y1, w, h]
 }
 
-pub(crate) fn resolve_background(bg: &Option<zenthra_core::Background>) -> (
-    [f32; 4], // color
-    [f32; 4], // color2
-    [f32; 4], // color3
-    [f32; 4], // color4
-    [f32; 4], // gradient_params
-    [f32; 4], // gradient_stops
-    bool,     // is_visible
-) {
-    match bg {
-        Some(zenthra_core::Background::Solid(c)) => (
-            c.to_array(),
-            [1.0, 1.0, 1.0, 1.0],
-            [1.0, 1.0, 1.0, 1.0],
-            [1.0, 1.0, 1.0, 1.0],
-            [0.0, 0.0, 0.5, 0.5],
-            [0.0, 0.333, 0.667, 1.0],
-            c.a > 0.0,
-        ),
-        Some(zenthra_core::Background::Gradient(g)) => match g {
-            zenthra_core::Gradient::Linear { direction, stops } => {
-                let angle_rad = direction.to_radians();
-                let count = stops.len().clamp(2, 4);
-                let c1 = stops.get(0).map(|s| s.color.to_array()).unwrap_or([0.0; 4]);
-                let c2 = stops.get(1).map(|s| s.color.to_array()).unwrap_or(c1);
-                let c3 = stops.get(2).map(|s| s.color.to_array()).unwrap_or(c2);
-                let c4 = stops.get(3).map(|s| s.color.to_array()).unwrap_or(c3);
-                let s0 = stops.get(0).map(|s| s.position).unwrap_or(0.0);
-                let s1 = stops.get(1).map(|s| s.position).unwrap_or(if count == 2 { 1.0 } else { 0.5 });
-                let s2 = stops.get(2).map(|s| s.position).unwrap_or(if count == 3 { 1.0 } else { 0.667 });
-                let s3 = stops.get(3).map(|s| s.position).unwrap_or(1.0);
-                (
-                    c1, c2, c3, c4,
-                    [1.0, angle_rad, count as f32, 0.0],
-                    [s0, s1, s2, s3],
-                    true,
-                )
-            }
-            zenthra_core::Gradient::Radial { anchor, radius, stops } => {
-                let count = stops.len().clamp(2, 4);
-                let c1 = stops.get(0).map(|s| s.color.to_array()).unwrap_or([0.0; 4]);
-                let c2 = stops.get(1).map(|s| s.color.to_array()).unwrap_or(c1);
-                let c3 = stops.get(2).map(|s| s.color.to_array()).unwrap_or(c2);
-                let c4 = stops.get(3).map(|s| s.color.to_array()).unwrap_or(c3);
-                let s0 = stops.get(0).map(|s| s.position).unwrap_or(0.0);
-                let s1 = stops.get(1).map(|s| s.position).unwrap_or(0.333);
-                let s2 = stops.get(2).map(|s| s.position).unwrap_or(0.667);
-                let _s3 = stops.get(3).map(|s| s.position).unwrap_or(1.0);
-                (
-                    c1, c2, c3, c4,
-                    [2.0, count as f32, anchor.0, anchor.1],
-                    [s0, s1, s2, *radius],
-                    true,
-                )
-            }
-            zenthra_core::Gradient::Mesh { points } => {
-                let c1 = points.get(0).map(|p| p.1.to_array()).unwrap_or([1.0; 4]);
-                let c2 = points.get(1).map(|p| p.1.to_array()).unwrap_or(c1);
-                let c3 = points.get(2).map(|p| p.1.to_array()).unwrap_or(c1);
-                let c4 = points.get(3).map(|p| p.1.to_array()).unwrap_or(c2);
-                (
-                    c1, c2, c3, c4,
-                    [3.0, points.len() as f32, 0.5, 0.5],
-                    [0.0, 0.333, 0.667, 1.0],
-                    true,
-                )
-            }
-        },
-        None => (
-            [0.0, 0.0, 0.0, 0.0],
-            [1.0, 1.0, 1.0, 1.0],
-            [1.0, 1.0, 1.0, 1.0],
-            [1.0, 1.0, 1.0, 1.0],
-            [0.0, 0.0, 0.5, 0.5],
-            [0.0, 0.333, 0.667, 1.0],
-            false,
-        ),
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::collections::HashMap;
+
+    #[test]
+    fn test_container_box_style_unification() {
+        let mut scroll_state = HashMap::new();
+        let mut cursor_state = HashMap::new();
+        let mut interaction_state = HashMap::new();
+        let layout_cache = HashMap::new();
+        let mut next_layout_cache = HashMap::new();
+        let screen_layout_cache = HashMap::new();
+        let mut next_screen_layout_cache = HashMap::new();
+        let widget_window_map = HashMap::new();
+        let mut next_widget_window_map = HashMap::new();
+        let image_sizes = HashMap::new();
+
+        let mut ui = Ui::new(
+            800, 600, 1.0, None, Vec::new(), None,
+            (0.0, 0.0), false,
+            &mut scroll_state, &mut cursor_state, &mut interaction_state,
+            None, None, false, false, 0.0,
+            &layout_cache, &mut next_layout_cache,
+            &screen_layout_cache, &mut next_screen_layout_cache,
+            &widget_window_map, &mut next_widget_window_map,
+            &image_sizes,
+        );
+
+        // 1. Inherent/Styleable builder methods write directly to self.style
+        let c = ui.container()
+            .bg(Color::RED)
+            .border((Color::BLUE, 2.0))
+            .border_alignment(BorderAlignment::Outside)
+            .radius(10.0, 20.0, 30.0, 40.0)
+            .shadow(Color::BLACK, 5.0, 5.0, 15.0)
+            .shadow_opacity(0.8)
+            .padding(8.0, 12.0, 16.0, 20.0)
+            .width(250.0)
+            .height(150.0);
+
+        assert_eq!(c.style.bg, Some(zenthra_core::Background::Solid(Color::RED)));
+        assert_eq!(c.style.border, zenthra_core::Border::Solid(Color::BLUE, 2.0));
+        assert_eq!(c.style.border_width(), 2.0);
+        assert_eq!(c.style.border_color(), Some(Color::BLUE));
+        assert_eq!(c.style.border_alignment, BorderAlignment::Outside);
+        assert_eq!(c.style.border_alignment_f32(), 1.0);
+        assert_eq!(c.style.radius, [10.0, 20.0, 30.0, 40.0]);
+        // GPU RectInstance expects [bl, br, tr, tl] = [40.0, 30.0, 20.0, 10.0]
+        assert_eq!(c.style.gpu_radius(), [40.0, 30.0, 20.0, 10.0]);
+        assert_eq!(c.style.shadow_color, Some(Color::BLACK));
+        assert_eq!(c.style.shadow_offset, [5.0, 5.0]);
+        assert_eq!(c.style.shadow_blur, 15.0);
+        assert_eq!(c.style.shadow_opacity, 0.8);
+        assert_eq!(c.style.padding.top, 8.0);
+        assert_eq!(c.style.padding.right, 12.0);
+        assert_eq!(c.style.padding.bottom, 16.0);
+        assert_eq!(c.style.padding.left, 20.0);
+        assert_eq!(c.style.width, Some(250.0));
+        assert_eq!(c.style.height, Some(150.0));
+
+        let (cx, cy, cw, ch) = c.style.inner_bounds(100.0, 100.0, 250.0, 150.0);
+        // padding: (t: 8, r: 12, b: 16, l: 20), border_width: 2.0
+        assert_eq!(cx, 100.0 + 20.0 + 2.0); // 122.0
+        assert_eq!(cy, 100.0 + 8.0 + 2.0);  // 110.0
+        assert_eq!(cw, 250.0 - 20.0 - 12.0 - 4.0); // 214.0
+        assert_eq!(ch, 150.0 - 8.0 - 16.0 - 4.0);  // 122.0
+
+        let rect_opt = c.style.build_rect(100.0, 100.0, 250.0, 150.0);
+        assert!(rect_opt.is_some());
+        let rect = rect_opt.unwrap();
+        assert_eq!(rect.pos, [100.0, 100.0]);
+        assert_eq!(rect.size, [250.0, 150.0]);
+        assert_eq!(rect.border_width, 2.0);
+
+        // 2. Direct style injection via .style(BoxStyle)
+        let mut custom_style = BoxStyle::new();
+        custom_style.fill_x = true;
+        custom_style.fill_y = true;
+        custom_style.radius = [5.0, 5.0, 5.0, 5.0];
+
+        let c2 = ui.container().style(custom_style);
+        assert!(c2.style.fill_x);
+        assert!(c2.style.fill_y);
+        assert_eq!(c2.style.gpu_radius(), [5.0, 5.0, 5.0, 5.0]);
+
+        // 3. Container show renders quad with BoxStyle
+        ui.container()
+            .bg(Color::rgb(0.1, 0.2, 0.3))
+            .border((Color::WHITE, 1.5))
+            .radius_all(12.0)
+            .shadow(Color::rgba(0.0, 0.0, 0.0, 0.5), 0.0, 4.0, 8.0)
+            .shadow_opacity(0.5)
+            .width(200.0)
+            .height(100.0)
+            .show(|_| {});
+
+        assert!(!ui.draws.is_empty());
+        let rect_draw = ui.draws.iter().find_map(|d| match d {
+            DrawCommand::Rect(r) => Some(&r.instance),
+            _ => None,
+        }).expect("Container background RectInstance should be drawn");
+
+        assert_eq!(rect_draw.size, [200.0, 100.0]);
+        assert_eq!(rect_draw.radius, [12.0, 12.0, 12.0, 12.0]);
+        assert_eq!(rect_draw.border_width, 1.5);
+        assert_eq!(rect_draw.border_color, Color::WHITE.to_array());
+        assert_eq!(rect_draw.shadow_offset, [0.0, 4.0]);
+        assert_eq!(rect_draw.shadow_blur, 8.0);
+        assert_eq!(rect_draw.shadow_color, [0.0, 0.0, 0.0, 0.25]); // 0.5 alpha * 0.5 shadow_opacity
+
+        // 4. Container with ONLY border (no bg) still renders border cleanly
+        ui.draws.clear();
+        ui.container()
+            .border((Color::RED, 2.0))
+            .width(100.0)
+            .height(50.0)
+            .show(|_| {});
+
+        let border_only_draw = ui.draws.iter().find_map(|d| match d {
+            DrawCommand::Rect(r) => Some(&r.instance),
+            _ => None,
+        }).expect("Container with only border should render a RectInstance");
+
+        assert_eq!(border_only_draw.color, [0.0, 0.0, 0.0, 0.0]);
+        assert_eq!(border_only_draw.border_width, 2.0);
+        assert_eq!(border_only_draw.border_color, Color::RED.to_array());
+
+        // 5. Container hover_border(Border::None) correctly sets zero border
+        let c_hover = ui.container()
+            .border((Color::WHITE, 2.0))
+            .hover_border(zenthra_core::Border::None)
+            .active_border(zenthra_core::Border::None);
+
+        assert_eq!(c_hover.hover_border_width, Some(0.0));
+        assert_eq!(c_hover.hover_border_color, Some(Color::TRANSPARENT));
+        assert_eq!(c_hover.active_border_width, Some(0.0));
+        assert_eq!(c_hover.active_border_color, Some(Color::TRANSPARENT));
     }
 }
+
 

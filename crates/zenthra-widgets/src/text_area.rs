@@ -1,8 +1,9 @@
 use crate::ui::{Ui, DrawCommand, OverlayRectDraw};
 use crate::text::TextBuilder;
-use zenthra_core::{Color, EdgeInsets, Id, Rect};
+use crate::style_ext::BoxStyleExt;
+use zenthra_core::{BoxStyle, Color, EdgeInsets, Id, Rect, Styleable};
 use zenthra_platform::event::PlatformEvent;
-use zenthra_text::prelude::{TextOptions, CosmicFontProvider, Padding};
+use zenthra_text::prelude::{TextOptions, CosmicFontProvider};
 // use zenthra_text::traits::FontProvider;
 
 const CTRL_STATE_KEY: Id = Id::from_u64(0xFEED_C001);
@@ -178,38 +179,174 @@ fn find_next_word_boundary(text: &str, cursor: usize) -> usize {
     cursor + target_rel
 }
 
-fn find_word_start(text: &str, cursor: usize) -> usize {
-    let cursor = cursor.min(text.len());
-    if cursor == 0 {
-        return 0;
+fn find_word_bounds(text: &str, cursor: usize) -> (usize, usize) {
+    if text.is_empty() {
+        return (0, 0);
     }
-    let sub = &text[..cursor];
-    let mut target = cursor;
-    for (idx, c) in sub.char_indices().rev() {
-        if c.is_alphanumeric() || c == '_' {
-            target = idx;
+    let cursor = cursor.min(text.len());
+    
+    let char_at = text[cursor..].chars().next();
+    let char_before = if cursor > 0 {
+        text[..cursor].chars().next_back()
+    } else {
+        None
+    };
+
+    let target_char = match (char_at, char_before) {
+        (Some(c), _) if c != '\n' => c,
+        (_, Some(c)) if c != '\n' => c,
+        (Some(c), _) => c,
+        _ => return (cursor, cursor),
+    };
+
+    if target_char == '\n' {
+        return (cursor, cursor);
+    }
+
+    let is_word = target_char.is_alphanumeric() || target_char == '_';
+    let is_ws = target_char.is_whitespace();
+
+    let mut start = cursor;
+    if let Some(c) = char_at {
+        if (is_word && (c.is_alphanumeric() || c == '_')) || (is_ws && c.is_whitespace() && c != '\n') {
+            // on matching char
+        } else if cursor > 0 {
+            start = cursor - char_before.map(|c| c.len_utf8()).unwrap_or(0);
+        }
+    } else if cursor > 0 {
+        start = cursor - char_before.map(|c| c.len_utf8()).unwrap_or(0);
+    }
+
+    for (idx, c) in text[..start].char_indices().rev() {
+        if c == '\n' {
+            break;
+        }
+        if is_word && (c.is_alphanumeric() || c == '_') {
+            start = idx;
+        } else if is_ws && c.is_whitespace() {
+            start = idx;
         } else {
             break;
         }
     }
-    target
+
+    let mut end = start;
+    for (idx, c) in text[start..].char_indices() {
+        if c == '\n' {
+            break;
+        }
+        if is_word && (c.is_alphanumeric() || c == '_') {
+            end = start + idx + c.len_utf8();
+        } else if is_ws && c.is_whitespace() {
+            end = start + idx + c.len_utf8();
+        } else {
+            break;
+        }
+    }
+
+    (start, end)
 }
 
-fn find_word_end(text: &str, cursor: usize) -> usize {
-    let cursor = cursor.min(text.len());
-    if cursor >= text.len() {
-        return text.len();
+fn hit_test_cursor(
+    sb: &zenthra_text::primitives::shaped_buffer::ShapedBuffer,
+    buffer: &str,
+    rel_x: f32,
+    rel_y: f32,
+    font_size: f32,
+    line_height: f32,
+) -> usize {
+    if buffer.is_empty() || sb.lines().is_empty() {
+        return 0;
     }
-    let sub = &text[cursor..];
-    let mut target_rel = 0;
-    for (idx, c) in sub.char_indices() {
-        if c.is_alphanumeric() || c == '_' {
-            target_rel = idx + c.len_utf8();
-        } else {
-            break;
+
+    let line_height_px = if line_height > 3.0 {
+        line_height
+    } else {
+        font_size * line_height
+    };
+
+    let first_line_y = sb.lines().first().map(|l| l.y).unwrap_or(0.0);
+
+    // Mouse above all lines -> clamp to line 0
+    let target_line_idx = if rel_y <= 0.0 {
+        0
+    } else {
+        let last_line = sb.lines().last().unwrap();
+        let last_line_bottom = (last_line.y - first_line_y) + line_height_px;
+        // Mouse below all lines -> clamp to end of text
+        if rel_y >= last_line_bottom {
+            return buffer.len();
+        }
+
+        let mut found = sb.lines().len() - 1;
+        for (i, line) in sb.lines().iter().enumerate() {
+            let line_top = line.y - first_line_y;
+            let line_bottom = line_top + line_height_px;
+            if rel_y < line_bottom {
+                found = i;
+                break;
+            }
+        }
+        found
+    };
+
+    let target_line = &sb.lines()[target_line_idx];
+    let line_start = target_line.start_cluster.min(buffer.len());
+
+    let line_end = if target_line_idx + 1 < sb.lines().len() {
+        let mut next_start = sb.lines()[target_line_idx + 1].start_cluster.min(buffer.len());
+        if next_start > line_start && buffer.as_bytes().get(next_start - 1) == Some(&b'\n') {
+            next_start -= 1;
+            if next_start > line_start && buffer.as_bytes().get(next_start - 1) == Some(&b'\r') {
+                next_start -= 1;
+            }
+        }
+        next_start
+    } else {
+        buffer.len()
+    };
+
+    if line_start >= line_end {
+        return line_start;
+    }
+
+    if rel_x <= 0.0 {
+        return line_start;
+    }
+    if rel_x >= target_line.width {
+        return line_end;
+    }
+
+    let mut best_idx = None;
+    let mut best_dist = f32::INFINITY;
+
+    for g in sb.glyphs() {
+        if g.cluster >= line_start && g.cluster < line_end {
+            let center_x = g.x + g.width * 0.5;
+            let dist = (center_x - rel_x).abs();
+            if dist < best_dist {
+                best_dist = dist;
+                let char_len = buffer
+                    .get(g.cluster..)
+                    .and_then(|s| s.chars().next())
+                    .map(|c| c.len_utf8())
+                    .unwrap_or(0);
+                best_idx = Some(if rel_x < center_x {
+                    g.cluster
+                } else {
+                    (g.cluster + char_len).min(line_end)
+                });
+            }
         }
     }
-    cursor + target_rel
+
+    best_idx.unwrap_or_else(|| {
+        if rel_x < target_line.width * 0.5 {
+            line_start
+        } else {
+            line_end
+        }
+    })
 }
 
 fn find_line_start(text: &str, cursor: usize) -> usize {
@@ -244,81 +381,80 @@ pub struct TextAreaBuilder<'u, 'a, 'b> {
     id: Id,
     x: f32,
     y: f32,
-    font_size: f32,
-    color: Color,
+
+    // Box & typography styling
+    pub style: BoxStyle,
+    pub text_style: zenthra_text::prelude::TextStyle,
+
+    // TextArea-specific fields
     cursor_color: Option<Color>,
-    bg: Option<Color>,
-    text_bg: Option<Color>,
-    highlight: Option<Color>,
-    padding: EdgeInsets,
-    text_padding: EdgeInsets,
-    line_height: f32,
-    width: f32,
-    height: Option<f32>,
-    max_height: Option<f32>,
+    pub selection_color: Option<Color>,
     scrollable: bool,
-    overflow_hidden: bool,
-    text_bg_fill_x: bool,
-    fill_x: bool,
-    wrap: zenthra_text::prelude::TextWrap,
-    radius: [f32; 4],
-    border_color: Option<Color>,
-    border_width: f32,
     focus_border_color: Option<Color>,
     focus_border_width: Option<f32>,
-    shadow_color: Option<Color>,
-    shadow_offset: [f32; 2],
-    shadow_blur: f32,
-    shadow_opacity: f32,
-    opacity: f32,
-    render_mode: Option<zenthra_core::RenderMode>,
     placeholder: Option<String>,
     placeholder_color: Option<Color>,
     submit_on_enter: bool,
+    render_mode: Option<zenthra_core::RenderMode>,
+    select_all: bool,
 }
+
+impl<'u, 'a, 'b> Styleable for TextAreaBuilder<'u, 'a, 'b> {
+    #[inline]
+    fn box_style_mut(&mut self) -> &mut BoxStyle {
+        &mut self.style
+    }
+
+    #[inline]
+    fn box_style(&self) -> &BoxStyle {
+        &self.style
+    }
+}
+
+// Single-source macro generates all BoxStyle builder methods (.width, .height, .padding, .radius, .bg, .border, .shadow, etc.)
+impl_box_style_methods!(TextAreaBuilder, 'u, 'a, 'b);
+
+// Single-source macro generates typography styling methods (.font_size, .text_color, .font_family, .font_weight, .bold, .italic, .line_height, etc.)
+impl_font_style_methods!(TextAreaBuilder, 'u, 'a, 'b);
+
+// Single-source macro generates text wrap methods (.wrap, .auto_wrap, .no_wrap)
+impl_text_wrap_methods!(TextAreaBuilder, 'u, 'a, 'b);
 
 impl<'u, 'a, 'b> TextAreaBuilder<'u, 'a, 'b> {
     pub fn new(ui: &'u mut Ui<'a>, buffer: &'b mut String) -> Self {
         let id = ui.id();
         let x = ui.cursor_x;
         let y = ui.cursor_y;
+        let mut style = BoxStyle::new();
+        style.width = Some(300.0);
+        style.bg = Some(zenthra_core::Background::Solid(Color::rgb(0.2, 0.2, 0.2)));
+        style.radius = [4.0; 4];
+        style.padding = EdgeInsets::symmetric(6.0, 8.0);
+
+        let mut text_style = zenthra_text::prelude::TextStyle::default();
+        text_style.font_size = 18.0;
+        text_style.color = Color::WHITE;
+        text_style.line_height = 1.2;
+        text_style.wrap = zenthra_text::prelude::TextWrap::Word;
+
         Self {
             ui,
             buffer,
             id,
             x,
             y,
-            font_size: 18.0,
-            color: Color::WHITE,
+            style,
+            text_style,
             cursor_color: None,
-            bg: Some(Color::rgb(0.2, 0.2, 0.2)),
-            text_bg: None,
-            padding: EdgeInsets::ZERO,
-            text_padding: EdgeInsets::ZERO,
-            line_height: 1.2,
-            width: 300.0,
-            height: None,
-            max_height: None,
+            selection_color: None,
             scrollable: false,
-            overflow_hidden: false,
-            text_bg_fill_x: false,
-            fill_x: false,
-            highlight: None,
-            wrap: zenthra_text::prelude::TextWrap::Word,
-            radius: [4.0; 4],
-            border_color: None,
-            border_width: 0.0,
             focus_border_color: None,
             focus_border_width: None,
-            shadow_color: None,
-            shadow_offset: [0.0; 2],
-            shadow_blur: 0.0,
-            shadow_opacity: 1.0,
-            opacity: 1.0,
-            render_mode: None,
             placeholder: None,
             placeholder_color: None,
             submit_on_enter: false,
+            render_mode: None,
+            select_all: false,
         }
     }
 
@@ -330,26 +466,14 @@ impl<'u, 'a, 'b> TextAreaBuilder<'u, 'a, 'b> {
         self
     }
 
+    pub fn pos(mut self, x: f32, y: f32) -> Self {
+        self.x = x;
+        self.y = y;
+        self
+    }
+
     pub fn scrollable(mut self, enabled: bool) -> Self {
         self.scrollable = enabled;
-        if enabled {
-            self.overflow_hidden = true;
-        }
-        self
-    }
-
-    pub fn overflow_hidden(mut self, enabled: bool) -> Self {
-        self.overflow_hidden = enabled;
-        self
-    }
-
-    pub fn size(mut self, size: f32) -> Self {
-        self.font_size = size;
-        self
-    }
-
-    pub fn color(mut self, color: Color) -> Self {
-        self.color = color;
         self
     }
 
@@ -358,198 +482,27 @@ impl<'u, 'a, 'b> TextAreaBuilder<'u, 'a, 'b> {
         self
     }
 
-    pub fn bg(mut self, bg: Color) -> Self {
-        self.bg = Some(bg);
+    pub fn selection_color(mut self, color: Color) -> Self {
+        self.selection_color = Some(color);
         self
     }
 
-    pub fn text_bg(mut self, bg: Color) -> Self {
-        self.text_bg = Some(bg);
-        self
-    }
-
-    pub fn highlight(mut self, color: Color) -> Self {
-        self.highlight = Some(color);
-        self
-    }
-
-    pub fn padding(mut self, t: f32, r: f32, b: f32, l: f32) -> Self {
-        self.padding = EdgeInsets { top: t, right: r, bottom: b, left: l };
-        self
-    }
-    pub fn padding_x(mut self, x: f32) -> Self {
-        self.padding.left = x;
-        self.padding.right = x;
-        self
-    }
-    pub fn padding_y(mut self, y: f32) -> Self {
-        self.padding.top = y;
-        self.padding.bottom = y;
-        self
-    }
-    pub fn padding_top(mut self, t: f32) -> Self {
-        self.padding.top = t;
-        self
-    }
-    pub fn padding_bottom(mut self, b: f32) -> Self {
-        self.padding.bottom = b;
-        self
-    }
-    pub fn padding_left(mut self, l: f32) -> Self {
-        self.padding.left = l;
-        self
-    }
-    pub fn padding_right(mut self, r: f32) -> Self {
-        self.padding.right = r;
-        self
-    }
-
-    pub fn text_padding(mut self, t: f32, r: f32, b: f32, l: f32) -> Self {
-        self.text_padding = EdgeInsets { top: t, right: r, bottom: b, left: l };
-        self
-    }
-    pub fn text_padding_x(mut self, x: f32) -> Self {
-        self.text_padding.left = x;
-        self.text_padding.right = x;
-        self
-    }
-    pub fn text_padding_y(mut self, y: f32) -> Self {
-        self.text_padding.top = y;
-        self.text_padding.bottom = y;
-        self
-    }
-    pub fn text_padding_top(mut self, t: f32) -> Self {
-        self.text_padding.top = t;
-        self
-    }
-    pub fn text_padding_bottom(mut self, b: f32) -> Self {
-        self.text_padding.bottom = b;
-        self
-    }
-    pub fn text_padding_left(mut self, l: f32) -> Self {
-        self.text_padding.left = l;
-        self
-    }
-    pub fn text_padding_right(mut self, r: f32) -> Self {
-        self.text_padding.right = r;
-        self
-    }
-
-    pub fn line_height(mut self, lh: f32) -> Self {
-        self.line_height = lh;
-        self
-    }
-
-    pub fn width(mut self, w: f32) -> Self {
-        self.width = w;
-        self
-    }
-
-    pub fn fill_x(mut self) -> Self {
-        self.fill_x = true;
-        self
-    }
-
-    pub fn radius(mut self, tl: f32, tr: f32, br: f32, bl: f32) -> Self {
-        self.radius = [tl, tr, br, bl];
-        self
-    }
-
-    pub fn radius_all(mut self, r: f32) -> Self {
-        self.radius = [r; 4];
-        self
-    }
-
-    pub fn radius_top(mut self, r: f32) -> Self {
-        self.radius[0] = r;
-        self.radius[1] = r;
-        self
-    }
-
-    pub fn radius_bottom(mut self, r: f32) -> Self {
-        self.radius[2] = r;
-        self.radius[3] = r;
-        self
-    }
-
-    pub fn radius_top_left(mut self, r: f32) -> Self {
-        self.radius[0] = r;
-        self
-    }
-
-    pub fn radius_top_right(mut self, r: f32) -> Self {
-        self.radius[1] = r;
-        self
-    }
-
-    pub fn radius_bottom_right(mut self, r: f32) -> Self {
-        self.radius[2] = r;
-        self
-    }
-
-    pub fn radius_bottom_left(mut self, r: f32) -> Self {
-        self.radius[3] = r;
-        self
-    }
-
-    pub fn radius_left(mut self, r: f32) -> Self {
-        self.radius[0] = r;
-        self.radius[3] = r;
-        self
-    }
-
-    pub fn radius_right(mut self, r: f32) -> Self {
-        self.radius[1] = r;
-        self.radius[2] = r;
-        self
-    }
-
-    pub fn border(mut self, color: Color, width: f32) -> Self {
-        self.border_color = Some(color);
-        self.border_width = width;
-        self
-    }
-
-    pub fn focus_border(mut self, color: Color, width: f32) -> Self {
-        self.focus_border_color = Some(color);
-        self.focus_border_width = Some(width);
-        self
-    }
-
-    pub fn shadow(mut self, color: Color, ox: f32, oy: f32, blur: f32) -> Self {
-        self.shadow_color = Some(color);
-        self.shadow_offset = [ox, oy];
-        self.shadow_blur = blur;
-        self
-    }
-
-    pub fn opacity(mut self, o: f32) -> Self {
-        self.opacity = o;
-        self
-    }
-
-    pub fn text_bg_fill_x(mut self, enabled: bool) -> Self {
-        self.text_bg_fill_x = enabled;
-        self
-    }
-
-    pub fn height(mut self, h: f32) -> Self {
-        self.height = Some(h);
-        self
-    }
-
-    pub fn max_height(mut self, h: f32) -> Self {
-        self.max_height = Some(h);
+    pub fn focus_border(mut self, border: impl Into<zenthra_core::Border>) -> Self {
+        match border.into() {
+            zenthra_core::Border::None => {
+                self.focus_border_color = Some(Color::TRANSPARENT);
+                self.focus_border_width = Some(0.0);
+            }
+            zenthra_core::Border::Solid(c, w) => {
+                self.focus_border_color = Some(c);
+                self.focus_border_width = Some(w);
+            }
+        }
         self
     }
 
     pub fn submit_on_enter(mut self, enabled: bool) -> Self {
         self.submit_on_enter = enabled;
-        self
-    }
-
-    pub fn wrap(mut self, strategy: zenthra_text::prelude::TextWrap) -> Self {
-        self.wrap = strategy;
         self
     }
 
@@ -568,38 +521,98 @@ impl<'u, 'a, 'b> TextAreaBuilder<'u, 'a, 'b> {
         self
     }
 
+    pub fn on_change<F>(self, mut f: F) -> Self
+    where
+        F: FnMut(String) + 'a,
+    {
+        self.ui.add_listener(self.id, crate::ui::EventPhase::Bubble, move |_, event| {
+            if let crate::ui::WidgetEvent::Change(crate::ui::EventValue::String(val)) = event {
+                f(val.clone());
+            }
+        });
+        self
+    }
+
+    pub fn on_hover<F>(self, mut f: F) -> Self
+    where
+        F: FnMut(bool) + 'a,
+    {
+        self.ui.add_listener(self.id, crate::ui::EventPhase::Bubble, move |_, event| {
+            if let crate::ui::WidgetEvent::Hover(hovered) = event {
+                f(*hovered);
+            }
+        });
+        self
+    }
+
+    pub fn on_event<F>(self, phase: crate::ui::EventPhase, f: F) -> Self
+    where
+        F: FnMut(&mut crate::ui::EventContext, &crate::ui::WidgetEvent) + 'a,
+    {
+        self.ui.add_listener(self.id, phase, f);
+        self
+    }
+
+    pub fn autofocus(self, enabled: bool) -> Self {
+        let autofocus_key = Id::from_u64(self.id.raw() ^ 0xAF0C_0500);
+        if enabled && !self.ui.interaction_state.contains_key(&autofocus_key) {
+            self.ui.interaction_state.insert(autofocus_key, 1.0);
+            self.ui.focused_id = Some(self.id);
+        }
+        self
+    }
+
+    pub fn select_all(mut self, enabled: bool) -> Self {
+        self.select_all = enabled;
+        self
+    }
+
     pub fn show(self) -> zenthra_core::Response {
         if let Some(mode) = self.render_mode {
             self.ui.render_mode_stack.push(mode);
         }
         let mut is_focused = self.ui.focused_id == Some(self.id);
+
+        let select_all_key = Id::from_u64(self.id.raw() ^ 0x5E1E_A110);
+        if self.select_all && !self.ui.interaction_state.contains_key(&select_all_key) {
+            self.ui.interaction_state.insert(select_all_key, 1.0);
+            self.ui.focused_id = Some(self.id);
+            is_focused = true;
+            let sel_anchor_id = Id::from_u64(self.id.raw() ^ 0x5E1EC710);
+            self.ui.cursor_state.insert(sel_anchor_id, 0);
+            self.ui.cursor_state.insert(self.id, self.buffer.len());
+        }
         
         // --- 1. Handle Scroll State ---
-        let (scroll_x, mut scroll_y) = if self.scrollable || self.max_height.is_some() {
+        let (scroll_x, mut scroll_y) = if self.scrollable || self.style.max_height.is_some() {
             *self.ui.scroll_state.get(&self.id).unwrap_or(&(0.0, 0.0))
         } else {
             (0.0, 0.0)
         };
 
         // --- 2. Initial Measure (to get content height) ---
-        let actual_width = if self.fill_x {
-            (self.ui.max_x - self.x).max(self.width)
+        let actual_width = if self.style.fill_x {
+            (self.ui.max_x - self.x).max(self.style.width.unwrap_or(300.0))
         } else {
-            self.width
+            self.style.width.unwrap_or(300.0)
         };
-        let effective_font_size = self.font_size * self.ui.font_scale;
+        let effective_font_size = self.text_style.font_size * self.ui.font_scale;
 
         let (_content_w, mut h_content, mut shaped_buffer) = if let Some(fs) = self.ui.font_system.as_ref() {
             let mut adapter = CosmicFontProvider::new_with_system(fs.clone());
-            let t_padding = Padding::from(self.text_padding);
-            let layout_width = actual_width - self.padding.horizontal() - t_padding.horizontal();
+            let layout_width = actual_width - self.style.padding.horizontal();
             adapter.set_layout_size(layout_width, 10000.0);
             
-            let options = TextOptions::new()
+            let mut options = TextOptions::new()
                 .font_size(effective_font_size)
-                .line_height(self.line_height)
-                .wrap(self.wrap)
+                .font_weight(self.text_style.font_weight)
+                .font_style(self.text_style.font_style)
+                .line_height(self.text_style.line_height)
+                .wrap(self.text_style.wrap)
                 .max_width(layout_width);
+            if let Some(ref family) = self.text_style.font_family {
+                options = options.font_family(family.clone());
+            }
             
             let buffer_to_shape = if self.buffer.is_empty() {
                 self.placeholder.as_deref().unwrap_or("")
@@ -608,29 +621,33 @@ impl<'u, 'a, 'b> TextAreaBuilder<'u, 'a, 'b> {
             };
             let buffer = adapter.shape(buffer_to_shape, &options);
             let (_, ch) = buffer.content_size();
-            (actual_width, ch + t_padding.vertical(), Some(buffer))
+            (actual_width, ch, Some(buffer))
         } else {
             (actual_width, 20.0, None)
         };
 
         // --- Determine h_box and effective scroll mode ---
         // max_height: auto-grow up to this height, then scroll. Takes priority over fixed height.
-        let (mut h_box, effective_scrollable) = if let Some(max_h) = self.max_height {
-            let min_h = self.height.unwrap_or(36.0);
-            let natural_h = (h_content + self.padding.vertical()).max(min_h);
+        let (mut h_box, effective_scrollable) = if let Some(max_h) = self.style.max_height {
+            let min_h = self.style.height.unwrap_or(36.0);
+            let natural_h = (h_content + self.style.padding.vertical()).max(min_h);
             if natural_h >= max_h {
                 (max_h, true) // content exceeds max: cap and scroll
             } else {
                 (natural_h, false) // content fits: natural height, no scroll
             }
         } else if self.scrollable {
-            (self.height.unwrap_or(200.0), true)
+            (self.style.height.unwrap_or(200.0), true)
         } else {
-            (h_content + self.padding.vertical(), false)
+            (h_content + self.style.padding.vertical(), false)
         };
 
-        if self.scrollable && self.height.unwrap_or(0.0) == 0.0 && self.max_height.is_none() {
+        if self.scrollable && self.style.height.unwrap_or(0.0) == 0.0 && self.style.max_height.is_none() {
             h_box = 200.0;
+        }
+
+        if self.style.fill_y {
+            h_box = (self.ui.max_y - self.y).max(h_box);
         }
 
         // --- 3. Handle Events ---
@@ -640,7 +657,7 @@ impl<'u, 'a, 'b> TextAreaBuilder<'u, 'a, 'b> {
             cursor_index = self.buffer.len(); // Safety
         }
         let initial_cursor_index = cursor_index;
-        let is_multiline = self.buffer.contains('\n') || h_content > self.font_size * self.line_height * 1.5;
+        let is_multiline = self.buffer.contains('\n') || h_content > self.text_style.font_size * self.text_style.line_height * 1.5;
 
         let selection_id = Id::from_u64(self.id.raw() ^ 0x5E1EC710);
         let mut selection_anchor: Option<usize> = self.ui.cursor_state.get(&selection_id).copied();
@@ -653,77 +670,100 @@ impl<'u, 'a, 'b> TextAreaBuilder<'u, 'a, 'b> {
         let (actual_x, actual_y) = (self.x + self.ui.offset_x, self.y + self.ui.offset_y);
         let is_hovered = self.ui.is_hovered(self.id, actual_x, actual_y, actual_width, h_box);
 
-        // Click to focus and position cursor / double-click to select word
+        // Click to focus and position cursor / double-click to select word / mouse drag selection
         let click_id = Id::from_u64(self.id.raw() ^ 0x00C7_1C40);
-        if self.ui.clicked && is_hovered {
-            self.ui.focused_id = Some(self.id);
-            is_focused = true;
-            if self.buffer.is_empty() {
+        let drag_id = Id::from_u64(self.id.raw() ^ 0x00D7_A600);
+
+        if self.buffer.is_empty() {
+            if self.ui.clicked && is_hovered {
+                self.ui.focused_id = Some(self.id);
+                is_focused = true;
                 cursor_index = 0;
                 selection_anchor = None;
                 self.ui.interaction_state.insert(click_id, self.ui.elapsed_time);
                 self.ui.interaction_state.insert(self.id, self.ui.elapsed_time);
                 self.ui.needs_redraw = true;
-            } else if let Some(sb) = &shaped_buffer {
-                let rel_x = self.ui.mouse_x - (self.x + self.padding.left + self.text_padding.left);
-                let rel_y = if !is_multiline && !effective_scrollable && h_box > h_content + self.padding.vertical() {
-                    let y_offset = ((h_box - h_content) / 2.0).max(self.padding.top);
-                    self.ui.mouse_y - (self.y + y_offset + self.text_padding.top)
-                } else {
-                    self.ui.mouse_y - (self.y + self.padding.top + self.text_padding.top - scroll_y)
-                };
+            }
+        } else if let Some(sb) = &shaped_buffer {
+            let rel_x = self.ui.mouse_x - (actual_x + self.style.padding.left);
+            let rel_y = if !is_multiline && !effective_scrollable && h_box > h_content + self.style.padding.vertical() {
+                let y_offset = ((h_box - h_content) / 2.0).max(self.style.padding.top);
+                self.ui.mouse_y - (actual_y + y_offset)
+            } else {
+                self.ui.mouse_y - (actual_y + self.style.padding.top - scroll_y)
+            };
 
-                let row_threshold = (effective_font_size * self.line_height).max(12.0);
-                let mut best_line = None;
-                let mut min_line_dist = f32::INFINITY;
-                for line in sb.lines() {
-                    let dist = (line.y - rel_y).abs();
-                    if dist < min_line_dist {
-                        min_line_dist = dist;
-                        best_line = Some(line);
-                    }
-                }
-
-                if let Some(target_line) = best_line {
-                    let mut best_idx = None;
-                    let mut best_dist = f32::INFINITY;
-                    for g in sb.glyphs() {
-                        if (g.y - target_line.y).abs() < row_threshold * 0.6 {
-                            let center_x = g.x + g.width * 0.5;
-                            let dist = (center_x - rel_x).abs();
-                            if dist < best_dist {
-                                best_dist = dist;
-                                let char_len = self.buffer.get(g.cluster..).and_then(|s| s.chars().next()).map(|c| c.len_utf8()).unwrap_or(0);
-                                best_idx = Some(if rel_x < center_x { g.cluster } else { (g.cluster + char_len).min(self.buffer.len()) });
-                            }
-                        }
-                    }
-
-                    if let Some(idx) = best_idx {
-                        cursor_index = idx.min(self.buffer.len());
-                    } else if rel_x > target_line.width {
-                        cursor_index = find_line_end(&self.buffer, target_line.start_cluster);
-                    } else {
-                        cursor_index = target_line.start_cluster.min(self.buffer.len());
-                    }
-                }
+            if self.ui.clicked && is_hovered {
+                self.ui.focused_id = Some(self.id);
+                is_focused = true;
+                self.ui.dispatch_event(self.id, crate::ui::WidgetEvent::Click);
+                let hit_pos = hit_test_cursor(
+                    sb,
+                    &self.buffer,
+                    rel_x,
+                    rel_y,
+                    effective_font_size,
+                    self.text_style.line_height,
+                );
 
                 let last_click_time = self.ui.interaction_state.get(&click_id).copied().unwrap_or(0.0);
                 if self.ui.elapsed_time - last_click_time < 0.35 {
-                    let word_start = find_word_start(&self.buffer, cursor_index);
-                    let word_end = find_word_end(&self.buffer, cursor_index);
+                    // Double Click: select word
+                    let (word_start, word_end) = find_word_bounds(&self.buffer, hit_pos);
                     if word_start < word_end {
                         selection_anchor = Some(word_start);
                         cursor_index = word_end;
                     } else {
                         selection_anchor = None;
+                        cursor_index = hit_pos;
                     }
+                    self.ui.interaction_state.insert(drag_id, 2.0); // 2.0 = word drag mode
                 } else {
-                    selection_anchor = None;
+                    // Single Click
+                    cursor_index = hit_pos;
+                    selection_anchor = Some(hit_pos);
+                    self.ui.interaction_state.insert(drag_id, 1.0); // 1.0 = char drag mode
                 }
+
                 self.ui.interaction_state.insert(click_id, self.ui.elapsed_time);
                 self.ui.interaction_state.insert(self.id, self.ui.elapsed_time);
                 self.ui.needs_redraw = true;
+            } else if self.ui.mouse_down && is_focused {
+                // Active mouse drag selection
+                if let Some(&drag_mode) = self.ui.interaction_state.get(&drag_id) {
+                    let hit_pos = hit_test_cursor(
+                        sb,
+                        &self.buffer,
+                        rel_x,
+                        rel_y,
+                        effective_font_size,
+                        self.text_style.line_height,
+                    );
+
+                    if drag_mode > 1.5 {
+                        let (w_start, w_end) = find_word_bounds(&self.buffer, hit_pos);
+                        let anchor = selection_anchor.unwrap_or(hit_pos);
+                        if hit_pos < anchor {
+                            cursor_index = w_start;
+                        } else {
+                            cursor_index = w_end;
+                        }
+                    } else {
+                        cursor_index = hit_pos;
+                    }
+
+                    self.ui.interaction_state.insert(self.id, self.ui.elapsed_time);
+                    self.ui.needs_redraw = true;
+                }
+            } else {
+                // Mouse released: clean up drag state
+                if self.ui.interaction_state.remove(&drag_id).is_some() {
+                    if let Some(anchor) = selection_anchor {
+                        if anchor == cursor_index {
+                            selection_anchor = None;
+                        }
+                    }
+                }
             }
         }
 
@@ -732,9 +772,9 @@ impl<'u, 'a, 'b> TextAreaBuilder<'u, 'a, 'b> {
         let mut is_alt_down = self.ui.interaction_state.get(&ALT_STATE_KEY).copied().unwrap_or(0.0) > 0.5;
 
         let mut submitted = false;
+        let mut changed = false;
         if is_focused || is_hovered {
             let mut events = std::mem::take(&mut self.ui.input_events);
-            let mut changed = false;
             for event in &events {
                 let (sel_start, sel_end, has_selection) = if let Some(a) = selection_anchor {
                     if a != cursor_index {
@@ -1001,7 +1041,6 @@ impl<'u, 'a, 'b> TextAreaBuilder<'u, 'a, 'b> {
                                 } else if let Some(sb) = &shaped_buffer {
                                     self.ui.interaction_state.insert(self.id, self.ui.elapsed_time);
                                     self.ui.needs_redraw = true;
-                                    let row_threshold = (self.font_size * self.line_height) * 0.5;
 
                                     let mut current_line_idx = 0;
                                     for (i, line) in sb.lines().iter().enumerate() {
@@ -1015,17 +1054,25 @@ impl<'u, 'a, 'b> TextAreaBuilder<'u, 'a, 'b> {
                                     if current_line_idx > 0 {
                                         let target_line_idx = current_line_idx - 1;
                                         let target_line = &sb.lines()[target_line_idx];
+                                        let target_line_start = target_line.start_cluster.min(self.buffer.len());
+                                        let target_line_end = sb.lines()[current_line_idx].start_cluster.min(self.buffer.len());
                                         
+                                        let current_line = &sb.lines()[current_line_idx];
+                                        let current_line_start = current_line.start_cluster.min(self.buffer.len());
+                                        let current_line_end = if current_line_idx + 1 < sb.lines().len() {
+                                            sb.lines()[current_line_idx + 1].start_cluster.min(self.buffer.len())
+                                        } else {
+                                            self.buffer.len()
+                                        };
+
                                         let mut target_x = 0.0;
-                                        if let Some(current_line) = sb.lines().get(current_line_idx) {
-                                            for g in sb.glyphs() {
-                                                if (g.y - current_line.y).abs() < row_threshold {
-                                                    if g.cluster < cursor_index {
-                                                        target_x = g.x + g.width;
-                                                    } else if g.cluster == cursor_index {
-                                                        target_x = g.x;
-                                                        break;
-                                                    }
+                                        for g in sb.glyphs() {
+                                            if g.cluster >= current_line_start && g.cluster < current_line_end {
+                                                if g.cluster < cursor_index {
+                                                    target_x = g.x + g.width;
+                                                } else if g.cluster == cursor_index {
+                                                    target_x = g.x;
+                                                    break;
                                                 }
                                             }
                                         }
@@ -1033,11 +1080,13 @@ impl<'u, 'a, 'b> TextAreaBuilder<'u, 'a, 'b> {
                                         let mut best_idx = None;
                                         let mut best_dist = f32::INFINITY;
                                         for g in sb.glyphs() {
-                                            if (g.y - target_line.y).abs() < row_threshold {
-                                                let dist = (g.x - target_x).abs();
+                                            if g.cluster >= target_line_start && g.cluster < target_line_end {
+                                                let center_x = g.x + g.width * 0.5;
+                                                let dist = (center_x - target_x).abs();
                                                 if dist < best_dist {
                                                     best_dist = dist;
-                                                    best_idx = Some(g.cluster);
+                                                    let char_len = self.buffer.get(g.cluster..).and_then(|s| s.chars().next()).map(|c| c.len_utf8()).unwrap_or(0);
+                                                    best_idx = Some(if target_x < center_x { g.cluster } else { (g.cluster + char_len).min(target_line_end) });
                                                 }
                                             }
                                         }
@@ -1063,7 +1112,6 @@ impl<'u, 'a, 'b> TextAreaBuilder<'u, 'a, 'b> {
                                 } else if let Some(sb) = &shaped_buffer {
                                     self.ui.interaction_state.insert(self.id, self.ui.elapsed_time);
                                     self.ui.needs_redraw = true;
-                                    let row_threshold = (self.font_size * self.line_height) * 0.5;
 
                                     let mut current_line_idx = 0;
                                     for (i, line) in sb.lines().iter().enumerate() {
@@ -1077,17 +1125,25 @@ impl<'u, 'a, 'b> TextAreaBuilder<'u, 'a, 'b> {
                                     if current_line_idx < sb.lines().len() - 1 {
                                         let target_line_idx = current_line_idx + 1;
                                         let target_line = &sb.lines()[target_line_idx];
-                                        
+                                        let target_line_start = target_line.start_cluster.min(self.buffer.len());
+                                        let target_line_end = if target_line_idx + 1 < sb.lines().len() {
+                                            sb.lines()[target_line_idx + 1].start_cluster.min(self.buffer.len())
+                                        } else {
+                                            self.buffer.len()
+                                        };
+
+                                        let current_line = &sb.lines()[current_line_idx];
+                                        let current_line_start = current_line.start_cluster.min(self.buffer.len());
+                                        let current_line_end = target_line_start;
+
                                         let mut target_x = 0.0;
-                                        if let Some(current_line) = sb.lines().get(current_line_idx) {
-                                            for g in sb.glyphs() {
-                                                if (g.y - current_line.y).abs() < row_threshold {
-                                                    if g.cluster < cursor_index {
-                                                        target_x = g.x + g.width;
-                                                    } else if g.cluster == cursor_index {
-                                                        target_x = g.x;
-                                                        break;
-                                                    }
+                                        for g in sb.glyphs() {
+                                            if g.cluster >= current_line_start && g.cluster < current_line_end {
+                                                if g.cluster < cursor_index {
+                                                    target_x = g.x + g.width;
+                                                } else if g.cluster == cursor_index {
+                                                    target_x = g.x;
+                                                    break;
                                                 }
                                             }
                                         }
@@ -1095,11 +1151,13 @@ impl<'u, 'a, 'b> TextAreaBuilder<'u, 'a, 'b> {
                                         let mut best_idx = None;
                                         let mut best_dist = f32::INFINITY;
                                         for g in sb.glyphs() {
-                                            if (g.y - target_line.y).abs() < row_threshold {
-                                                let dist = (g.x - target_x).abs();
+                                            if g.cluster >= target_line_start && g.cluster < target_line_end {
+                                                let center_x = g.x + g.width * 0.5;
+                                                let dist = (center_x - target_x).abs();
                                                 if dist < best_dist {
                                                     best_dist = dist;
-                                                    best_idx = Some(g.cluster);
+                                                    let char_len = self.buffer.get(g.cluster..).and_then(|s| s.chars().next()).map(|c| c.len_utf8()).unwrap_or(0);
+                                                    best_idx = Some(if target_x < center_x { g.cluster } else { (g.cluster + char_len).min(target_line_end) });
                                                 }
                                             }
                                         }
@@ -1164,7 +1222,7 @@ impl<'u, 'a, 'b> TextAreaBuilder<'u, 'a, 'b> {
                     PlatformEvent::MouseWheel { delta_x, delta_y } if effective_scrollable && is_hovered => {
                         let total_delta = if delta_y.abs() > 0.001 { *delta_y } else { *delta_x };
                         let step = if total_delta.abs() <= 5.0 { total_delta * 38.0 } else { total_delta };
-                        let usable_h = h_box - self.padding.vertical();
+                        let usable_h = h_box - self.style.padding.vertical();
                         let max_scroll = (h_content - usable_h).max(0.0);
                         scroll_y = (scroll_y - step).clamp(0.0, max_scroll);
                         self.ui.needs_redraw = true;
@@ -1177,11 +1235,19 @@ impl<'u, 'a, 'b> TextAreaBuilder<'u, 'a, 'b> {
                         // RE-SHAPE after buffer modification
                         if let Some(fs) = self.ui.font_system.as_ref() {
                             let mut adapter = CosmicFontProvider::new_with_system(fs.clone());
-                            let t_padding = Padding::from(self.text_padding);
-                            let layout_width = actual_width - self.padding.horizontal() - t_padding.horizontal();
+                            let layout_width = actual_width - self.style.padding.horizontal();
                             adapter.set_layout_size(layout_width, 10000.0);
                             
-                            let options = TextOptions::new().font_size(effective_font_size).line_height(self.line_height).wrap(self.wrap).max_width(layout_width);
+                            let mut options = TextOptions::new()
+                                .font_size(effective_font_size)
+                                .font_weight(self.text_style.font_weight)
+                                .font_style(self.text_style.font_style)
+                                .line_height(self.text_style.line_height)
+                                .wrap(self.text_style.wrap)
+                                .max_width(layout_width);
+                            if let Some(ref family) = self.text_style.font_family {
+                                options = options.font_family(family.clone());
+                            }
                             let buffer_to_shape = if self.buffer.is_empty() {
                                 self.placeholder.as_deref().unwrap_or("")
                             } else {
@@ -1189,14 +1255,14 @@ impl<'u, 'a, 'b> TextAreaBuilder<'u, 'a, 'b> {
                             };
                             let buffer = adapter.shape(buffer_to_shape, &options);
                             let (_cw, ch) = buffer.content_size();
-                            h_content = ch + t_padding.vertical();
+                            h_content = ch;
                             shaped_buffer = Some(buffer);
                             
                             // Re-calculate h_box immediately if not fixed
                             if !effective_scrollable {
-                                let min_h = self.height.unwrap_or(36.0);
-                                let natural_h = (h_content + self.padding.vertical()).max(min_h);
-                                if let Some(max_h) = self.max_height {
+                                let min_h = self.style.height.unwrap_or(36.0);
+                                let natural_h = (h_content + self.style.padding.vertical()).max(min_h);
+                                if let Some(max_h) = self.style.max_height {
                                     h_box = natural_h.min(max_h);
                                 } else {
                                     h_box = natural_h;
@@ -1209,7 +1275,7 @@ impl<'u, 'a, 'b> TextAreaBuilder<'u, 'a, 'b> {
                     
                     let cursor_changed = changed || cursor_index != initial_cursor_index;
                     if effective_scrollable {
-                        let usable_h = h_box - self.padding.vertical();
+                        let usable_h = h_box - self.style.padding.vertical();
                         let max_scroll = (h_content - usable_h).max(0.0);
                         
                         // Vertical Auto-scroll: only when typing or moving cursor!
@@ -1224,8 +1290,9 @@ impl<'u, 'a, 'b> TextAreaBuilder<'u, 'a, 'b> {
                                     } else { break; }
                                 }
                                 if found {
-                                    let line_h = self.font_size * self.line_height;
-                                    let cursor_y_v = ly + self.text_padding.top;
+                                    let line_h = self.text_style.font_size * self.text_style.line_height;
+                                    let first_l_y = sb.lines().first().map(|l| l.y).unwrap_or(0.0);
+                                    let cursor_y_v = ly - first_l_y;
                                     
                                     if cursor_y_v > scroll_y + usable_h - line_h {
                                         scroll_y = cursor_y_v - usable_h + line_h;
@@ -1247,67 +1314,46 @@ impl<'u, 'a, 'b> TextAreaBuilder<'u, 'a, 'b> {
                     self.ui.cursor_state.insert(self.id, cursor_index);
                     let selection_id = Id::from_u64(self.id.raw() ^ 0x5E1EC710);
                     if let Some(anchor) = selection_anchor {
-                        if anchor != cursor_index {
-                            self.ui.cursor_state.insert(selection_id, anchor);
-                        } else {
-                            self.ui.cursor_state.remove(&selection_id);
-                        }
+                        self.ui.cursor_state.insert(selection_id, anchor);
                     } else {
                         self.ui.cursor_state.remove(&selection_id);
                     }
                     self.ui.scroll_state.insert(self.id, (scroll_x, scroll_y));
                 }
 
-        // --- 4. Render Background (FIXED) ---
+        // --- 4. Render Background & Border ---
         let start_draw = self.ui.draws.len();
-        if let Some(bg) = self.bg {
-            use crate::ui::RectDraw;
-            use zenthra_render::RectInstance;
-            let border_col = if is_focused {
-                self.focus_border_color
-                    .or(self.border_color)
-                    .unwrap_or(if self.border_width > 0.0 { Color::rgba(1.0, 1.0, 1.0, 0.4) } else { Color::TRANSPARENT })
-                    .to_array()
-            } else {
-                self.border_color
-                    .unwrap_or(if self.border_width > 0.0 { Color::rgba(1.0, 1.0, 1.0, 0.2) } else { Color::TRANSPARENT })
-                    .to_array()
-            };
-            let border_w = if is_focused {
-                self.focus_border_width.unwrap_or(if self.border_width > 0.0 { self.border_width.max(1.0) } else { 0.0 })
-            } else {
-                self.border_width
-            };
-            self.ui.draws.push(DrawCommand::Rect(RectDraw {
-                instance: RectInstance {
-                    pos: [self.x, self.y],
-                    size: [actual_width, h_box],
-                    color: bg.to_array(),
-                    radius: self.radius,
-                    border_width: border_w,
-                    border_color: border_col,
-                    shadow_color: self.shadow_color.map(|c| {
-                        let mut a = c.to_array();
-                        a[3] *= self.shadow_opacity;
-                        a
-                    }).unwrap_or([0.0, 0.0, 0.0, 0.0]),
-                    shadow_offset: self.shadow_offset,
-                    shadow_blur: self.shadow_blur,
-                    clip_rect: [0.0, 0.0, 9999.0, 9999.0],
-                    grayscale: 0.0,
-                    brightness: 1.0,
-                    opacity: self.opacity,
-                    ..Default::default()
-                }
-            }));
-        }
+        use crate::ui::RectDraw;
+        let effective_border_w = if is_focused {
+            self.focus_border_width.unwrap_or_else(|| self.style.border_width().max(1.0))
+        } else {
+            self.style.border_width()
+        };
+        let effective_border_c = if is_focused {
+            self.focus_border_color
+                .or_else(|| self.style.border_color())
+                .unwrap_or(Color::rgb(0.4, 0.7, 1.0))
+        } else {
+            self.style.border_color().unwrap_or(Color::TRANSPARENT)
+        };
+        let instance = self.style.build_rect_instance(
+            self.x,
+            self.y,
+            actual_width,
+            h_box,
+            self.style.bg.as_ref(),
+            Some(effective_border_c),
+            Some(effective_border_w),
+            1.0,
+        );
+        self.ui.draws.push(DrawCommand::Rect(RectDraw { instance }));
 
         // --- 5. Render Text (ALWAYS CLIPPED TO BOX) ---
-        let pos_y = if !is_multiline && !effective_scrollable && h_box > h_content + self.padding.vertical() {
+        let pos_y = if !is_multiline && !effective_scrollable && h_box > h_content + self.style.padding.vertical() {
             // When box is taller than content (only for single-line inputs), center vertically!
-            self.y + ((h_box - h_content) / 2.0).max(self.padding.top)
+            self.y + ((h_box - h_content) / 2.0).max(self.style.padding.top)
         } else {
-            self.y + self.padding.top - scroll_y
+            self.y + self.style.padding.top - scroll_y
         };
         let display_text = if self.buffer.is_empty() {
             self.placeholder.as_deref().unwrap_or("")
@@ -1317,30 +1363,18 @@ impl<'u, 'a, 'b> TextAreaBuilder<'u, 'a, 'b> {
         let display_color = if self.buffer.is_empty() {
             self.placeholder_color.unwrap_or(Color::rgba(1.0, 1.0, 1.0, 0.4))
         } else {
-            self.color
+            self.text_style.color
         };
 
+        let mut clean_text_style = self.text_style.clone();
+        clean_text_style.highlight_color = None;
+
         let mut text_builder = TextBuilder::new(self.ui, display_text)
-            .size(self.font_size)
-            .line_height(self.line_height)
+            .text_style(clean_text_style)
             .color(display_color)
-            .fill_x(false)
-            .padding(self.text_padding.top, self.text_padding.right, self.text_padding.bottom, self.text_padding.left)
-            .wrap(self.wrap)
-            .max_width(actual_width - self.padding.horizontal() - self.text_padding.horizontal())
-            .pos(self.x + self.padding.left, pos_y);
-
-        if self.text_bg_fill_x {
-            text_builder = text_builder.min_width(actual_width - self.padding.horizontal());
-        }
-
-        if let Some(tbg) = self.text_bg {
-            text_builder = text_builder.bg(tbg).fill_x(false);
-        }
-
-        if let Some(h) = self.highlight {
-            text_builder = text_builder.highlight(h);
-        }
+            .wrap(self.text_style.wrap)
+            .max_width(actual_width - self.style.padding.horizontal())
+            .pos(self.x + self.style.padding.left, pos_y);
 
         // Always clip text to the textarea box boundary so text never overflows outside
         text_builder = text_builder.clip_rect(self.x + 1.0, self.y + 1.0, (actual_width - 2.0).max(0.0), (h_box - 2.0).max(0.0));
@@ -1353,15 +1387,15 @@ impl<'u, 'a, 'b> TextAreaBuilder<'u, 'a, 'b> {
             self.ui.scroll_state.insert(self.id, (scroll_x, scroll_y));
 
             // --- 5.5 Render Scroll Bar ---
-            if h_content > h_box - self.padding.vertical() {
-                let usable_h = h_box - self.padding.vertical();
+            if h_content > h_box - self.style.padding.vertical() {
+                let usable_h = h_box - self.style.padding.vertical();
                 let scroll_bar_w = 3.0;
                 let scroll_bar_x = self.x + actual_width - scroll_bar_w - 2.0;
                 
                 let thumb_h = ((usable_h / h_content) * usable_h).clamp(16.0, usable_h);
                 let max_scroll = (h_content - usable_h).max(1.0);
                 let scroll_percent = (scroll_y / max_scroll).clamp(0.0, 1.0);
-                let thumb_y = self.y + self.padding.top + scroll_percent * (usable_h - thumb_h);
+                let thumb_y = self.y + self.style.padding.top + scroll_percent * (usable_h - thumb_h);
 
                 self.ui.draws.push(DrawCommand::OverlayRect(OverlayRectDraw {
                     x: scroll_bar_x,
@@ -1386,7 +1420,7 @@ impl<'u, 'a, 'b> TextAreaBuilder<'u, 'a, 'b> {
         if is_focused {
             self.ui.request_redraw_after(std::time::Duration::from_millis(250));
             let font_size = effective_font_size;
-            let lh = self.line_height;
+            let lh = self.text_style.line_height;
             let visual_ascent = font_size * (0.8 + (lh - 1.0) / 2.0);
             let cursor_height = font_size * lh;
 
@@ -1408,14 +1442,24 @@ impl<'u, 'a, 'b> TextAreaBuilder<'u, 'a, 'b> {
 
                 // Selection highlight
                 if has_selection && !self.buffer.is_empty() {
-                    let sel_color = Color::rgba(0.26, 0.52, 0.96, 0.35);
-                    let row_threshold = (font_size * lh) * 0.6;
-                    for line in sb.lines() {
-                        let line_cy = if !is_multiline && !effective_scrollable && h_box > h_content + self.padding.vertical() {
-                            let y_offset = ((h_box - h_content) / 2.0).max(self.padding.top);
-                            line.y + self.y + y_offset + self.text_padding.top + v_shift - visual_ascent
+                    let sel_color = self.selection_color.unwrap_or(Color::rgba(0.26, 0.52, 0.96, 0.35));
+                    for (line_idx, line) in sb.lines().iter().enumerate() {
+                        let line_start = line.start_cluster.min(self.buffer.len());
+                        let line_end = if line_idx + 1 < sb.lines().len() {
+                            sb.lines()[line_idx + 1].start_cluster.min(self.buffer.len())
                         } else {
-                            line.y + self.y + self.padding.top + self.text_padding.top + v_shift - visual_ascent - scroll_y
+                            self.buffer.len()
+                        };
+
+                        if line_end <= sel_start || line_start >= sel_end {
+                            continue;
+                        }
+
+                        let line_cy = if !is_multiline && !effective_scrollable && h_box > h_content + self.style.padding.vertical() {
+                            let y_offset = ((h_box - h_content) / 2.0).max(self.style.padding.top);
+                            line.y + self.y + y_offset + v_shift - visual_ascent
+                        } else {
+                            line.y + self.y + self.style.padding.top + v_shift - visual_ascent - scroll_y
                         };
 
                         if line_cy + cursor_height < self.y - 4.0 || line_cy > self.y + h_box + 4.0 {
@@ -1426,7 +1470,7 @@ impl<'u, 'a, 'b> TextAreaBuilder<'u, 'a, 'b> {
                         let mut line_max_x: Option<f32> = None;
 
                         for g in sb.glyphs() {
-                            if (g.y - line.y).abs() < row_threshold {
+                            if g.cluster >= line_start && g.cluster < line_end {
                                 if g.cluster >= sel_start && g.cluster < sel_end {
                                     let left = g.x;
                                     let right = g.x + g.width;
@@ -1436,13 +1480,16 @@ impl<'u, 'a, 'b> TextAreaBuilder<'u, 'a, 'b> {
                             }
                         }
 
-                        if line_min_x.is_none() && line.start_cluster >= sel_start && line.start_cluster < sel_end {
+                        if sel_start <= line_start {
                             line_min_x = Some(0.0);
-                            line_max_x = Some(font_size * 0.4);
+                        }
+                        if sel_end >= line_end {
+                            let extra = if line_end < self.buffer.len() { font_size * 0.35 } else { 0.0 };
+                            line_max_x = Some((line.width + extra).max(font_size * 0.4));
                         }
 
                         if let (Some(min_x), Some(max_x)) = (line_min_x, line_max_x) {
-                            let sel_x = self.x + self.padding.left + self.text_padding.left + min_x;
+                            let sel_x = self.x + self.style.padding.left + min_x;
                             let sel_w = (max_x - min_x).max(3.0);
                             self.ui.draws.push(DrawCommand::OverlayRect(OverlayRectDraw {
                                 x: sel_x,
@@ -1456,68 +1503,56 @@ impl<'u, 'a, 'b> TextAreaBuilder<'u, 'a, 'b> {
                     }
                 }
 
-                let _final_border_w = self.border_width;
-                let _final_border_c = self.border_color.unwrap_or(Color::rgba(1.0, 1.0, 1.0, 0.4));
                 let mut lx = 0.0;
                 let mut ly = first_line_y;
-                let mut found = false;
 
                 if self.buffer.is_empty() {
                     lx = 0.0;
                     ly = first_line_y;
                 } else {
+                    let mut found = false;
                     for g in sb.glyphs() {
                         if g.cluster == cursor_index {
                             lx = g.x;
-                            ly = g.y;
                             found = true;
                             break;
                         }
                     }
 
-                    if !found {
-                        let mut best_line = None;
-                        for line in sb.lines() {
-                            if line.start_cluster <= cursor_index {
-                                best_line = Some(line);
-                            } else {
-                                break;
-                            }
+                    let mut best_line = None;
+                    for line in sb.lines() {
+                        if line.start_cluster <= cursor_index {
+                            best_line = Some(line);
+                        } else {
+                            break;
                         }
+                    }
 
-                        if let Some(line) = best_line {
-                            ly = line.y;
-                            // If we are past the start of the line and not found in glyphs,
-                            // we're likely at a newline or trailing space.
+                    if let Some(line) = best_line {
+                        ly = line.y;
+                        if !found {
                             if cursor_index > line.start_cluster {
                                 lx = line.width;
                             } else {
                                 lx = 0.0;
                             }
                         }
-                        
-                        if cursor_index == self.buffer.len() {
-                            if let Some(lg) = sb.glyphs().last() {
-                                if (lg.y - ly).abs() < 2.0 {
-                                    lx = lg.x + lg.width;
-                                } else {
-                                    // Last line might be empty
-                                    if let Some(last_line) = sb.lines().last() {
-                                        ly = last_line.y;
-                                        lx = 0.0;
-                                    }
-                                }
-                            }
+                    }
+                    
+                    if cursor_index == self.buffer.len() {
+                        if let Some(last_line) = sb.lines().last() {
+                            ly = last_line.y;
+                            lx = last_line.width;
                         }
                     }
                 }
                 
-                let cx = lx + self.x + self.padding.left + self.text_padding.left;
-                let cy = if !is_multiline && !effective_scrollable && h_box > h_content + self.padding.vertical() {
-                    let y_offset = ((h_box - h_content) / 2.0).max(self.padding.top);
-                    ly + self.y + y_offset + self.text_padding.top + v_shift - visual_ascent
+                let cx = lx + self.x + self.style.padding.left;
+                let cy = if !is_multiline && !effective_scrollable && h_box > h_content + self.style.padding.vertical() {
+                    let y_offset = ((h_box - h_content) / 2.0).max(self.style.padding.top);
+                    ly + self.y + y_offset + v_shift - visual_ascent
                 } else {
-                    ly + self.y + self.padding.top + self.text_padding.top + v_shift - visual_ascent - scroll_y
+                    ly + self.y + self.style.padding.top + v_shift - visual_ascent - scroll_y
                 };
                 
                  // Smart Blink: Solid while typing, blink when idle
@@ -1539,7 +1574,7 @@ impl<'u, 'a, 'b> TextAreaBuilder<'u, 'a, 'b> {
                         y: cy,
                         width: 2.0,
                         height: cursor_height,
-                        color: self.cursor_color.unwrap_or(self.color),
+                        color: self.cursor_color.unwrap_or(self.text_style.color),
                         clip: [self.x + 1.0, self.y + 1.0, (actual_width - 2.0).max(0.0), (h_box - 2.0).max(0.0)],
                     }));
                 }
@@ -1554,11 +1589,20 @@ impl<'u, 'a, 'b> TextAreaBuilder<'u, 'a, 'b> {
             self.ui.render_mode_stack.pop();
         }
 
+        if changed {
+            self.ui.dispatch_event(self.id, crate::ui::WidgetEvent::Change(crate::ui::EventValue::String(self.buffer.clone())));
+        }
+        if submitted {
+            self.ui.dispatch_event(self.id, crate::ui::WidgetEvent::Submit);
+        }
+        self.ui.dispatch_event(self.id, crate::ui::WidgetEvent::Hover(is_hovered));
+
         zenthra_core::Response {
             clicked: self.ui.clicked && is_hovered,
             hovered: is_hovered,
             pressed: is_hovered && self.ui.mouse_down,
             submitted,
+            changed,
         }
     }
 }
@@ -1657,5 +1701,199 @@ mod tests {
         let char_len = buf[cur..].chars().next().map(|c| c.len_utf8()).unwrap();
         buf.drain(cur..cur + char_len);
         assert_eq!(buf, "ello");
+    }
+
+    #[test]
+    fn test_text_area_styling_and_focus_border() {
+        use std::collections::HashMap;
+        use std::hash::{Hash, Hasher};
+
+        let mut scroll_state = HashMap::new();
+        let mut cursor_state = HashMap::new();
+        let mut interaction_state = HashMap::new();
+        let layout_cache = HashMap::new();
+        let mut next_layout_cache = HashMap::new();
+        let screen_layout_cache = HashMap::new();
+        let mut next_screen_layout_cache = HashMap::new();
+        let widget_window_map = HashMap::new();
+        let mut next_widget_window_map = HashMap::new();
+        let image_sizes = HashMap::new();
+
+        let area_id_key = "my_text_area";
+        let mut hasher = std::collections::hash_map::DefaultHasher::new();
+        area_id_key.hash(&mut hasher);
+        let expected_id = Id::from_u64(hasher.finish());
+
+        let mut text = String::from("code block");
+
+        // Case 1: bg(None), border(None), focus_border(...) when NOT focused
+        {
+            let mut ui = Ui::new(
+                800, 600, 1.0, None, Vec::new(), None,
+                (0.0, 0.0), false,
+                &mut scroll_state, &mut cursor_state, &mut interaction_state,
+                None, None, false, false, 0.0,
+                &layout_cache, &mut next_layout_cache,
+                &screen_layout_cache, &mut next_screen_layout_cache,
+                &widget_window_map, &mut next_widget_window_map,
+                &image_sizes,
+            );
+
+            ui.text_area_with_id(&mut text, area_id_key)
+                .bg(None)
+                .border(None)
+                .focus_border((Color::rgb(0.35, 0.58, 0.98), 1.5))
+                .shadow(Color::BLACK, 0.0, 2.0, 4.0)
+                .shadow_opacity(0.8)
+                .show();
+
+            assert!(ui.draws.len() >= 2);
+            if let crate::ui::DrawCommand::Rect(rd) = &ui.draws[0] {
+                assert_eq!(rd.instance.color, Color::TRANSPARENT.to_array());
+                assert_eq!(rd.instance.border_width, 0.0);
+                assert_eq!(rd.instance.shadow_color, [0.0, 0.0, 0.0, 0.8]);
+            } else {
+                panic!("Expected RectDraw for text_area at draws[0]");
+            }
+        }
+
+        // Case 2: Same text_area when FOCUSED -> focus border must render!
+        {
+            let mut ui = Ui::new(
+                800, 600, 1.0, None, Vec::new(), Some(expected_id),
+                (0.0, 0.0), false,
+                &mut scroll_state, &mut cursor_state, &mut interaction_state,
+                None, None, false, false, 0.0,
+                &layout_cache, &mut next_layout_cache,
+                &screen_layout_cache, &mut next_screen_layout_cache,
+                &widget_window_map, &mut next_widget_window_map,
+                &image_sizes,
+            );
+
+            ui.text_area_with_id(&mut text, area_id_key)
+                .bg(None)
+                .border(None)
+                .focus_border((Color::rgb(0.35, 0.58, 0.98), 1.5))
+                .show();
+
+            assert!(ui.draws.len() >= 2);
+            if let crate::ui::DrawCommand::Rect(rd) = &ui.draws[0] {
+                assert_eq!(rd.instance.color, Color::TRANSPARENT.to_array());
+                assert_eq!(rd.instance.border_width, 1.5);
+                assert_eq!(rd.instance.border_color, Color::rgb(0.35, 0.58, 0.98).to_array());
+            } else {
+                panic!("Expected RectDraw for focused text_area at draws[0]");
+            }
+        }
+
+        // Case 3: Explicit focus_border(None) when FOCUSED -> no focus border!
+        {
+            let mut ui = Ui::new(
+                800, 600, 1.0, None, Vec::new(), Some(expected_id),
+                (0.0, 0.0), false,
+                &mut scroll_state, &mut cursor_state, &mut interaction_state,
+                None, None, false, false, 0.0,
+                &layout_cache, &mut next_layout_cache,
+                &screen_layout_cache, &mut next_screen_layout_cache,
+                &widget_window_map, &mut next_widget_window_map,
+                &image_sizes,
+            );
+
+            ui.text_area_with_id(&mut text, area_id_key)
+                .border((Color::WHITE, 1.0))
+                .focus_border(None)
+                .show();
+
+            assert!(ui.draws.len() >= 2);
+            if let crate::ui::DrawCommand::Rect(rd) = &ui.draws[0] {
+                assert_eq!(rd.instance.border_width, 0.0);
+                assert_eq!(rd.instance.border_color, Color::TRANSPARENT.to_array());
+            } else {
+                panic!("Expected RectDraw at draws[0]");
+            }
+        }
+    }
+
+    #[test]
+    fn test_hit_test_cursor_multiline() {
+        use zenthra_text::defaults::cosmic_font::CosmicFontProvider;
+        use zenthra_text::types::options::TextOptions;
+
+        let text = "abc\ndef";
+        let font_size = 14.0;
+        let line_height = 1.0;
+
+        let mut adapter = CosmicFontProvider::new();
+        let options = TextOptions::new()
+            .font_size(font_size)
+            .line_height(line_height);
+        let sb = adapter.shape(text, &options);
+
+        // Click above text -> line 0, start
+        assert_eq!(super::hit_test_cursor(&sb, text, 0.0, -5.0, font_size, line_height), 0);
+
+        // Click line 0 on first character
+        assert_eq!(super::hit_test_cursor(&sb, text, 1.0, 5.0, font_size, line_height), 0);
+
+        // Click line 0 past width -> end of line 0 before \n (index 3)
+        assert_eq!(super::hit_test_cursor(&sb, text, 500.0, 5.0, font_size, line_height), 3);
+
+        // Click line 1 on first character
+        let line1_y = sb.lines().get(1).map(|l| l.y - sb.lines()[0].y).unwrap_or(14.0);
+        assert_eq!(super::hit_test_cursor(&sb, text, 1.0, line1_y + 2.0, font_size, line_height), 4);
+
+        // Click line 1 past width -> end of text (index 7)
+        assert_eq!(super::hit_test_cursor(&sb, text, 500.0, line1_y + 2.0, font_size, line_height), 7);
+
+        // Click below all lines -> end of text (index 7)
+        assert_eq!(super::hit_test_cursor(&sb, text, 10.0, 100.0, font_size, line_height), 7);
+    }
+
+    #[test]
+    fn test_hit_test_code_content() {
+        use zenthra_text::defaults::cosmic_font::CosmicFontProvider;
+        use zenthra_text::types::options::TextOptions;
+
+        let code_content = String::from(
+            "// Welcome to Zenthra TextArea!\n\
+             fn calculate_metrics(count: usize) -> f64 {\n\
+                 let factor = 1.6180339887;\n\
+                 (count as f64) * factor\n\
+             }\n\n\
+             // Immediate mode UI with zero lag cursor\n\
+             let result = calculate_metrics(42);\n\
+             println!(\"Result: {}\", result);\n"
+        );
+
+        let font_size = 13.0;
+        let line_height = 1.4;
+
+        let mut adapter = CosmicFontProvider::new();
+        let options = TextOptions::new()
+            .font_size(font_size)
+            .line_height(line_height);
+        let sb = adapter.shape(&code_content, &options);
+
+        println!("TOTAL LINES: {}", sb.lines().len());
+        for (i, line) in sb.lines().iter().enumerate() {
+            let line_end = if i + 1 < sb.lines().len() {
+                sb.lines()[i + 1].start_cluster
+            } else {
+                code_content.len()
+            };
+            let text_snippet = code_content.get(line.start_cluster..line_end).unwrap_or("<invalid>");
+            println!("Line {}: y={}, width={}, start_cluster={}, snippet={:?}", i, line.y, line.width, line.start_cluster, text_snippet);
+        }
+
+        let first_line_y = sb.lines().first().map(|l| l.y).unwrap_or(0.0);
+        let line_h = font_size * line_height;
+        // Let's find which line has "// Immediate mode UI with zero lag cursor"
+        // and hit test on that line!
+        for (i, line) in sb.lines().iter().enumerate() {
+            let rel_y = (line.y - first_line_y) + line_h * 0.5;
+            let hit = super::hit_test_cursor(&sb, &code_content, 50.0, rel_y, font_size, line_height);
+            let char_at_hit = code_content.get(hit..).and_then(|s| s.lines().next()).unwrap_or("");
+            println!("Testing Line {} (rel_y={}): hit_idx={}, line starts with {:?}", i, rel_y, hit, char_at_hit);
+        }
     }
 }

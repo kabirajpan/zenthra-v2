@@ -36,162 +36,22 @@ wgpu              = { workspace = true }
 winit             = { workspace = true }
 bytemuck          = { workspace = true }
 
-
-[[example]]
-name = "hello"
-path = "../../examples/hello/main.rs"
-
-[[example]]
-name = "text"
-path = "../../examples/text/main.rs"
-
-[[example]]
-name = "containers"
-path = "../../examples/containers/main.rs"
-
-[[example]]
-name = "nested_wrap"
-path = "../../examples/nested_wrap.rs"
-[[example]]
-name = "edit"
-path = "../../examples/edit/main.rs"
-
 [[example]]
 name = "button"
 path = "../../examples/button.rs"
 
 [[example]]
-name = "render_modes"
-path = "../../examples/render_modes.rs"
+name = "container"
+path = "../../examples/container.rs"
 
 [[example]]
-name = "button_default"
-path = "../../examples/button_default.rs"
+name = "text"
+path = "../../examples/text.rs"
 
 [[example]]
-name = "wrapper_test"
-path = "../../examples/wrapper_test/main.rs"
+name = "input"
+path = "../../examples/input.rs"
 
 [[example]]
-name = "wrapper_modes"
-path = "../../examples/wrapper_modes.rs"
-
-[[example]]
-name = "container_test"
-path = "../../examples/container_test.rs"
-
-[[example]]
-name = "slider_test"
-path = "../../examples/slider_test.rs"
-
-[[example]]
-name = "progress_test"
-path = "../../examples/progress_test.rs"
-
-[[example]]
-name = "switch_test"
-path = "../../examples/switch_test.rs"
-
-[[example]]
-name = "image_test"
-path = "../../examples/image_test.rs"
-
-[[example]]
-name = "image_simple"
-path = "../../examples/image_simple.rs"
-
-[[example]]
-name = "checkbox_test"
-path = "../../examples/checkbox_test.rs"
-
-[[example]]
-name = "checkbox_list"
-path = "../../examples/checkbox_list.rs"
-
-[[example]]
-name = "toggle_list"
-path = "../../examples/toggle_list.rs"
-
-[[example]]
-name = "radio_list"
-path = "../../examples/radio_list.rs"
-
-[[example]]
-name = "scroll_test"
-path = "../../examples/scroll_test.rs"
-
-[[example]]
-name = "dropdown_test"
-path = "../../examples/dropdown_test.rs"
-
-[[example]]
-name = "simple_dynamic"
-path = "../../examples/simple_dynamic.rs"
-
-[[example]]
-name = "floating_window"
-path = "../../examples/floating_window.rs"
-
-[[example]]
-name = "window_test"
-path = "../../examples/window_test.rs"
-
-[[example]]
-name = "menu_test"
-path = "../../examples/menu_test.rs"
-
-[[example]]
-name = "card_test"
-path = "../../examples/card_test.rs"
-
-[[example]]
-name = "stack_test"
-path = "../../examples/stack_test.rs"
-
-[[example]]
-name = "panel_test"
-path = "../../examples/panel_test.rs"
-
-[[example]]
-name = "sidebar_test"
-path = "../../examples/sidebar_test.rs"
-
-[[example]]
-name = "color_test"
-path = "../../examples/color_test.rs"
-
-[[example]]
-name = "declarative_event_test"
-path = "../../examples/declarative_event_test.rs"
-
-[[example]]
-name = "glassmorphism_demo"
-path = "../../examples/glassmorphism_demo.rs"
-
-[[example]]
-name = "custom_shader_demo"
-path = "../../examples/custom_shader_demo.rs"
-
-[[example]]
-name = "simple_window"
-path = "../../examples/simple_window.rs"
-
-[[example]]
-name = "reactive_state_demo"
-path = "../../examples/reactive_state_demo.rs"
-
-[[example]]
-name = "gradient_showcase"
-path = "../../examples/gradient_showcase.rs"
-
-[[example]]
-name = "gradient_timeline_clips"
-path = "../../examples/gradient_timeline_clips.rs"
-
-[[example]]
-name = "gradient_box"
-path = "../../examples/gradient_box.rs"
-
-[[example]]
-name = "gradient_mesh_card"
-path = "../../examples/gradient_mesh_card.rs"
+name = "text_area"
+path = "../../examples/text_area.rs"

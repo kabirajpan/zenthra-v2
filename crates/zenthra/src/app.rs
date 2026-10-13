@@ -182,6 +182,7 @@ impl App {
         let mut mouse_pos: (f32, f32) = (0.0, 0.0);
         let mut ui_mouse_down = false;
         let mut active_drag: Option<zenthra_widgets::ui::ScrollDrag> = None;
+        let mut active_widget_id: Option<zenthra_core::Id> = None;
         let mut layout_cache: std::collections::HashMap<
             zenthra_core::Id,
             (zenthra_core::Rect, u64),
@@ -194,6 +195,7 @@ impl App {
             zenthra_core::Id,
             zenthra_core::Id,
         > = std::collections::HashMap::new();
+        let mut prev_active_overlays: Vec<zenthra_core::Id> = Vec::new();
         let start_time = std::time::Instant::now();
 
         let fonts = std::mem::take(&mut self.fonts);
@@ -307,6 +309,7 @@ impl App {
                         // and let the UI handle the rest.
                         if !ui_mouse_down {
                             active_drag = None;
+                            active_widget_id = None;
                         }
                         needs_redraw = true;
                     }
@@ -382,6 +385,7 @@ impl App {
                         &mut cursor_state,
                         &mut interaction_state,
                         active_drag,
+                        active_widget_id,
                         ui_clicked,
                         ui_right_clicked,
                         elapsed,
@@ -396,7 +400,7 @@ impl App {
 
                     f(&mut ui);
 
-                    // Clear modal and overlay flags for any window or overlay that was not shown in this frame
+                    // Clear modal flags for any window that was not shown in this frame
                     let shown_windows: std::collections::HashSet<zenthra_core::Id> = ui.window_overlays.iter().map(|(id, _)| *id).collect();
                     let mut keys_to_clear = Vec::new();
                     for (&key, &val) in ui.interaction_state.iter() {
@@ -408,8 +412,9 @@ impl App {
                                 keys_to_clear.push(key);
                             }
                         } else if flag_type == 99 && val > 0.5 {
-                            let overlay_id = zenthra_core::Id::from_u64(raw >> 8);
-                            if !ui.active_overlays.contains(&overlay_id) {
+                            let masked_id = raw >> 8;
+                            let matches_any = ui.active_overlays.iter().any(|&o| (o.raw() & 0x00FF_FFFF_FFFF_FFFF) == masked_id);
+                            if !matches_any {
                                 keys_to_clear.push(key);
                             }
                         }
@@ -417,6 +422,20 @@ impl App {
                     for key in keys_to_clear {
                         ui.interaction_state.insert(key, 0.0);
                     }
+
+                    // Clear overlay flags for any overlay active in prev frame that was closed in this frame
+                    for &prev_id in &prev_active_overlays {
+                        if !ui.active_overlays.contains(&prev_id) {
+                            let k = zenthra_widgets::overlay_key(prev_id);
+                            ui.interaction_state.insert(k, 0.0);
+                        }
+                    }
+                    // Ensure all currently active overlays have their overlay flag set to 1.0
+                    for &curr_id in &ui.active_overlays {
+                        let k = zenthra_widgets::overlay_key(curr_id);
+                        ui.interaction_state.insert(k, 1.0);
+                    }
+                    prev_active_overlays = ui.active_overlays.clone();
 
                     // Sort window overlays by z-index and append them to ui.overlays
                     ui.window_overlays.sort_by(|(id_a, _), (id_b, _)| {
@@ -430,11 +449,16 @@ impl App {
 
                     focused_id = ui.focused_id;
                     active_drag = ui.active_drag;
+                    active_widget_id = ui.active_widget_id;
+                    if !ui_mouse_down {
+                        active_widget_id = None;
+                    }
                     needs_redraw |= ui.needs_redraw;
                     frame.request_redraw_at = ui.requested_redraw_at;
                     frame.window_actions = ui.window_actions.clone();
                     if !frame.window_actions.is_empty() {
                         ui_mouse_down = false;
+                        active_widget_id = None;
                     }
 
                     let winit_cursor = match ui.cursor_icon {
@@ -451,6 +475,39 @@ impl App {
                     
                     (ui.draws, ui.overlays)
                 };
+
+                // Immediately load available local textures synchronously so continuous video/animation frames never drop
+                for cmd in draws.iter().chain(overlays.iter()) {
+                    if let DrawCommand::Image(id_cmd) = cmd {
+                        if !texture_cache.contains_key(&id_cmd.source) {
+                            let sync_res = match &id_cmd.source {
+                                zenthra_core::ImageSource::Path(p) => {
+                                    std::fs::read(p).ok().and_then(|bytes| {
+                                        zenthra_render::texture::create_texture_bind_group(&device, queue, &ip.texture_bgl, &bytes).ok()
+                                    })
+                                }
+                                zenthra_core::ImageSource::Bytes(b) => {
+                                    zenthra_render::texture::create_texture_bind_group(&device, queue, &ip.texture_bgl, b).ok()
+                                }
+                                _ => None,
+                            };
+                            if let Some((bg, w, h)) = sync_res {
+                                let full_count = texture_cache.keys().filter(|k| !matches!(k, zenthra_core::ImageSource::Thumbnail(_))).count();
+                                if full_count >= 256 {
+                                    if let Some(idx) = texture_lru.iter().position(|k| !matches!(k, zenthra_core::ImageSource::Thumbnail(_))) {
+                                        if let Some(lru_key) = texture_lru.remove(idx) {
+                                            texture_cache.remove(&lru_key);
+                                            image_sizes.remove(&lru_key);
+                                        }
+                                    }
+                                }
+                                texture_cache.insert(id_cmd.source.clone(), (std::sync::Arc::new(bg), w, h));
+                                image_sizes.insert(id_cmd.source.clone(), (w, h));
+                                texture_lru.push_back(id_cmd.source.clone());
+                            }
+                        }
+                    }
+                }
 
                 // ── Acquire surface + encoder ─────────────────────────────────
                 let surface_texture = match frame.window.gpu.surface.get_current_texture() {
@@ -724,10 +781,10 @@ impl App {
                                 } else {
                                     if let Some(pos) = texture_lru.iter().position(|x| *x == id_cmd.source) {
                                         texture_lru.remove(pos);
-                                     }
-                                     texture_lru.push_back(id_cmd.source.clone());
-                                     if texture_cache.contains_key(&id_cmd.source) {
-                                         let mut inst = id_cmd.instance;
+                                    }
+                                    texture_lru.push_back(id_cmd.source.clone());
+                                    if texture_cache.contains_key(&id_cmd.source) {
+                                        let mut inst = id_cmd.instance;
                                          inst.pos[0] *= sf; inst.pos[1] *= sf;
                                          inst.size[0] *= sf; inst.size[1] *= sf;
                                          inst.clip_rect[0] *= sf; inst.clip_rect[1] *= sf;

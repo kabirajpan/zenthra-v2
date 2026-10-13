@@ -2999,15 +2999,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "window_test_mobile"
-version = "0.1.0"
-dependencies = [
- "android-activity",
- "winit",
- "zenthra",
-]
-
-[[package]]
 name = "windows"
 version = "0.62.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"

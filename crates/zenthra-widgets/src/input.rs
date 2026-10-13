@@ -1,8 +1,9 @@
 use crate::ui::{Ui, DrawCommand, OverlayRectDraw, ScrollDrag};
 use crate::text::TextBuilder;
-use zenthra_core::{Color, EdgeInsets, Id, Role, SemanticNode, Rect};
+use crate::style_ext::BoxStyleExt;
+use zenthra_core::{BoxStyle, Color, EdgeInsets, Id, Role, SemanticNode, Rect, Styleable};
 use zenthra_platform::event::PlatformEvent;
-use zenthra_text::prelude::{TextOptions, CosmicFontProvider, Padding, ShapedGlyph};
+use zenthra_text::prelude::{TextOptions, CosmicFontProvider, ShapedGlyph};
 use zenthra_text::traits::FontProvider;
 
 const CTRL_STATE_KEY: Id = Id::from_u64(0xFEED_C071);
@@ -80,6 +81,74 @@ fn find_next_word_boundary(text: &str, cursor: usize) -> usize {
     target
 }
 
+fn find_word_bounds(text: &str, cursor: usize) -> (usize, usize) {
+    if text.is_empty() {
+        return (0, 0);
+    }
+    let cursor = cursor.min(text.len());
+    
+    let char_at = text[cursor..].chars().next();
+    let char_before = if cursor > 0 {
+        text[..cursor].chars().next_back()
+    } else {
+        None
+    };
+
+    let target_char = match (char_at, char_before) {
+        (Some(c), _) if c != '\n' => c,
+        (_, Some(c)) if c != '\n' => c,
+        (Some(c), _) => c,
+        _ => return (cursor, cursor),
+    };
+
+    if target_char == '\n' {
+        return (cursor, cursor);
+    }
+
+    let is_word = target_char.is_alphanumeric() || target_char == '_';
+    let is_ws = target_char.is_whitespace();
+
+    let mut start = cursor;
+    if let Some(c) = char_at {
+        if (is_word && (c.is_alphanumeric() || c == '_')) || (is_ws && c.is_whitespace() && c != '\n') {
+            // on matching char
+        } else if cursor > 0 {
+            start = cursor - char_before.map(|c| c.len_utf8()).unwrap_or(0);
+        }
+    } else if cursor > 0 {
+        start = cursor - char_before.map(|c| c.len_utf8()).unwrap_or(0);
+    }
+
+    for (idx, c) in text[..start].char_indices().rev() {
+        if c == '\n' {
+            break;
+        }
+        if is_word && (c.is_alphanumeric() || c == '_') {
+            start = idx;
+        } else if is_ws && c.is_whitespace() {
+            start = idx;
+        } else {
+            break;
+        }
+    }
+
+    let mut end = start;
+    for (idx, c) in text[start..].char_indices() {
+        if c == '\n' {
+            break;
+        }
+        if is_word && (c.is_alphanumeric() || c == '_') {
+            end = start + idx + c.len_utf8();
+        } else if is_ws && c.is_whitespace() {
+            end = start + idx + c.len_utf8();
+        } else {
+            break;
+        }
+    }
+
+    (start, end)
+}
+
 fn get_clipboard_text() -> Option<String> {
     #[cfg(target_os = "linux")]
     {
@@ -154,73 +223,73 @@ pub struct InputBuilder<'u, 'a, 'b> {
     id: Id,
     x: f32,
     y: f32,
-    font_size: f32,
-    color: Color,
+
+    // Box & typography styling
+    pub style: BoxStyle,
+    pub text_style: zenthra_text::prelude::TextStyle,
+
+    // Input-specific fields
     cursor_color: Option<Color>,
-    bg: Option<Color>,
-    text_bg: Option<Color>,
-    highlight: Option<Color>,
-    padding: EdgeInsets,
-    text_padding: EdgeInsets,
-    line_height: f32,
-    width: Option<f32>,
-    min_width: f32,
+    pub selection_color: Option<Color>,
     scrollable: bool,
-    fill_x: bool,
-    text_bg_fill_x: bool,
-    radius: [f32; 4],
-    border_color: Option<Color>,
-    border_width: f32,
     focus_border_color: Option<Color>,
     focus_border_width: Option<f32>,
     placeholder: Option<String>,
     placeholder_color: Option<Color>,
-    opacity: f32,
-    shadow_color: Option<Color>,
-    shadow_offset: [f32; 2],
-    shadow_blur: f32,
-    shadow_opacity: f32,
     render_mode: Option<zenthra_core::RenderMode>,
+    select_all: bool,
 }
+
+impl<'u, 'a, 'b> Styleable for InputBuilder<'u, 'a, 'b> {
+    #[inline]
+    fn box_style_mut(&mut self) -> &mut BoxStyle {
+        &mut self.style
+    }
+
+    #[inline]
+    fn box_style(&self) -> &BoxStyle {
+        &self.style
+    }
+}
+
+// Single-source macro generates all BoxStyle builder methods (.width, .height, .padding, .radius, .bg, .border, .shadow, etc.)
+impl_box_style_methods!(InputBuilder, 'u, 'a, 'b);
+
+// Single-source macro generates all typography styling builder methods (.font_size, .text_color, .font_family, .font_weight, etc.)
+impl_font_style_methods!(InputBuilder, 'u, 'a, 'b);
 
 impl<'u, 'a, 'b> InputBuilder<'u, 'a, 'b> {
     pub fn new(ui: &'u mut Ui<'a>, buffer: &'b mut String) -> Self {
         let id = ui.id();
         let x = ui.cursor_x;
         let y = ui.cursor_y;
+        let mut style = BoxStyle::new();
+        style.bg = Some(zenthra_core::Background::Solid(Color::rgb(0.2, 0.2, 0.2)));
+        style.radius = [4.0; 4];
+        style.padding = EdgeInsets::symmetric(4.0, 8.0);
+
+        let mut text_style = zenthra_text::prelude::TextStyle::default();
+        text_style.font_size = 18.0;
+        text_style.color = Color::WHITE;
+        text_style.line_height = 1.2;
+
         Self {
             ui,
             buffer,
             id,
             x,
             y,
-            font_size: 18.0,
-            color: Color::WHITE,
+            style,
+            text_style,
             cursor_color: None,
-            bg: Some(Color::rgb(0.2, 0.2, 0.2)),
-            text_bg: None,
-            padding: EdgeInsets::ZERO,
-            text_padding: EdgeInsets::ZERO,
-            line_height: 1.2,
-            width: None,
-            min_width: 200.0,
+            selection_color: None,
             scrollable: true,
-            fill_x: false,
-            text_bg_fill_x: false,
-            highlight: None,
-            radius: [4.0; 4],
-            border_color: None,
-            border_width: 0.0,
             focus_border_color: None,
             focus_border_width: None,
             placeholder: None,
             placeholder_color: None,
-            opacity: 1.0,
-            shadow_color: None,
-            shadow_offset: [0.0; 2],
-            shadow_blur: 0.0,
-            shadow_opacity: 1.0,
             render_mode: None,
+            select_all: false,
         }
     }
 
@@ -232,13 +301,9 @@ impl<'u, 'a, 'b> InputBuilder<'u, 'a, 'b> {
         self
     }
 
-    pub fn size(mut self, size: f32) -> Self {
-        self.font_size = size;
-        self
-    }
-
-    pub fn color(mut self, color: Color) -> Self {
-        self.color = color;
+    pub fn pos(mut self, x: f32, y: f32) -> Self {
+        self.x = x;
+        self.y = y;
         self
     }
 
@@ -247,95 +312,8 @@ impl<'u, 'a, 'b> InputBuilder<'u, 'a, 'b> {
         self
     }
 
-    pub fn bg(mut self, bg: Color) -> Self {
-        self.bg = Some(bg);
-        self
-    }
-
-    pub fn text_bg(mut self, bg: Color) -> Self {
-        self.text_bg = Some(bg);
-        self
-    }
-
-    pub fn highlight(mut self, color: Color) -> Self {
-        self.highlight = Some(color);
-        self
-    }
-
-    pub fn padding(mut self, t: f32, r: f32, b: f32, l: f32) -> Self {
-        self.padding = EdgeInsets { top: t, right: r, bottom: b, left: l };
-        self
-    }
-    pub fn padding_x(mut self, x: f32) -> Self {
-        self.padding.left = x;
-        self.padding.right = x;
-        self
-    }
-    pub fn padding_y(mut self, y: f32) -> Self {
-        self.padding.top = y;
-        self.padding.bottom = y;
-        self
-    }
-    pub fn padding_top(mut self, t: f32) -> Self {
-        self.padding.top = t;
-        self
-    }
-    pub fn padding_bottom(mut self, b: f32) -> Self {
-        self.padding.bottom = b;
-        self
-    }
-    pub fn padding_left(mut self, l: f32) -> Self {
-        self.padding.left = l;
-        self
-    }
-    pub fn padding_right(mut self, r: f32) -> Self {
-        self.padding.right = r;
-        self
-    }
-
-    pub fn text_padding(mut self, t: f32, r: f32, b: f32, l: f32) -> Self {
-        self.text_padding = EdgeInsets { top: t, right: r, bottom: b, left: l };
-        self
-    }
-    pub fn text_padding_x(mut self, x: f32) -> Self {
-        self.text_padding.left = x;
-        self.text_padding.right = x;
-        self
-    }
-    pub fn text_padding_y(mut self, y: f32) -> Self {
-        self.text_padding.top = y;
-        self.text_padding.bottom = y;
-        self
-    }
-    pub fn text_padding_top(mut self, t: f32) -> Self {
-        self.text_padding.top = t;
-        self
-    }
-    pub fn text_padding_bottom(mut self, b: f32) -> Self {
-        self.text_padding.bottom = b;
-        self
-    }
-    pub fn text_padding_left(mut self, l: f32) -> Self {
-        self.text_padding.left = l;
-        self
-    }
-    pub fn text_padding_right(mut self, r: f32) -> Self {
-        self.text_padding.right = r;
-        self
-    }
-
-    pub fn line_height(mut self, lh: f32) -> Self {
-        self.line_height = lh;
-        self
-    }
-
-    pub fn width(mut self, w: f32) -> Self {
-        self.width = Some(w);
-        self
-    }
-
-    pub fn min_width(mut self, w: f32) -> Self {
-        self.min_width = w;
+    pub fn selection_color(mut self, color: Color) -> Self {
+        self.selection_color = Some(color);
         self
     }
 
@@ -344,104 +322,17 @@ impl<'u, 'a, 'b> InputBuilder<'u, 'a, 'b> {
         self
     }
 
-    pub fn fill_x(mut self) -> Self {
-        self.fill_x = true;
-        self
-    }
-
-    pub fn radius(mut self, tl: f32, tr: f32, br: f32, bl: f32) -> Self {
-        self.radius = [tl, tr, br, bl];
-        self
-    }
-
-    pub fn radius_all(mut self, r: f32) -> Self {
-        self.radius = [r, r, r, r];
-        self
-    }
-
-    pub fn radius_top(mut self, r: f32) -> Self {
-        self.radius[0] = r;
-        self.radius[1] = r;
-        self
-    }
-
-    pub fn radius_bottom(mut self, r: f32) -> Self {
-        self.radius[2] = r;
-        self.radius[3] = r;
-        self
-    }
-
-    pub fn radius_top_left(mut self, r: f32) -> Self {
-        self.radius[0] = r;
-        self
-    }
-
-    pub fn radius_top_right(mut self, r: f32) -> Self {
-        self.radius[1] = r;
-        self
-    }
-
-    pub fn radius_bottom_right(mut self, r: f32) -> Self {
-        self.radius[2] = r;
-        self
-    }
-
-    pub fn radius_bottom_left(mut self, r: f32) -> Self {
-        self.radius[3] = r;
-        self
-    }
-
-    pub fn radius_left(mut self, r: f32) -> Self {
-        self.radius[0] = r;
-        self.radius[3] = r;
-        self
-    }
-
-    pub fn radius_right(mut self, r: f32) -> Self {
-        self.radius[1] = r;
-        self.radius[2] = r;
-        self
-    }
-
-    pub fn border(mut self, color: Color, width: f32) -> Self {
-        self.border_color = Some(color);
-        self.border_width = width;
-        self
-    }
-
-    pub fn no_border(mut self) -> Self {
-        self.border_color = Some(Color::TRANSPARENT);
-        self.border_width = 0.0;
-        self.focus_border_color = Some(Color::TRANSPARENT);
-        self.focus_border_width = Some(0.0);
-        self
-    }
-
-    pub fn no_bg(mut self) -> Self {
-        self.bg = None;
-        self
-    }
-
-    pub fn focus_border(mut self, color: Color, width: f32) -> Self {
-        self.focus_border_color = Some(color);
-        self.focus_border_width = Some(width);
-        self
-    }
-
-    pub fn shadow(mut self, color: Color, ox: f32, oy: f32, blur: f32) -> Self {
-        self.shadow_color = Some(color);
-        self.shadow_offset = [ox, oy];
-        self.shadow_blur = blur;
-        self
-    }
-
-    pub fn opacity(mut self, o: f32) -> Self {
-        self.opacity = o;
-        self
-    }
-
-    pub fn text_bg_fill_x(mut self, enabled: bool) -> Self {
-        self.text_bg_fill_x = enabled;
+    pub fn focus_border(mut self, border: impl Into<zenthra_core::Border>) -> Self {
+        match border.into() {
+            zenthra_core::Border::None => {
+                self.focus_border_color = Some(Color::TRANSPARENT);
+                self.focus_border_width = Some(0.0);
+            }
+            zenthra_core::Border::Solid(c, w) => {
+                self.focus_border_color = Some(c);
+                self.focus_border_width = Some(w);
+            }
+        }
         self
     }
 
@@ -492,11 +383,35 @@ impl<'u, 'a, 'b> InputBuilder<'u, 'a, 'b> {
         self
     }
 
+    pub fn autofocus(self, enabled: bool) -> Self {
+        let autofocus_key = Id::from_u64(self.id.raw() ^ 0xAF0C_0500);
+        if enabled && !self.ui.interaction_state.contains_key(&autofocus_key) {
+            self.ui.interaction_state.insert(autofocus_key, 1.0);
+            self.ui.focused_id = Some(self.id);
+        }
+        self
+    }
+
+    pub fn select_all(mut self, enabled: bool) -> Self {
+        self.select_all = enabled;
+        self
+    }
+
     pub fn show(self) -> zenthra_core::Response {
         if let Some(mode) = self.render_mode {
             self.ui.render_mode_stack.push(mode);
         }
-        let is_focused = self.ui.focused_id == Some(self.id);
+        let mut is_focused = self.ui.focused_id == Some(self.id);
+
+        let select_all_key = Id::from_u64(self.id.raw() ^ 0x5E1E_A110);
+        if self.select_all && !self.ui.interaction_state.contains_key(&select_all_key) {
+            self.ui.interaction_state.insert(select_all_key, 1.0);
+            self.ui.focused_id = Some(self.id);
+            is_focused = true;
+            let sel_anchor_id = Id::from_u64(self.id.raw() ^ 0x5E1EC700);
+            self.ui.cursor_state.insert(sel_anchor_id, 0);
+            self.ui.cursor_state.insert(self.id, self.buffer.len());
+        }
         
         // --- 1. Initial Measure (for hit-testing and initial sizing) ---
         let text_to_measure = if self.buffer.is_empty() {
@@ -506,24 +421,32 @@ impl<'u, 'a, 'b> InputBuilder<'u, 'a, 'b> {
         };
         let (mut w_text_raw, h_content, mut shaped_buffer) = if let Some(fs) = self.ui.font_system.as_ref() {
             let mut adapter = CosmicFontProvider::new_with_system(fs.clone());
-            let t_padding = Padding::from(self.text_padding);
-            adapter.set_layout_size(1000000.0, 10000.0);
-            let options = TextOptions::new()
-                .font_size(self.font_size * self.ui.font_scale)
-                .line_height(self.line_height)
+            let mut options = TextOptions::new()
+                .font_size(self.text_style.font_size * self.ui.font_scale)
+                .font_weight(self.text_style.font_weight)
+                .font_style(self.text_style.font_style)
+                .line_height(self.text_style.line_height)
                 .wrap(zenthra_text::prelude::TextWrap::None);
+            if let Some(ref family) = self.text_style.font_family {
+                options = options.font_family(family.clone());
+            }
             let buffer = adapter.shape(text_to_measure, &options);
             let (cw, _ch) = buffer.content_size();
             let m = adapter.metrics(&options);
-            (cw + t_padding.horizontal(), m.line_height() + t_padding.vertical(), Some(buffer))
+            (cw, m.line_height(), Some(buffer))
         } else {
-            (self.min_width, 20.0, None)
+            (self.style.min_width.unwrap_or(0.0), 20.0, None)
         };
 
-        let max_available_w = (self.ui.max_x - self.x).max(self.min_width);
-        let mut w_box = if self.fill_x { max_available_w } else { self.width.unwrap_or_else(|| (w_text_raw + self.padding.horizontal()).min(max_available_w)).max(self.min_width) };
-        let h_box = h_content + self.padding.vertical();
-        let mut w_view = w_box - self.padding.horizontal();
+        let min_w = self.style.min_width.unwrap_or(0.0);
+        let max_available_w = (self.ui.max_x - self.x).max(min_w);
+        let mut w_box = if self.style.fill_x { max_available_w } else { self.style.width.unwrap_or_else(|| (w_text_raw + self.style.padding.horizontal()).min(max_available_w)).max(min_w) };
+        let h_box = if self.style.fill_y {
+            (self.ui.max_y - self.y).max(h_content + self.style.padding.vertical())
+        } else {
+            self.style.height.unwrap_or(h_content + self.style.padding.vertical())
+        };
+        let mut w_view = (w_box - self.style.padding.horizontal()).max(0.0);
 
         // --- 2. Hit Testing & Event Handling ---
         let mut cursor_index = *self.ui.cursor_state.get(&self.id).unwrap_or(&self.buffer.len());
@@ -556,6 +479,7 @@ impl<'u, 'a, 'b> InputBuilder<'u, 'a, 'b> {
         self.ui.dispatch_event(self.id, crate::ui::WidgetEvent::Hover(is_hovered));
         let mut needs_auto_scroll = false;
         let mut changed = false;
+        let mut submitted = false;
 
         if is_focused || is_hovered || self.ui.active_drag.is_some() {
             let events = std::mem::take(&mut self.ui.input_events);
@@ -843,6 +767,10 @@ impl<'u, 'a, 'b> InputBuilder<'u, 'a, 'b> {
                                 self.ui.needs_redraw = true;
                                 needs_auto_scroll = true;
                             }
+                            winit::keyboard::KeyCode::Enter | winit::keyboard::KeyCode::NumpadEnter => {
+                                submitted = true;
+                                self.ui.dispatch_event(self.id, crate::ui::WidgetEvent::Submit);
+                            }
                             _ => {}
                         }
                     }
@@ -857,10 +785,108 @@ impl<'u, 'a, 'b> InputBuilder<'u, 'a, 'b> {
                 }
             }
             
+            let click_id = Id::from_u64(self.id.raw() ^ 0x00C7_1C40);
+            let drag_id = Id::from_u64(self.id.raw() ^ 0x00D7_A600);
+
+            let (sx, _sy) = *self.ui.scroll_state.get(&self.id).unwrap_or(&(0.0, 0.0));
+            let rel_x = self.ui.mouse_x - (self.x + self.style.padding.left - sx);
+
             if self.ui.clicked && is_hovered {
                 self.ui.focused_id = Some(self.id);
                 needs_auto_scroll = true;
                 self.ui.dispatch_event(self.id, crate::ui::WidgetEvent::Click);
+
+                let hit_pos = if let Some(sb) = &shaped_buffer {
+                    if rel_x <= 0.0 {
+                        0
+                    } else if rel_x >= w_text_raw {
+                        self.buffer.len()
+                    } else {
+                        let mut best_idx = None;
+                        let mut best_dist = f32::INFINITY;
+                        for g in sb.glyphs() {
+                            let center_x = g.x + g.width * 0.5;
+                            let dist = (center_x - rel_x).abs();
+                            if dist < best_dist {
+                                best_dist = dist;
+                                let char_len = self.buffer.get(g.cluster..).and_then(|s| s.chars().next()).map(|c| c.len_utf8()).unwrap_or(0);
+                                best_idx = Some(if rel_x < center_x { g.cluster } else { (g.cluster + char_len).min(self.buffer.len()) });
+                            }
+                        }
+                        best_idx.unwrap_or(self.buffer.len())
+                    }
+                } else {
+                    self.buffer.len()
+                };
+
+                let last_click_time = self.ui.interaction_state.get(&click_id).copied().unwrap_or(0.0);
+                if self.ui.elapsed_time - last_click_time < 0.35 {
+                    let (w_start, w_end) = find_word_bounds(&self.buffer, hit_pos);
+                    if w_start < w_end {
+                        selection_anchor = Some(w_start);
+                        cursor_index = w_end;
+                    } else {
+                        selection_anchor = None;
+                        cursor_index = hit_pos;
+                    }
+                    self.ui.interaction_state.insert(drag_id, 2.0);
+                } else {
+                    cursor_index = hit_pos;
+                    selection_anchor = Some(hit_pos);
+                    self.ui.interaction_state.insert(drag_id, 1.0);
+                }
+
+                self.ui.interaction_state.insert(click_id, self.ui.elapsed_time);
+                self.ui.interaction_state.insert(self.id, self.ui.elapsed_time);
+                self.ui.needs_redraw = true;
+            } else if self.ui.mouse_down && is_focused {
+                if let Some(&drag_mode) = self.ui.interaction_state.get(&drag_id) {
+                    let hit_pos = if let Some(sb) = &shaped_buffer {
+                        if rel_x <= 0.0 {
+                            0
+                        } else if rel_x >= w_text_raw {
+                            self.buffer.len()
+                        } else {
+                            let mut best_idx = None;
+                            let mut best_dist = f32::INFINITY;
+                            for g in sb.glyphs() {
+                                let center_x = g.x + g.width * 0.5;
+                                let dist = (center_x - rel_x).abs();
+                                if dist < best_dist {
+                                    best_dist = dist;
+                                    let char_len = self.buffer.get(g.cluster..).and_then(|s| s.chars().next()).map(|c| c.len_utf8()).unwrap_or(0);
+                                    best_idx = Some(if rel_x < center_x { g.cluster } else { (g.cluster + char_len).min(self.buffer.len()) });
+                                }
+                            }
+                            best_idx.unwrap_or(self.buffer.len())
+                        }
+                    } else {
+                        self.buffer.len()
+                    };
+
+                    if drag_mode > 1.5 {
+                        let (w_start, w_end) = find_word_bounds(&self.buffer, hit_pos);
+                        let anchor = selection_anchor.unwrap_or(hit_pos);
+                        if hit_pos < anchor {
+                            cursor_index = w_start;
+                        } else {
+                            cursor_index = w_end;
+                        }
+                    } else {
+                        cursor_index = hit_pos;
+                    }
+
+                    self.ui.interaction_state.insert(self.id, self.ui.elapsed_time);
+                    self.ui.needs_redraw = true;
+                }
+            } else {
+                if self.ui.interaction_state.remove(&drag_id).is_some() {
+                    if let Some(anchor) = selection_anchor {
+                        if anchor == cursor_index {
+                            selection_anchor = None;
+                        }
+                    }
+                }
             }
             
             if let Some(anchor) = selection_anchor {
@@ -880,12 +906,16 @@ impl<'u, 'a, 'b> InputBuilder<'u, 'a, 'b> {
         if changed {
              if let Some(fs) = self.ui.font_system.as_ref() {
                 let mut adapter = CosmicFontProvider::new_with_system(fs.clone());
-                let t_padding = Padding::from(self.text_padding);
                 adapter.set_layout_size(1000000.0, 10000.0);
-                let options = TextOptions::new()
-                    .font_size(self.font_size * self.ui.font_scale)
-                    .line_height(self.line_height)
+                let mut options = TextOptions::new()
+                    .font_size(self.text_style.font_size * self.ui.font_scale)
+                    .font_weight(self.text_style.font_weight)
+                    .font_style(self.text_style.font_style)
+                    .line_height(self.text_style.line_height)
                     .wrap(zenthra_text::prelude::TextWrap::None);
+                if let Some(ref family) = self.text_style.font_family {
+                    options = options.font_family(family.clone());
+                }
                 let text_to_measure = if self.buffer.is_empty() {
                     self.placeholder.as_deref().unwrap_or("")
                 } else {
@@ -893,12 +923,13 @@ impl<'u, 'a, 'b> InputBuilder<'u, 'a, 'b> {
                 };
                 let buffer = adapter.shape(text_to_measure, &options);
                 let (cw, _ch) = buffer.content_size();
-                w_text_raw = cw + t_padding.horizontal();
+                w_text_raw = cw;
                 shaped_buffer = Some(buffer);
                 
                 // Re-calculate boxes
-                w_box = if self.fill_x { max_available_w } else { self.width.unwrap_or_else(|| (w_text_raw + self.padding.horizontal()).min(max_available_w)).max(self.min_width) };
-                w_view = w_box - self.padding.horizontal();
+                let min_w = self.style.min_width.unwrap_or(0.0);
+                w_box = if self.style.fill_x { max_available_w } else { self.style.width.unwrap_or_else(|| (w_text_raw + self.style.padding.horizontal()).min(max_available_w)).max(min_w) };
+                w_view = (w_box - self.style.padding.horizontal()).max(0.0);
             }
         }
 
@@ -913,9 +944,9 @@ impl<'u, 'a, 'b> InputBuilder<'u, 'a, 'b> {
         let thumb_w = thumb_w.max(20.0);
         let scroll_percent = if max_scroll > 0.0 { scroll_x / max_scroll } else { 0.0 };
         let track_width = (w_view - thumb_w).max(0.0);
-        let thumb_x = self.x + self.padding.left + scroll_percent * track_width;
+        let thumb_x = self.x + self.style.padding.left + scroll_percent * track_width;
 
-        let actual_thumb_x = actual_x + self.padding.left + scroll_percent * track_width;
+        let actual_thumb_x = actual_x + self.style.padding.left + scroll_percent * track_width;
         let actual_scroll_bar_y = actual_y + h_box - scroll_bar_h - 2.0;
         let is_over_thumb = self.ui.mouse_in_rect(actual_thumb_x, actual_scroll_bar_y - 2.0, thumb_w, scroll_bar_h + 4.0);
 
@@ -955,7 +986,7 @@ impl<'u, 'a, 'b> InputBuilder<'u, 'a, 'b> {
                     clx = sb.glyphs().last().map(|g: &ShapedGlyph| g.x + g.width).unwrap_or(0.0);
                 }
 
-                let cursor_x_v = clx + self.text_padding.left;
+                let cursor_x_v = clx;
                 if cursor_x_v > scroll_x + w_view - 40.0 {
                     scroll_x = cursor_x_v - w_view + 40.0;
                 } else if cursor_x_v < scroll_x + 10.0 {
@@ -967,77 +998,54 @@ impl<'u, 'a, 'b> InputBuilder<'u, 'a, 'b> {
         scroll_x = scroll_x.clamp(0.0, max_scroll);
         self.ui.scroll_state.insert(scroll_state_id, (scroll_x, scroll_y));
 
-        // --- 4. Render Background ---
+        // --- 4. Render Background & Border ---
         let start_draw = self.ui.draws.len();
-        if let Some(bg) = self.bg {
-            use crate::ui::RectDraw;
-            use zenthra_render::RectInstance;
-            self.ui.draws.push(DrawCommand::Rect(RectDraw {
-                instance: RectInstance {
-                    pos: [self.x, self.y],
-                    size: [w_box, h_box],
-                    color: bg.to_array(),
-                    radius: [
-                        self.radius[3],
-                        self.radius[2],
-                        self.radius[1],
-                        self.radius[0],
-                    ],
-                    border_width: if is_focused {
-                        self.focus_border_width.unwrap_or_else(|| self.border_width.max(1.0))
-                    } else {
-                        self.border_width
-                    },
-                    border_color: if is_focused {
-                        self.focus_border_color
-                            .or(self.border_color)
-                            .unwrap_or(Color::rgb(0.4, 0.7, 1.0))
-                            .to_array()
-                    } else {
-                        self.border_color.unwrap_or(Color::TRANSPARENT).to_array()
-                    },
-                    shadow_color: self.shadow_color.map(|mut c| { c.a *= self.shadow_opacity; c.to_array() }).unwrap_or([0.0; 4]),
-                    shadow_offset: self.shadow_offset,
-                    shadow_blur: self.shadow_blur,
-                    clip_rect: [0.0, 0.0, 9999.0, 9999.0],
-                    grayscale: 0.0,
-                    brightness: 1.0,
-                    opacity: self.opacity,
-                    ..Default::default()
-                }
-            }));
-        }
+        use crate::ui::RectDraw;
+        let effective_border_w = if is_focused {
+            self.focus_border_width.unwrap_or_else(|| self.style.border_width().max(1.0))
+        } else {
+            self.style.border_width()
+        };
+        let effective_border_c = if is_focused {
+            self.focus_border_color
+                .or_else(|| self.style.border_color())
+                .unwrap_or(Color::rgb(0.4, 0.7, 1.0))
+        } else {
+            self.style.border_color().unwrap_or(Color::TRANSPARENT)
+        };
+        let instance = self.style.build_rect_instance(
+            self.x,
+            self.y,
+            w_box,
+            h_box,
+            self.style.bg.as_ref(),
+            Some(effective_border_c),
+            Some(effective_border_w),
+            1.0,
+        );
+        self.ui.draws.push(DrawCommand::Rect(RectDraw { instance }));
 
         // --- 5. Render Text ---
         let (text_to_draw, draw_color) = if self.buffer.is_empty() && self.placeholder.is_some() {
-            (self.placeholder.as_deref().unwrap_or(""), self.placeholder_color.unwrap_or(self.color.with_alpha(0.4)))
+            (self.placeholder.as_deref().unwrap_or(""), self.placeholder_color.unwrap_or(self.text_style.color.with_alpha(0.4)))
         } else {
-            (self.buffer.as_str(), self.color)
+            (self.buffer.as_str(), self.text_style.color)
         };
 
+        let mut clean_text_style = self.text_style.clone();
+        clean_text_style.highlight_color = None;
+
         let mut text_builder = TextBuilder::new(self.ui, text_to_draw)
-            .size(self.font_size)
-            .line_height(self.line_height)
+            .text_style(clean_text_style)
             .color(draw_color)
-            .fill_x(self.fill_x)
-            .padding(self.text_padding.top, self.text_padding.right, self.text_padding.bottom, self.text_padding.left)
             .wrap(zenthra_text::prelude::TextWrap::None)
-            .max_width(1000000.0) 
-            .pos(self.x + self.padding.left - scroll_x, self.y + self.padding.top)
+            .pos(self.x + self.style.padding.left - scroll_x, self.y + self.style.padding.top)
             .clip_rect(self.x, self.y, w_box, h_box);
 
-        if self.text_bg_fill_x {
-            text_builder = text_builder.min_width(w_view);
-        }
-        
-        if let Some(tbg) = self.text_bg {
-            text_builder = text_builder.bg(tbg).fill_x(false);
+        if self.style.fill_x {
+            text_builder = text_builder.fill_x();
         }
 
-        if let Some(h) = self.highlight {
-            text_builder = text_builder.highlight(h);
-        }
-        
         let (_, _, final_sb, _) = text_builder.draw_and_measure();
 
         // --- 5b. Render Selection Highlight ---
@@ -1053,15 +1061,15 @@ impl<'u, 'a, 'b> InputBuilder<'u, 'a, 'b> {
                     }
                 }
                 if let (Some(x0), Some(x1)) = (min_x, max_x) {
-                    let sel_x = self.x + self.padding.left + self.text_padding.left + x0 - scroll_x;
-                    let sel_y = self.y + self.padding.top + self.text_padding.top;
+                    let sel_x = self.x + self.style.padding.left + x0 - scroll_x;
+                    let sel_y = self.y + self.style.padding.top;
                     let sel_w = (x1 - x0).max(2.0);
-                    let sel_color = self.highlight.unwrap_or(Color::rgba(0.2, 0.5, 0.9, 0.35));
+                    let sel_color = self.selection_color.unwrap_or(Color::rgba(0.2, 0.5, 0.9, 0.35));
                     self.ui.draws.push(DrawCommand::OverlayRect(OverlayRectDraw {
                         x: sel_x,
                         y: sel_y,
                         width: sel_w,
-                        height: self.font_size * self.line_height,
+                        height: self.text_style.font_size * self.text_style.line_height,
                         color: sel_color,
                         clip: [self.x, self.y, w_box, h_box],
                     }));
@@ -1071,8 +1079,8 @@ impl<'u, 'a, 'b> InputBuilder<'u, 'a, 'b> {
         
         // --- 6. Cursor Rendering ---
         if is_focused {
-            let font_size = self.font_size;
-            let lh = self.line_height;
+            let font_size = self.text_style.font_size;
+            let lh = self.text_style.line_height;
             let cursor_height = font_size * lh; 
 
             if let Some(sb) = final_sb {
@@ -1092,8 +1100,8 @@ impl<'u, 'a, 'b> InputBuilder<'u, 'a, 'b> {
                     }
                 }
 
-                let cx = lx + self.x + self.padding.left + self.text_padding.left - scroll_x;
-                let cy = self.y + self.padding.top + self.text_padding.top;
+                let cx = lx + self.x + self.style.padding.left - scroll_x;
+                let cy = self.y + self.style.padding.top;
                 
                 // Smart Blink: Solid while typing, blink when idle
                 let last_activity = *self.ui.interaction_state.get(&self.id).unwrap_or(&0.0);
@@ -1113,7 +1121,7 @@ impl<'u, 'a, 'b> InputBuilder<'u, 'a, 'b> {
                         y: cy,
                         width: 2.0,
                         height: cursor_height,
-                        color: self.cursor_color.unwrap_or(self.color),
+                        color: self.cursor_color.unwrap_or(self.text_style.color),
                         clip: [self.x, self.y, w_box, h_box],
                     }));
                 }
@@ -1153,7 +1161,123 @@ impl<'u, 'a, 'b> InputBuilder<'u, 'a, 'b> {
             clicked: self.ui.clicked && is_hovered,
             hovered: is_hovered,
             pressed: is_hovered && self.ui.mouse_down,
-            submitted: false,
+            submitted,
+            changed,
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::collections::HashMap;
+    use zenthra_core::{Id, Color};
+    use crate::ui::Ui;
+
+    #[test]
+    fn test_input_styling_and_focus_border() {
+        let mut scroll_state = HashMap::new();
+        let mut cursor_state = HashMap::new();
+        let mut interaction_state = HashMap::new();
+        let layout_cache = HashMap::new();
+        let mut next_layout_cache = HashMap::new();
+        let screen_layout_cache = HashMap::new();
+        let mut next_screen_layout_cache = HashMap::new();
+        let widget_window_map = HashMap::new();
+        let mut next_widget_window_map = HashMap::new();
+        let image_sizes = HashMap::new();
+
+        let input_id_key = "test_input";
+        let mut hasher = std::collections::hash_map::DefaultHasher::new();
+        use std::hash::{Hash, Hasher};
+        input_id_key.hash(&mut hasher);
+        let expected_id = Id::from_u64(hasher.finish());
+
+        let mut text = String::from("hello");
+
+        // Case 1: bg(None), border(None), focus_border(...) when NOT focused
+        {
+            let mut ui = Ui::new(
+                800, 600, 1.0, None, Vec::new(), None,
+                (0.0, 0.0), false,
+                &mut scroll_state, &mut cursor_state, &mut interaction_state,
+                None, None, false, false, 0.0,
+                &layout_cache, &mut next_layout_cache,
+                &screen_layout_cache, &mut next_screen_layout_cache,
+                &widget_window_map, &mut next_widget_window_map,
+                &image_sizes,
+            );
+
+            ui.input_with_id(&mut text, input_id_key)
+                .bg(None)
+                .border(None)
+                .focus_border((Color::rgb(0.35, 0.58, 0.98), 1.5))
+                .shadow_opacity(0.8)
+                .show();
+
+            assert_eq!(ui.draws.len(), 2);
+            if let crate::ui::DrawCommand::Rect(rd) = &ui.draws[0] {
+                assert_eq!(rd.instance.color, Color::TRANSPARENT.to_array());
+                assert_eq!(rd.instance.border_width, 0.0);
+            } else {
+                panic!("Expected RectDraw for input at draws[0]");
+            }
+        }
+
+        // Case 2: Same input when FOCUSED -> focus border must render!
+        {
+            let mut ui = Ui::new(
+                800, 600, 1.0, None, Vec::new(), Some(expected_id),
+                (0.0, 0.0), false,
+                &mut scroll_state, &mut cursor_state, &mut interaction_state,
+                None, None, false, false, 0.0,
+                &layout_cache, &mut next_layout_cache,
+                &screen_layout_cache, &mut next_screen_layout_cache,
+                &widget_window_map, &mut next_widget_window_map,
+                &image_sizes,
+            );
+
+            ui.input_with_id(&mut text, input_id_key)
+                .bg(None)
+                .border(None)
+                .focus_border((Color::rgb(0.35, 0.58, 0.98), 1.5))
+                .show();
+
+            // When focused, it has RectDraw + TextDraw + Blinking Cursor Draw (or 2/3 draws)
+            assert!(ui.draws.len() >= 2);
+            if let crate::ui::DrawCommand::Rect(rd) = &ui.draws[0] {
+                assert_eq!(rd.instance.color, Color::TRANSPARENT.to_array());
+                assert_eq!(rd.instance.border_width, 1.5);
+                assert_eq!(rd.instance.border_color, Color::rgb(0.35, 0.58, 0.98).to_array());
+            } else {
+                panic!("Expected RectDraw for focused input at draws[0]");
+            }
+        }
+
+        // Case 3: Explicit focus_border(None) when FOCUSED -> no focus border!
+        {
+            let mut ui = Ui::new(
+                800, 600, 1.0, None, Vec::new(), Some(expected_id),
+                (0.0, 0.0), false,
+                &mut scroll_state, &mut cursor_state, &mut interaction_state,
+                None, None, false, false, 0.0,
+                &layout_cache, &mut next_layout_cache,
+                &screen_layout_cache, &mut next_screen_layout_cache,
+                &widget_window_map, &mut next_widget_window_map,
+                &image_sizes,
+            );
+
+            ui.input_with_id(&mut text, input_id_key)
+                .bg(None)
+                .border(None)
+                .focus_border(None)
+                .show();
+
+            assert!(ui.draws.len() >= 2);
+            if let crate::ui::DrawCommand::Rect(rd) = &ui.draws[0] {
+                assert_eq!(rd.instance.border_width, 0.0);
+            } else {
+                panic!("Expected RectDraw for input at draws[0]");
+            }
         }
     }
 }

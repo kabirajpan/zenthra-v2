@@ -1,8 +1,8 @@
 // crates/zenthra-widgets/src/controls/checkbox.rs
 
+use crate::style_ext::BoxStyleExt;
 use crate::ui::{DrawCommand, RectDraw, TextDraw, Ui};
-use zenthra_core::{Color, Id, Rect, Response, Role, SemanticNode};
-use zenthra_render::RectInstance;
+use zenthra_core::{Background, Border, BoxStyle, Color, Id, Rect, Response, Role, SemanticNode, Styleable};
 
 pub struct CheckboxBuilder<'u, 'a, 'b> {
     ui: &'u mut Ui<'a>,
@@ -10,32 +10,21 @@ pub struct CheckboxBuilder<'u, 'a, 'b> {
     label: String,
     id: Id,
 
-    // Layout
-    size: f32,
-    radius: [f32; 4],
-    gap: f32,
+    // Box & Typography Styles
+    pub style: BoxStyle,
+    pub text_style: zenthra_text::prelude::TextStyle,
 
-    // Visuals (Unchecked)
-    bg: Color,
-    border_color: Color,
-    border_width: f32,
+    // Layout
+    gap: f32,
 
     // Visuals (Checked)
     check_bg: Color,
     check_color: Color,
 
-    // Label
-    label_size: f32,
-    label_color: Color,
     active_label_color: Option<Color>,
 
     // Premium Effects
     glow: bool,
-    shadow_color: Color,
-    shadow_offset: [f32; 2],
-    shadow_blur: f32,
-    shadow_opacity: f32,
-    shadow_enabled: bool,
     hover_scale: f32,
     pressed_scale: f32,
     hover_brightness: f32,
@@ -45,9 +34,41 @@ pub struct CheckboxBuilder<'u, 'a, 'b> {
     active_bg: Option<Color>,
 }
 
+impl<'u, 'a, 'b> Styleable for CheckboxBuilder<'u, 'a, 'b> {
+    #[inline]
+    fn box_style_mut(&mut self) -> &mut BoxStyle {
+        &mut self.style
+    }
+
+    #[inline]
+    fn box_style(&self) -> &BoxStyle {
+        &self.style
+    }
+}
+
+// Single-source macro generates all BoxStyle builder methods (.width, .height, .padding, .radius, .bg, .border, .shadow, etc.)
+impl_box_style_methods!(CheckboxBuilder, 'u, 'a, 'b);
+
+// Single-source macro generates all TextStyle builder methods (.font_size, .text_color, .font_family, .font_weight, .wrap, etc.)
+impl_text_style_methods!(CheckboxBuilder, 'u, 'a, 'b);
+
 impl<'u, 'a, 'b> CheckboxBuilder<'u, 'a, 'b> {
     pub fn new(ui: &'u mut Ui<'a>, value: &'b mut bool, label: &str) -> Self {
         let id = ui.id();
+
+        let mut style = BoxStyle::new();
+        style.width = Some(18.0);
+        style.height = Some(18.0);
+        style.radius = [4.0; 4];
+        style.bg = Some(Background::Solid(Color::rgb(0.15, 0.15, 0.15)));
+        style.border = Border::Solid(Color::rgb(0.3, 0.3, 0.3), 1.0);
+        style.shadow_offset = [0.0, 2.0];
+        style.shadow_blur = 8.0;
+        style.shadow_opacity = 0.4;
+
+        let mut text_style = zenthra_text::prelude::TextStyle::default();
+        text_style.font_size = 14.0;
+        text_style.color = Color::WHITE;
 
         Self {
             ui,
@@ -55,159 +76,93 @@ impl<'u, 'a, 'b> CheckboxBuilder<'u, 'a, 'b> {
             label: label.to_string(),
             id,
 
-            // Default Layout
-            size: 18.0,
-            radius: [4.0; 4],
+            style,
+            text_style,
             gap: 8.0,
-
-            // Default Visuals
-            bg: Color::rgb(0.15, 0.15, 0.15),
-            border_color: Color::rgb(0.3, 0.3, 0.3),
-            border_width: 1.0,
 
             check_bg: Color::rgb(0.2, 0.5, 1.0),
             check_color: Color::WHITE,
-
-            label_size: 14.0,
-            label_color: Color::WHITE,
             active_label_color: None,
 
             glow: false,
-            shadow_enabled: false,
-            shadow_color: Color::rgb(0.0, 0.0, 0.0),
-            shadow_offset: [0.0, 2.0],
-            shadow_blur: 8.0,
-            shadow_opacity: 0.4,
             hover_scale: 1.0,
             pressed_scale: 1.0,
+            hover_brightness: 1.0,
 
             hover_bg: None,
             active_bg: None,
-            hover_brightness: 1.0,
         }
     }
 
+    #[inline]
     pub fn size(mut self, size: f32) -> Self {
-        self.size = size;
+        self.style.width = Some(size);
+        self.style.height = Some(size);
         self
     }
 
-    pub fn radius(mut self, tl: f32, tr: f32, br: f32, bl: f32) -> Self {
-        self.radius = [tl, tr, br, bl];
-        self
-    }
-
-    pub fn radius_all(mut self, r: f32) -> Self {
-        self.radius = [r; 4];
-        self
-    }
-
-    pub fn radius_top(mut self, r: f32) -> Self {
-        self.radius[0] = r;
-        self.radius[1] = r;
-        self
-    }
-
-    pub fn radius_bottom(mut self, r: f32) -> Self {
-        self.radius[2] = r;
-        self.radius[3] = r;
-        self
-    }
-
-    pub fn radius_top_left(mut self, r: f32) -> Self {
-        self.radius[0] = r;
-        self
-    }
-
-    pub fn radius_top_right(mut self, r: f32) -> Self {
-        self.radius[1] = r;
-        self
-    }
-
-    pub fn radius_bottom_right(mut self, r: f32) -> Self {
-        self.radius[2] = r;
-        self
-    }
-
-    pub fn radius_bottom_left(mut self, r: f32) -> Self {
-        self.radius[3] = r;
-        self
-    }
-
-    pub fn radius_left(mut self, r: f32) -> Self {
-        self.radius[0] = r;
-        self.radius[3] = r;
-        self
-    }
-
-    pub fn radius_right(mut self, r: f32) -> Self {
-        self.radius[1] = r;
-        self.radius[2] = r;
-        self
-    }
-
+    #[inline]
     pub fn gap(mut self, gap: f32) -> Self {
         self.gap = gap;
         self
     }
 
-    pub fn bg(mut self, color: Color) -> Self {
-        self.bg = color;
+    #[inline]
+    pub fn check_bg(mut self, bg: impl Into<Option<Color>>) -> Self {
+        self.check_bg = bg.into().unwrap_or(Color::TRANSPARENT);
         self
     }
 
-    pub fn check_bg(mut self, color: Color) -> Self {
-        self.check_bg = color;
-        self
-    }
-
+    #[inline]
     pub fn check_color(mut self, color: Color) -> Self {
         self.check_color = color;
         self
     }
 
+    #[inline]
     pub fn label_size(mut self, size: f32) -> Self {
-        self.label_size = size;
+        self.text_style.font_size = size;
         self
     }
 
+    #[inline]
     pub fn label_color(mut self, color: Color) -> Self {
-        self.label_color = color;
+        self.text_style.color = color;
         self
     }
 
-    pub fn border(mut self, color: Color, weight: f32) -> Self {
-        self.border_color = color;
-        self.border_width = weight;
-        self
-    }
-
+    #[inline]
     pub fn active_label(mut self, color: Color) -> Self {
         self.active_label_color = Some(color);
         self
     }
 
+    #[inline]
     pub fn glow(mut self, enabled: bool) -> Self {
         self.glow = enabled;
         self
     }
 
+    #[inline]
     pub fn scaling(mut self, hover: f32, pressed: f32) -> Self {
         self.hover_scale = hover;
         self.pressed_scale = pressed;
         self
     }
 
+    #[inline]
     pub fn hover_bg(mut self, color: Color) -> Self {
         self.hover_bg = Some(color);
         self
     }
 
+    #[inline]
     pub fn active_bg(mut self, color: Color) -> Self {
         self.active_bg = Some(color);
         self
     }
 
+    #[inline]
     pub fn hover_brightness(mut self, b: f32) -> Self {
         self.hover_brightness = b;
         self
@@ -267,21 +222,23 @@ impl<'u, 'a, 'b> CheckboxBuilder<'u, 'a, 'b> {
 
     pub fn show(self) -> Response {
         let (x, y) = (self.ui.cursor_x, self.ui.cursor_y);
+        let box_w = self.style.width.unwrap_or(18.0);
+        let box_h = self.style.height.unwrap_or(18.0);
 
         // 1. Measure Text
         let mut text_w = 0.0;
         let mut text_h = 0.0;
         if let Some(fs) = self.ui.font_system.as_ref() {
             let mut adapter = zenthra_text::prelude::CosmicFontProvider::new_with_system(fs.clone());
-            let options = zenthra_text::prelude::TextOptions::new().font_size(self.label_size);
+            let options = zenthra_text::prelude::TextOptions::new().font_size(self.text_style.font_size);
             let buffer = adapter.shape(&self.label, &options);
             let (cw, ch) = buffer.content_size();
             text_w = cw;
             text_h = ch;
         }
 
-        let total_w = self.size + self.gap + text_w;
-        let total_h = self.size.max(text_h);
+        let total_w = box_w + self.gap + text_w;
+        let total_h = box_h.max(text_h);
 
         // 2. Hit-testing (Use recorded layout for accurate positioning in containers)
         let (actual_ox, actual_oy, actual_w, actual_h) = if let Some((rect, _)) = self.ui.get_recorded_layout(self.id) {
@@ -298,6 +255,10 @@ impl<'u, 'a, 'b> CheckboxBuilder<'u, 'a, 'b> {
         let is_hovered = self.ui.is_hovered(self.id, actual_ox, actual_oy, actual_w, actual_h);
         let is_pressed = is_hovered && self.ui.mouse_down;
         let mut clicked = false;
+
+        if is_hovered {
+            self.ui.cursor_icon = crate::text::CursorIcon::Pointer;
+        }
 
         self.ui.dispatch_event(self.id, crate::ui::WidgetEvent::Hover(is_hovered));
 
@@ -339,64 +300,68 @@ impl<'u, 'a, 'b> CheckboxBuilder<'u, 'a, 'b> {
         }
 
         // Color Logic
-        let mut current_bg = if *self.value { self.check_bg } else { self.bg };
+        let unchecked_bg = self.style.bg.clone().unwrap_or(Background::Solid(Color::TRANSPARENT));
+        let mut current_bg = if *self.value {
+            Background::Solid(self.check_bg)
+        } else {
+            unchecked_bg
+        };
         if is_pressed {
-            if let Some(c) = self.active_bg { current_bg = c; }
+            if let Some(c) = self.active_bg { current_bg = Background::Solid(c); }
         } else if is_hovered {
-            if let Some(c) = self.hover_bg { current_bg = c; }
+            if let Some(c) = self.hover_bg { current_bg = Background::Solid(c); }
         }
 
         let start_draw = self.ui.draws.len();
 
         // Visual Midpoints
-        let mid_x = x + self.size / 2.0;
+        let mid_x = x + box_w / 2.0;
         let mid_y = y + (total_h / 2.0);
 
         // Scaled dimensions
-        let base_size = self.size * final_scale;
-        let bx = mid_x - base_size / 2.0;
-        let by = mid_y - base_size / 2.0;
+        let base_w = box_w * final_scale;
+        let base_h = box_h * final_scale;
+        let bx = mid_x - base_w / 2.0;
+        let by = mid_y - base_h / 2.0;
 
-        // 4. Draw Box
-        self.ui.draws.push(DrawCommand::Rect(RectDraw {
-            instance: RectInstance {
-                pos: [bx, by],
-                size: [base_size, base_size],
-                color: current_bg.to_array(),
-                radius: [
-                    self.radius[0] * final_scale,
-                    self.radius[1] * final_scale,
-                    self.radius[2] * final_scale,
-                    self.radius[3] * final_scale,
-                ],
-                border_width: self.border_width,
-                border_color: self.border_color.to_array(),
-                brightness: if is_hovered { self.hover_brightness } else { 1.0 },
-                shadow_color: if self.shadow_enabled {
-                    let mut a = self.shadow_color.to_array();
-                    a[3] *= self.shadow_opacity;
-                    a
-                } else if self.glow && *self.value {
-                    let mut sc = self.check_bg.to_array();
-                    sc[3] *= 0.4 * final_sel;
-                    sc
-                } else { [0.0, 0.0, 0.0, 0.0] },
-                shadow_offset: if self.shadow_enabled { self.shadow_offset } else { [0.0, 0.0] },
-                shadow_blur: if self.shadow_enabled { self.shadow_blur } else if self.glow && *self.value { 10.0 * final_sel } else { 0.0 },
-                ..Default::default()
-            },
-        }));
+        // 4. Draw Box via build_rect_instance
+        let mut instance = self.style.build_rect_instance(
+            bx,
+            by,
+            base_w,
+            base_h,
+            Some(&current_bg),
+            None,
+            None,
+            1.0,
+        );
+        if is_hovered {
+            instance.brightness = self.hover_brightness;
+        }
+        if self.style.shadow_color.is_none() && self.glow && *self.value {
+            let mut sc = self.check_bg.to_array();
+            sc[3] *= 0.4 * final_sel;
+            instance.shadow_color = sc;
+            instance.shadow_blur = 10.0 * final_sel;
+        }
+        instance.radius = [
+            self.style.radius[3] * final_scale,
+            self.style.radius[2] * final_scale,
+            self.style.radius[1] * final_scale,
+            self.style.radius[0] * final_scale,
+        ];
+
+        self.ui.draws.push(DrawCommand::Rect(RectDraw { instance }));
 
         // 5. Draw Check Indicator (Unicode Checkmark)
         if *self.value {
             let check_str = "✓";
             let mut check_w = 0.0;
             let mut check_h = 0.0;
-            
+            let check_font_size = box_w * 0.8;
+
             if let Some(fs) = self.ui.font_system.as_ref() {
                 let mut adapter = zenthra_text::prelude::CosmicFontProvider::new_with_system(fs.clone());
-                // Scale the checkmark slightly smaller than the box
-                let check_font_size = self.size * 0.8;
                 let options = zenthra_text::prelude::TextOptions::new().font_size(check_font_size);
                 let buffer = adapter.shape(check_str, &options);
                 let (cw, ch) = buffer.content_size();
@@ -404,24 +369,24 @@ impl<'u, 'a, 'b> CheckboxBuilder<'u, 'a, 'b> {
                 check_h = ch;
             }
 
-            let cx = x + (self.size - check_w) / 2.0;
+            let cx = x + (box_w - check_w) / 2.0;
             let cy = y + (total_h - check_h) / 2.0;
 
             self.ui.draws.push(DrawCommand::Text(TextDraw {
                 text: check_str.to_string(),
                 pos: [cx, cy],
                 options: zenthra_text::prelude::TextOptions::new()
-                    .font_size(self.size * 0.8)
+                    .font_size(check_font_size)
                     .color(self.check_color),
                 clip: [0.0, 0.0, 9999.0, 9999.0],
             }));
         }
 
         // 6. Draw Label (Color Transition)
-        let lx = x + self.size + self.gap;
+        let lx = x + box_w + self.gap;
         let ly = y + (total_h - text_h) / 2.0;
-        
-        let mut l_color = self.label_color;
+
+        let mut l_color = self.text_style.color;
         if let Some(active_c) = self.active_label_color {
             if final_sel > 0.5 {
                 l_color = active_c;
@@ -432,7 +397,7 @@ impl<'u, 'a, 'b> CheckboxBuilder<'u, 'a, 'b> {
             text: self.label.clone(),
             pos: [lx, ly],
             options: zenthra_text::prelude::TextOptions::new()
-                .font_size(self.label_size)
+                .font_size(self.text_style.font_size)
                 .color(l_color),
             clip: [0.0, 0.0, 9999.0, 9999.0],
         }));
@@ -452,6 +417,92 @@ impl<'u, 'a, 'b> CheckboxBuilder<'u, 'a, 'b> {
             hovered: is_hovered,
             pressed: is_pressed,
             submitted: false,
+            changed: clicked,
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::collections::HashMap;
+
+    #[test]
+    fn test_checkbox_styling_and_shadow() {
+        let mut scroll_state = HashMap::new();
+        let mut cursor_state = HashMap::new();
+        let mut interaction_state = HashMap::new();
+        let layout_cache = HashMap::new();
+        let mut next_layout_cache = HashMap::new();
+        let screen_layout_cache = HashMap::new();
+        let mut next_screen_layout_cache = HashMap::new();
+        let widget_window_map = HashMap::new();
+        let mut next_widget_window_map = HashMap::new();
+        let image_sizes = HashMap::new();
+
+        let mut checked = false;
+
+        // 1. Unchecked Checkbox with shadow and border
+        {
+            let mut ui = Ui::new(
+                800, 600, 1.0, None, Vec::new(), None,
+                (0.0, 0.0), false,
+                &mut scroll_state, &mut cursor_state, &mut interaction_state,
+                None, None, false, false, 0.0,
+                &layout_cache, &mut next_layout_cache,
+                &screen_layout_cache, &mut next_screen_layout_cache,
+                &widget_window_map, &mut next_widget_window_map,
+                &image_sizes,
+            );
+
+            ui.checkbox(&mut checked, "Enable Shadows")
+                .bg(Color::rgb(0.12, 0.12, 0.16))
+                .border((Color::rgb(0.3, 0.35, 0.45), 1.0))
+                .radius_all(4.0)
+                .shadow(Color::BLACK, 0.0, 2.0, 6.0)
+                .shadow_opacity(0.5)
+                .show();
+
+            // Draws: 1 RectDraw (box), 1 TextDraw (label)
+            assert_eq!(ui.draws.len(), 2);
+            if let DrawCommand::Rect(rd) = &ui.draws[0] {
+                assert_eq!(rd.instance.color, Color::rgb(0.12, 0.12, 0.16).to_array());
+                assert_eq!(rd.instance.border_width, 1.0);
+                assert_eq!(rd.instance.border_color, Color::rgb(0.3, 0.35, 0.45).to_array());
+                assert_eq!(rd.instance.radius, [4.0, 4.0, 4.0, 4.0]);
+                assert_eq!(rd.instance.shadow_color, [0.0, 0.0, 0.0, 0.5]);
+            } else {
+                panic!("Expected RectDraw for checkbox box");
+            }
+        }
+
+        // 2. Checked Checkbox with bg(None) and custom check colors
+        {
+            let mut checked_true = true;
+            let mut ui = Ui::new(
+                800, 600, 1.0, None, Vec::new(), None,
+                (0.0, 0.0), false,
+                &mut scroll_state, &mut cursor_state, &mut interaction_state,
+                None, None, false, false, 0.0,
+                &layout_cache, &mut next_layout_cache,
+                &screen_layout_cache, &mut next_screen_layout_cache,
+                &widget_window_map, &mut next_widget_window_map,
+                &image_sizes,
+            );
+
+            ui.checkbox(&mut checked_true, "Active Feature")
+                .bg(None)
+                .check_bg(Color::rgb(0.2, 0.6, 1.0))
+                .check_color(Color::WHITE)
+                .show();
+
+            // Draws: 1 RectDraw (box), 1 TextDraw (checkmark), 1 TextDraw (label)
+            assert_eq!(ui.draws.len(), 3);
+            if let DrawCommand::Rect(rd) = &ui.draws[0] {
+                assert_eq!(rd.instance.color, Color::rgb(0.2, 0.6, 1.0).to_array());
+            } else {
+                panic!("Expected RectDraw for checkmark box");
+            }
         }
     }
 }

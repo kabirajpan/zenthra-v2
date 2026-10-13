@@ -125,6 +125,7 @@ pub struct Ui<'a> {
     pub cursor_state: &'a mut std::collections::HashMap<Id, usize>,
     pub interaction_state: &'a mut std::collections::HashMap<Id, f32>,
     pub active_drag: Option<ScrollDrag>,
+    pub active_widget_id: Option<Id>,
     pub clicked: bool,
     pub right_clicked: bool,
     pub elapsed_time: f32,
@@ -188,6 +189,12 @@ pub fn copy_to_system_clipboard(text: &str) {
     }
 }
 
+/// Generates a unique interaction_state key for an overlay widget id.
+#[inline]
+pub fn overlay_key(id: Id) -> Id {
+    Id::from_u64(((id.raw() & 0x00FF_FFFF_FFFF_FFFF) << 8) | 99)
+}
+
 impl<'a> Ui<'a> {
     pub fn new(
         width: u32,
@@ -202,6 +209,7 @@ impl<'a> Ui<'a> {
         cursor_state: &'a mut std::collections::HashMap<Id, usize>,
         interaction_state: &'a mut std::collections::HashMap<Id, f32>,
         active_drag: Option<ScrollDrag>,
+        active_widget_id: Option<Id>,
         clicked: bool,
         right_clicked: bool,
         elapsed_time: f32,
@@ -251,6 +259,7 @@ impl<'a> Ui<'a> {
             cursor_state,
             interaction_state,
             active_drag,
+            active_widget_id: if mouse_down { active_widget_id } else { None },
             clicked,
             right_clicked,
             elapsed_time,
@@ -369,7 +378,11 @@ impl<'a> Ui<'a> {
         let mut hasher = std::collections::hash_map::DefaultHasher::new();
         use std::hash::Hasher;
         id.hash(&mut hasher);
-        Id::from_u64(hasher.finish())
+        Id::from_u64(hasher.finish() & 0x00FF_FFFF_FFFF_FFFF)
+    }
+
+    pub fn overlay_key(&self, id: Id) -> Id {
+        overlay_key(id)
     }
 
     pub fn record_layout(&mut self, id: Id, rect: Rect) {
@@ -489,13 +502,12 @@ impl<'a> Ui<'a> {
                 .or_else(|| self.next_widget_window_map.get(&other_id))
                 .copied()
                 .unwrap_or(other_id);
-
-            let overlay_key = Id::from_u64((other_id.raw() << 8) | 99);
-            let win_overlay_key = Id::from_u64((other_win_id.raw() << 8) | 99);
+            let overlay_k = overlay_key(other_id);
+            let win_overlay_k = overlay_key(other_win_id);
             let is_overlay = self.active_overlays.contains(&other_id)
                 || self.active_overlays.contains(&other_win_id)
-                || self.interaction_state.get(&overlay_key).map(|&v| v > 0.5).unwrap_or(false)
-                || self.interaction_state.get(&win_overlay_key).map(|&v| v > 0.5).unwrap_or(false);
+                || self.interaction_state.get(&overlay_k).map(|&v| v > 0.5).unwrap_or(false)
+                || self.interaction_state.get(&win_overlay_k).map(|&v| v > 0.5).unwrap_or(false);
 
             if is_overlay {
                 // If current widget belongs to an active overlay, check relative stack order:
@@ -510,6 +522,10 @@ impl<'a> Ui<'a> {
                         if our_idx >= other_idx {
                             return false;
                         }
+                    } else if other_pos.is_none() {
+                        // Current widget is inside an active overlay being drawn.
+                        // Stale overlay rects from previous frames that are not active in this frame cannot occlude it.
+                        return false;
                     }
                 }
 
@@ -534,45 +550,99 @@ impl<'a> Ui<'a> {
             }
         }
 
-        // 3. Check z-order occlusion
-        let check_z_rect = |other_id: Id, other_rect: &Rect| -> bool {
-            if other_id == id || other_id == our_win_id {
-                return false;
-            }
-            let other_win_id = self.widget_window_map.get(&other_id)
-                .or_else(|| self.next_widget_window_map.get(&other_id))
-                .copied()
-                .unwrap_or(other_id);
-            if other_win_id == our_win_id {
-                return false;
-            }
-            let other_z_key = Id::from_u64((other_win_id.raw() << 8) | 4);
-            if let Some(&other_z) = self.interaction_state.get(&other_z_key) {
-                if other_z > our_z {
-                    if x >= other_rect.origin.x && x <= other_rect.origin.x + other_rect.size.width &&
-                       y >= other_rect.origin.y && y <= other_rect.origin.y + other_rect.size.height {
-                        return true;
+        // 3. Check z-order occlusion (only applies if current widget is not in an overlay)
+        if !is_in_active_overlay && effective_our_overlay.is_none() {
+            let check_z_rect = |other_id: Id, other_rect: &Rect| -> bool {
+                if other_id == id || other_id == our_win_id {
+                    return false;
+                }
+                let other_win_id = self.widget_window_map.get(&other_id)
+                    .or_else(|| self.next_widget_window_map.get(&other_id))
+                    .copied()
+                    .unwrap_or(other_id);
+                if other_win_id == our_win_id {
+                    return false;
+                }
+                let other_z_key = Id::from_u64(((other_win_id.raw() & 0x00FF_FFFF_FFFF_FFFF) << 8) | 4);
+                if let Some(&other_z) = self.interaction_state.get(&other_z_key) {
+                    if other_z > our_z {
+                        if x >= other_rect.origin.x && x <= other_rect.origin.x + other_rect.size.width &&
+                           y >= other_rect.origin.y && y <= other_rect.origin.y + other_rect.size.height {
+                            return true;
+                        }
                     }
                 }
-            }
-            false
-        };
+                false
+            };
 
-        for (&other_id, other_rect) in self.screen_layout_cache {
-            if check_z_rect(other_id, other_rect) {
-                return true;
+            for (&other_id, other_rect) in self.screen_layout_cache {
+                if check_z_rect(other_id, other_rect) {
+                    return true;
+                }
             }
-        }
-        for (&other_id, other_rect) in self.next_screen_layout_cache.iter() {
-            if check_z_rect(other_id, other_rect) {
-                return true;
+            for (&other_id, other_rect) in self.next_screen_layout_cache.iter() {
+                if check_z_rect(other_id, other_rect) {
+                    return true;
+                }
             }
         }
 
         false
     }
 
+    /// Returns true if this widget is allowed to receive pointer interactions.
+    /// Returns false if another widget currently has exclusive pointer capture.
+    pub fn can_interact(&self, id: Id) -> bool {
+        if self.active_widget_id.is_none() || self.active_widget_id == Some(id) {
+            return true;
+        }
+
+        // Overlay Priority: If current widget is inside an active overlay, but
+        // active_widget_id was captured by an underlying non-overlay background element,
+        // the active overlay takes precedence.
+        let is_in_overlay = !self.active_overlay_stack.is_empty() || self.active_overlays.contains(&id);
+        if is_in_overlay {
+            if let Some(active_id) = self.active_widget_id {
+                let active_k = overlay_key(active_id);
+                let active_is_overlay = self.active_overlays.contains(&active_id)
+                    || self.active_overlay_stack.contains(&active_id)
+                    || self.interaction_state.get(&active_k).map(|&v| v > 0.5).unwrap_or(false);
+                if !active_is_overlay {
+                    return true;
+                }
+            }
+        }
+
+        false
+    }
+
+    /// Returns true if this widget currently holds exclusive pointer capture.
+    pub fn is_active(&self, id: Id) -> bool {
+        self.active_widget_id == Some(id)
+    }
+
+    /// Claims pointer capture for the given widget if no other widget has it.
+    /// Returns true if capture was granted or already held by this widget.
+    pub fn claim_active(&mut self, id: Id) -> bool {
+        if self.can_interact(id) {
+            self.active_widget_id = Some(id);
+            true
+        } else {
+            false
+        }
+    }
+
+    /// Releases pointer capture.
+    pub fn release_active(&mut self) {
+        self.active_widget_id = None;
+    }
+
     pub fn is_hovered(&self, id: Id, fallback_x: f32, fallback_y: f32, fallback_w: f32, fallback_h: f32) -> bool {
+        // Pointer capture check: if another widget holds capture, this widget is NOT hovered.
+        if !self.can_interact(id) {
+            return false;
+        }
+
         let is_in = if let Some(screen_rect) = self.screen_layout_cache.get(&id) {
             self.mouse_in_rect(screen_rect.origin.x, screen_rect.origin.y, screen_rect.size.width, screen_rect.size.height)
         } else if let Some((rect, _)) = self.get_recorded_layout(id) {
@@ -717,7 +787,11 @@ impl<'a> Ui<'a> {
     }
 
 
-    pub fn input<'b>(&mut self, buffer: &'b mut String, id: impl std::hash::Hash) -> crate::input::InputBuilder<'_, 'a, 'b> {
+    pub fn input<'b>(&mut self, buffer: &'b mut String) -> crate::input::InputBuilder<'_, 'a, 'b> {
+        crate::input::InputBuilder::new(self, buffer)
+    }
+
+    pub fn input_with_id<'b>(&mut self, buffer: &'b mut String, id: impl std::hash::Hash) -> crate::input::InputBuilder<'_, 'a, 'b> {
         crate::input::InputBuilder::new(self, buffer).id(id)
     }
 
@@ -746,7 +820,11 @@ impl<'a> Ui<'a> {
         crate::controls::dropdown::DropdownBuilder::new(self, selected, options)
     }
 
-    pub fn text_area<'b>(&mut self, buffer: &'b mut String, id: impl std::hash::Hash) -> crate::text_area::TextAreaBuilder<'_, 'a, 'b> {
+    pub fn text_area<'b>(&mut self, buffer: &'b mut String) -> crate::text_area::TextAreaBuilder<'_, 'a, 'b> {
+        crate::text_area::TextAreaBuilder::new(self, buffer)
+    }
+
+    pub fn text_area_with_id<'b>(&mut self, buffer: &'b mut String, id: impl std::hash::Hash) -> crate::text_area::TextAreaBuilder<'_, 'a, 'b> {
         crate::text_area::TextAreaBuilder::new(self, buffer).id(id)
     }
 
@@ -758,12 +836,16 @@ impl<'a> Ui<'a> {
         crate::controls::menu::MenuBarBuilder::new(self)
     }
 
-    pub fn menu(&mut self, label: &str) -> crate::controls::menu::MenuBuilder<'_, 'a> {
-        crate::controls::menu::MenuBuilder::new(self, label)
+    pub fn drag_value<'b, N: crate::controls::drag_value::NumericValue>(&mut self, value: &'b mut N, id: impl std::hash::Hash) -> crate::controls::drag_value::DragValueBuilder<'_, 'a, 'b, N> {
+        crate::controls::drag_value::DragValueBuilder::new(self, value, id)
     }
 
-    pub fn sub_menu(&mut self, label: &str) -> crate::controls::menu::SubMenuBuilder<'_, 'a> {
-        crate::controls::menu::SubMenuBuilder::new(self, label)
+    pub fn number_box<'b, N: crate::controls::drag_value::NumericValue>(&mut self, value: &'b mut N, id: impl std::hash::Hash) -> crate::controls::drag_value::DragValueBuilder<'_, 'a, 'b, N> {
+        crate::controls::drag_value::DragValueBuilder::new(self, value, id)
+    }
+
+    pub fn menu(&mut self, label: &str) -> crate::controls::menu::MenuBuilder<'_, 'a> {
+        crate::controls::menu::MenuBuilder::new(self, label)
     }
 
     pub fn menu_item(&mut self, label: &str) -> crate::controls::menu::MenuItemBuilder<'_, 'a> {
@@ -854,19 +936,19 @@ impl<'a> Ui<'a> {
     }
 
     pub fn h1(&mut self, content: &str) -> TextBuilder<'_, 'a> {
-        self.text(content).size(40.0).bold()
+        self.text(content).font_size(40.0).bold()
     }
 
     pub fn h2(&mut self, content: &str) -> TextBuilder<'_, 'a> {
-        self.text(content).size(32.0).bold()
+        self.text(content).font_size(32.0).bold()
     }
 
     pub fn h3(&mut self, content: &str) -> TextBuilder<'_, 'a> {
-        self.text(content).size(24.0).bold()
+        self.text(content).font_size(24.0).bold()
     }
 
     pub fn h4(&mut self, content: &str) -> TextBuilder<'_, 'a> {
-        self.text(content).size(20.0).bold()
+        self.text(content).font_size(20.0).bold()
     }
 
     pub fn card(&mut self) -> crate::containers::card::CardBuilder<'_, 'a> {
@@ -880,7 +962,7 @@ impl<'a> Ui<'a> {
     pub fn card_header<F>(&mut self, title: &str, subtitle: &str, actions: F)
     where F: FnOnce(&mut Ui) {
         self.container()
-            .full_width()
+            .fill_x()
             .row()
             .halign(zenthra_core::Align::SpaceBetween)
             .valign(zenthra_core::Align::Center)
@@ -890,14 +972,14 @@ impl<'a> Ui<'a> {
                     .column()
                     .show(|ui| {
                         ui.text(title)
-                            .size(16.0)
+                            .font_size(16.0)
                             .weight(crate::text::FontWeight::Bold)
                             .color(Color::WHITE)
                             .show();
                         if !subtitle.is_empty() {
                             ui.spacing(2.0);
                             ui.text(subtitle)
-                                .size(12.0)
+                                .font_size(12.0)
                                 .color(Color::rgb(0.6, 0.6, 0.6))
                                 .show();
                         }
@@ -916,7 +998,7 @@ impl<'a> Ui<'a> {
     where F: FnOnce(&mut Ui) {
         self.card_divider();
         self.container()
-            .full_width()
+            .fill_x()
             .row()
             .show(f);
     }
@@ -924,7 +1006,7 @@ impl<'a> Ui<'a> {
     pub fn card_divider(&mut self) {
         self.spacing(8.0);
         self.container()
-            .full_width()
+            .fill_x()
             .height(1.0)
             .bg(Color::rgb(0.2, 0.2, 0.25))
             .show(|_| {});
@@ -947,6 +1029,7 @@ pub enum WidgetEvent {
     Hover(bool),
     Scroll(f32, f32),
     Change(EventValue),
+    Submit,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -1007,7 +1090,7 @@ mod tests {
             &mut scroll_state,
             &mut cursor_state,
             &mut interaction_state,
-            None, false, false, 0.0,
+            None, None, false, false, 0.0,
             &layout_cache,
             &mut next_layout_cache,
             &screen_layout_cache,
@@ -1050,7 +1133,7 @@ mod tests {
             &mut scroll_state,
             &mut cursor_state,
             &mut interaction_state,
-            None, false, false, 0.0,
+            None, None, false, false, 0.0,
             &layout_cache,
             &mut next_layout_cache,
             &screen_layout_cache,
@@ -1171,7 +1254,7 @@ mod tests {
                     &mut scroll_state,
                     &mut cursor_state,
                     &mut interaction_state,
-                    None, false, false, 0.0,
+                    None, None, false, false, 0.0,
                     &layout_cache,
                     &mut next_layout_cache,
                     &screen_layout_cache,
@@ -1258,7 +1341,7 @@ mod tests {
                 800, 600, 1.0, None, Vec::new(), None,
                 (10.0, 10.0), false,
                 &mut scroll_state, &mut cursor_state, &mut interaction_state,
-                None, true, false, 0.0, // clicked = true
+                None, None, true, false, 0.0, // clicked = true
                 &layout_cache, &mut next_layout_cache,
                 &screen_layout_cache, &mut next_screen_layout_cache,
                 &widget_window_map, &mut next_widget_window_map,
@@ -1273,7 +1356,7 @@ mod tests {
                     ui.spacing(4.0);
                     ui.menu_item("Flat Folder Icons").show();
                     ui.spacing(4.0);
-                    ui.sub_menu("Accent Color").show(|ui| {
+                    ui.menu("Accent Color").show(|ui| {
                         ui.menu_item("Yellow").show();
                     });
                 });
@@ -1299,7 +1382,7 @@ mod tests {
                 800, 600, 1.0, None, Vec::new(), None,
                 (50.0, 150.0), false, // hovering at Accent Color
                 &mut scroll_state, &mut cursor_state, &mut interaction_state,
-                None, false, false, 0.0,
+                None, None, false, false, 0.0,
                 &layout_cache, &mut next_layout_cache,
                 &screen_layout_cache, &mut next_screen_layout_cache,
                 &widget_window_map, &mut next_widget_window_map,
@@ -1313,7 +1396,7 @@ mod tests {
                     ui.spacing(4.0);
                     ui.menu_item("Flat Folder Icons").show();
                     ui.spacing(4.0);
-                    ui.sub_menu("Accent Color").show(|ui| {
+                    ui.menu("Accent Color").show(|ui| {
                         ui.menu_item("Yellow").show();
                     });
                 });
@@ -1335,7 +1418,7 @@ mod tests {
                 800, 600, 1.0, None, Vec::new(), None,
                 (50.0, 150.0), false,
                 &mut scroll_state, &mut cursor_state, &mut interaction_state,
-                None, true, false, 0.0, // clicked = true
+                None, None, true, false, 0.0, // clicked = true
                 &layout_cache, &mut next_layout_cache,
                 &screen_layout_cache, &mut next_screen_layout_cache,
                 &widget_window_map, &mut next_widget_window_map,
@@ -1353,7 +1436,7 @@ mod tests {
                     ui.spacing(4.0);
                     ui.menu_item("Flat Folder Icons").show();
                     ui.spacing(4.0);
-                    ui.sub_menu("Accent Color").show(|ui| {
+                    ui.menu("Accent Color").show(|ui| {
                         ui.menu_item("Yellow").show();
                     });
                 });
@@ -1387,7 +1470,7 @@ mod tests {
                 800, 600, 1.0, None, Vec::new(), None,
                 (50.0, 150.0), false,
                 &mut scroll_state, &mut cursor_state, &mut interaction_state,
-                None, false, false, 0.0,
+                None, None, false, false, 0.0,
                 &layout_cache, &mut next_layout_cache,
                 &screen_layout_cache, &mut next_screen_layout_cache,
                 &widget_window_map, &mut next_widget_window_map,
@@ -1402,7 +1485,7 @@ mod tests {
                     ui.spacing(4.0);
                     ui.menu_item("Flat Folder Icons").show();
                     ui.spacing(4.0);
-                    ui.sub_menu("Accent Color").show(|ui| {
+                    ui.menu("Accent Color").show(|ui| {
                         ui.menu_item("Yellow").show();
                     });
                 });
@@ -1416,4 +1499,351 @@ mod tests {
         });
         assert!(yellow_found, "Submenu popup item (Yellow) should be rendered in screen layout cache");
     }
+
+    #[test]
+    fn test_popover_click() {
+        let mut scroll_state = HashMap::new();
+        let mut cursor_state = HashMap::new();
+        let mut interaction_state = HashMap::new();
+        let mut layout_cache = HashMap::new();
+        let mut next_layout_cache = HashMap::new();
+        let mut screen_layout_cache = HashMap::new();
+        let mut next_screen_layout_cache = HashMap::new();
+        let widget_window_map = HashMap::new();
+        let mut next_widget_window_map = HashMap::new();
+        let image_sizes = HashMap::new();
+
+        let ai_more_btn_id = Id::from_u64(999999887);
+        let msgs_scroll_id = Id::from_u64(999999802);
+        let bubble_id = Id::from_u64(999_100_000);
+        let copy_btn_id = Id::from_u64(999_100_001);
+
+        let render_frame = |ui: &mut Ui,
+                            clicked_zene: &mut bool,
+                            clicked_settings: &mut bool| {
+            // Main background column
+            ui.container().width(800.0).height(600.0).column().show(|ui| {
+                // Title bar (height 36)
+                ui.container().width(800.0).height(36.0).show(|_| {});
+
+                // Middle area (height 540)
+                ui.container().width(800.0).height(540.0).row().show(|ui| {
+                    // Buffer area (width 500)
+                    ui.container().width(500.0).height(540.0).show(|_| {});
+
+                    // AI panel (width 300)
+                    let ai_w = 300.0;
+                    let ai_h = 540.0;
+                    ui.container().id(Id::from_u64(8888)).width(ai_w).height(ai_h).clip(true).column().show(|ui| {
+                        // Header (height 32)
+                        ui.container().width(ai_w).height(32.0).row().show(|ui| {
+                            ui.container().width(200.0).height(32.0).show(|_| {});
+                            ui.container().raw_id(ai_more_btn_id).width(22.0).height(22.0).interactive(true).role(zenthra_core::Role::Button).show(|_| {});
+                        });
+
+                        // Chat content (height 507)
+                        let content_h = ai_h - 33.0;
+                        ui.container().width(ai_w).height(content_h).column().show(|ui| {
+                            // Messages scroll area
+                            ui.container().id(msgs_scroll_id).width(ai_w).height(350.0).scroll_y(true).column().show(|ui| {
+                                // Message bubble
+                                ui.container().id(bubble_id).width(200.0).height(40.0).hover_bg(Color::RED).row().show(|ui| {
+                                    ui.container().id(copy_btn_id).width(20.0).height(20.0).hover_bg(Color::GREEN).interactive(true).role(zenthra_core::Role::Button).show(|_| {});
+                                });
+                            });
+
+                            // Prompt dock
+                            ui.container().width(ai_w).height(100.0).show(|_| {});
+                        });
+                    });
+
+                    // 3-dot menu popover
+                    let menu_w = 180.0;
+                    let menu_h = 122.0;
+                    ui.popover(ai_more_btn_id)
+                        .placement(zenthra_core::Placement::Bottom)
+                        .align(zenthra_core::PopoverAlign::End)
+                        .gap(4.0)
+                        .auto_flip(false)
+                        .width(menu_w)
+                        .height(menu_h)
+                        .show(|ui| {
+                            ui.container().fill_x().column().gap(1.0).show(|ui| {
+                                // Section 1 header
+                                ui.container().padding(3.0, 6.0, 2.0, 6.0).show(|ui| {
+                                    ui.text("NATIVE AGENT").show();
+                                });
+
+                                // ZENE btn
+                                let zene_btn = ui.container()
+                                    .fill_x()
+                                    .padding(4.0, 6.0, 4.0, 6.0)
+                                    .radius_all(3.5)
+                                    .hover_bg(Color::BLUE)
+                                    .interactive(true).role(zenthra_core::Role::Button)
+                                    .show(|ui| {
+                                        ui.text("ZENE").show();
+                                    });
+                                if zene_btn.clicked { *clicked_zene = true; }
+
+                                // Divider
+                                ui.container().fill_x().height(1.0).show(|_| {});
+
+                                // Section 2 header
+                                ui.container().padding(2.0, 6.0, 2.0, 6.0).show(|ui| {
+                                    ui.text("EXTERNAL AGENTS").show();
+                                });
+
+                                // AG btn
+                                let _ag_btn = ui.container()
+                                    .fill_x()
+                                    .padding(4.0, 6.0, 4.0, 6.0)
+                                    .radius_all(3.5)
+                                    .hover_bg(Color::BLUE)
+                                    .interactive(true).role(zenthra_core::Role::Button)
+                                    .show(|ui| {
+                                        ui.text("Google Antigravity").show();
+                                    });
+
+                                // Divider
+                                ui.container().fill_x().height(1.0).show(|_| {});
+
+                                // Settings btn
+                                let set_btn = ui.container()
+                                    .fill_x()
+                                    .padding(4.0, 6.0, 4.0, 6.0)
+                                    .radius_all(3.5)
+                                    .hover_bg(Color::BLUE)
+                                    .interactive(true).role(zenthra_core::Role::Button)
+                                    .show(|ui| {
+                                        ui.text("AI & Agent Settings...").show();
+                                    });
+                                if set_btn.clicked { *clicked_settings = true; }
+                            });
+                        });
+                });
+            });
+        };
+
+        // Frame 1: Initial render
+        {
+            let mut cz = false;
+            let mut cs = false;
+            let mut ui = Ui::new(
+                800, 600, 1.0, None, Vec::new(), None,
+                (0.0, 0.0), false,
+                &mut scroll_state, &mut cursor_state, &mut interaction_state,
+                None, None, false, false, 0.0,
+                &layout_cache, &mut next_layout_cache,
+                &screen_layout_cache, &mut next_screen_layout_cache,
+                &widget_window_map, &mut next_widget_window_map,
+                &image_sizes,
+            );
+            render_frame(&mut ui, &mut cz, &mut cs);
+        }
+
+        layout_cache = next_layout_cache.clone();
+        screen_layout_cache = next_screen_layout_cache.clone();
+        next_layout_cache.clear();
+        next_screen_layout_cache.clear();
+
+        // Find zene_btn rect and set_btn rect from screen_layout_cache
+        // Let's test clicking on ZENE button in Frame 2!
+        let mut clicked_zene = false;
+        let mut clicked_settings = false;
+
+        // Where is ai_more_btn?
+        // ui_w = 800. Buffer = 500. AI panel starts at x = 500.
+        // Header height = 32. y starts at 36 (title bar).
+        // ai_more_btn is at x = 500 + 200 = 700, y = 36.
+        // Popover is anchored at (700, 36).
+        // Placement = Bottom: y = 36 + 22 + 4 = 62.
+        // Align = End: x = 700 + 22 - 180 = 542.
+        // Popover is at (542, 62, 180, 122).
+        // zene_btn is near the top of the popover: y ~= 62 + 4 + 18 ~= 84.
+        // set_btn is near the bottom of the popover: y ~= 62 + 95 ~= 157.
+
+        // Test 1: Click on ZENE (x = 600.0, y = 100.0)
+        {
+            let mut ui = Ui::new(
+                800, 600, 1.0, None, Vec::new(), None,
+                (600.0, 100.0), true,
+                &mut scroll_state, &mut cursor_state, &mut interaction_state,
+                None, None, true, false, 0.0, // clicked = true
+                &layout_cache, &mut next_layout_cache,
+                &screen_layout_cache, &mut next_screen_layout_cache,
+                &widget_window_map, &mut next_widget_window_map,
+                &image_sizes,
+            );
+            render_frame(&mut ui, &mut clicked_zene, &mut clicked_settings);
+        }
+
+        // Test 2: Click on Settings (x = 600.0, y = 190.0)
+        {
+            let mut ui = Ui::new(
+                800, 600, 1.0, None, Vec::new(), None,
+                (600.0, 190.0), true,
+                &mut scroll_state, &mut cursor_state, &mut interaction_state,
+                None, None, true, false, 0.0, // clicked = true
+                &layout_cache, &mut next_layout_cache,
+                &screen_layout_cache, &mut next_screen_layout_cache,
+                &widget_window_map, &mut next_widget_window_map,
+                &image_sizes,
+            );
+            render_frame(&mut ui, &mut clicked_zene, &mut clicked_settings);
+        }
+
+        assert!(clicked_zene, "ZENE button must be clicked when clicking inside it!");
+        assert!(clicked_settings, "Settings button must be clicked when clicking inside it!");
+    }
+
+    #[test]
+    fn test_model_picker_popover() {
+        let mut scroll_state = HashMap::new();
+        let mut cursor_state = HashMap::new();
+        let mut interaction_state = HashMap::new();
+        let mut layout_cache = HashMap::new();
+        let mut next_layout_cache = HashMap::new();
+        let mut screen_layout_cache = HashMap::new();
+        let mut next_screen_layout_cache = HashMap::new();
+        let widget_window_map = HashMap::new();
+        let mut next_widget_window_map = HashMap::new();
+        let image_sizes = HashMap::new();
+
+        let model_btn_id = Id::from_u64(999999886);
+        let msgs_scroll_id = Id::from_u64(999999802);
+
+        let render_model_picker = |ui: &mut Ui, clicked_model: &mut Option<usize>| {
+            // Main layout
+            ui.container().width(800.0).height(600.0).column().show(|ui| {
+                ui.container().width(800.0).height(36.0).show(|_| {});
+                ui.container().width(800.0).height(540.0).row().show(|ui| {
+                    ui.container().width(500.0).height(540.0).show(|_| {});
+
+                    let ai_w = 300.0;
+                    let ai_h = 540.0;
+                    ui.container().id(Id::from_u64(8888)).width(ai_w).height(ai_h).clip(true).column().show(|ui| {
+                        ui.container().width(ai_w).height(32.0).show(|_| {});
+
+                        let content_h = ai_h - 33.0;
+                        ui.container().width(ai_w).height(content_h).column().show(|ui| {
+                            // Messages scroll area
+                            ui.container().id(msgs_scroll_id).width(ai_w).height(350.0).scroll_y(true).column().show(|ui| {
+                                ui.container().width(200.0).height(200.0).hover_bg(Color::RED).show(|_| {});
+                            });
+
+                            // Prompt dock (height 120, at y = 36 + 32 + 350 = 418)
+                            ui.container().width(ai_w).height(120.0).column().show(|ui| {
+                                ui.container().width(ai_w).height(80.0).show(|_| {});
+                                // Bottom bar with model button
+                                ui.container().width(ai_w).height(26.0).row().show(|ui| {
+                                    ui.container().raw_id(model_btn_id).width(60.0).height(24.0).interactive(true).role(zenthra_core::Role::Button).show(|_| {});
+                                });
+                            });
+                        });
+                    });
+
+                    // Popover for model picker: Placement::Top anchored to model_btn_id
+                    let menu_w = 220.0;
+                    let menu_h = 240.0;
+                    ui.popover(model_btn_id)
+                        .placement(zenthra_core::Placement::Top)
+                        .align(zenthra_core::PopoverAlign::Start)
+                        .gap(3.0)
+                        .auto_flip(false)
+                        .width(menu_w)
+                        .height(menu_h)
+                        .show(|ui| {
+                            ui.container()
+                                .raw_id(Id::from_u64(0xF00D_1101))
+                                .fill_x()
+                                .height(menu_h - 6.0)
+                                .column()
+                                .gap(1.2)
+                                .scroll_y(true)
+                                .show(|ui| {
+                                    for i in 0..6 {
+                                        let row_id = Id::from_u64(0xBEEF_0000 + i as u64);
+                                        let row = ui.container()
+                                            .raw_id(row_id)
+                                            .interactive(true).role(zenthra_core::Role::Button)
+                                            .fill_x()
+                                            .height(26.0)
+                                            .hover_bg(Color::BLUE)
+                                            .row()
+                                            .show(|ui| {
+                                                ui.text(&format!("Model {}", i)).show();
+                                            });
+                                        if row.clicked || (row.hovered && ui.clicked) {
+                                            *clicked_model = Some(i);
+                                        }
+                                    }
+                                });
+                        });
+                });
+            });
+        };
+
+        // Frame 1
+        {
+            let mut cm = None;
+            let mut ui = Ui::new(
+                800, 600, 1.0, None, Vec::new(), None,
+                (0.0, 0.0), false,
+                &mut scroll_state, &mut cursor_state, &mut interaction_state,
+                None, None, false, false, 0.0,
+                &layout_cache, &mut next_layout_cache,
+                &screen_layout_cache, &mut next_screen_layout_cache,
+                &widget_window_map, &mut next_widget_window_map,
+                &image_sizes,
+            );
+            render_model_picker(&mut ui, &mut cm);
+        }
+
+        layout_cache = next_layout_cache.clone();
+        screen_layout_cache = next_screen_layout_cache.clone();
+        next_layout_cache.clear();
+        next_screen_layout_cache.clear();
+
+        // Test clicking Model 0 (top model) vs Model 5 (bottom model)
+        let m0_rect = screen_layout_cache.get(&Id::from_u64(0xBEEF_0000)).copied().unwrap();
+        let m5_rect = screen_layout_cache.get(&Id::from_u64(0xBEEF_0005)).copied().unwrap();
+
+        let mut clicked_m0 = None;
+        {
+            let mut ui = Ui::new(
+                800, 600, 1.0, None, Vec::new(), None,
+                (m0_rect.origin.x + 10.0, m0_rect.origin.y + 10.0), true,
+                &mut scroll_state, &mut cursor_state, &mut interaction_state,
+                None, None, true, false, 0.0,
+                &layout_cache, &mut next_layout_cache,
+                &screen_layout_cache, &mut next_screen_layout_cache,
+                &widget_window_map, &mut next_widget_window_map,
+                &image_sizes,
+            );
+            render_model_picker(&mut ui, &mut clicked_m0);
+        }
+
+        let mut clicked_m5 = None;
+        {
+            let mut ui = Ui::new(
+                800, 600, 1.0, None, Vec::new(), None,
+                (m5_rect.origin.x + 10.0, m5_rect.origin.y + 10.0), true,
+                &mut scroll_state, &mut cursor_state, &mut interaction_state,
+                None, None, true, false, 0.0,
+                &layout_cache, &mut next_layout_cache,
+                &screen_layout_cache, &mut next_screen_layout_cache,
+                &widget_window_map, &mut next_widget_window_map,
+                &image_sizes,
+            );
+            render_model_picker(&mut ui, &mut clicked_m5);
+        }
+
+        assert_eq!(clicked_m0, Some(0), "Model 0 (top of popover) must be clickable!");
+        assert_eq!(clicked_m5, Some(5), "Model 5 (bottom of popover) must be clickable!");
+    }
 }
+
+
+
+

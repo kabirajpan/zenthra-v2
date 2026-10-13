@@ -1,9 +1,8 @@
 // crates/zenthra-widgets/src/button.rs
 
 use crate::ui::{DrawCommand, RectDraw, TextDraw, Ui};
-// use crate::text::TextBuilder;
-use zenthra_core::{Color, EdgeInsets, Id, Rect, Role, SemanticNode};
-use zenthra_render::RectInstance;
+use zenthra_core::{BoxStyle, Color, EdgeInsets, Id, Rect, Role, SemanticNode, Styleable};
+use crate::style_ext::BoxStyleExt;
 
 pub struct ButtonBuilder<'u, 'a> {
     ui: &'u mut Ui<'a>,
@@ -12,78 +11,72 @@ pub struct ButtonBuilder<'u, 'a> {
 
     // Position & Layout
     pos: Option<(f32, f32)>,
-    width: Option<f32>,
-    height: Option<f32>,
-    padding: EdgeInsets,
+    pub style: BoxStyle,
 
-    // Visuals (Idle)
-    bg: zenthra_core::Background,
-    text_color: Color,
-    radius: [f32; 4],
-    font_size: f32,
-    border_width: f32,
-    border_color: Color,
-
-    // Shadows
-    shadow_offset: [f32; 2],
-    shadow_blur: f32,
-    shadow_color: Color,
-    shadow_opacity: f32,
+    // Typography
+    pub text_style: zenthra_text::prelude::TextStyle,
 
     // States
     hover_bg: Option<zenthra_core::Background>,
     active_bg: Option<zenthra_core::Background>,
 
     // Other
-    opacity: f32,
     render_mode: Option<zenthra_core::RenderMode>,
-    hover_brightness: f32,
     hover_scale: f32,
     hover_border_color: Option<Color>,
     hover_border_width: Option<f32>,
     active_border_color: Option<Color>,
     active_border_width: Option<f32>,
-    wrap: zenthra_text::prelude::TextWrap,
-    fill_x: bool,
     align: zenthra_core::Align,
-    font_family: Option<String>,
 }
+
+impl<'u, 'a> Styleable for ButtonBuilder<'u, 'a> {
+    #[inline]
+    fn box_style_mut(&mut self) -> &mut BoxStyle {
+        &mut self.style
+    }
+
+    #[inline]
+    fn box_style(&self) -> &BoxStyle {
+        &self.style
+    }
+}
+
+// Single-source macro generates all BoxStyle builder methods (.width, .height, .padding, .radius, .bg, .border, .shadow, .style, etc.)
+impl_box_style_methods!(ButtonBuilder);
+
+// Single-source macro generates all TextStyle builder methods (.font_size, .color, .family, .weight, .wrap, etc.)
+impl_text_style_methods!(ButtonBuilder);
 
 impl<'u, 'a> ButtonBuilder<'u, 'a> {
     pub fn new(ui: &'u mut Ui<'a>, label: &str) -> Self {
         let id = ui.id();
+        let mut style = BoxStyle::new();
+        style.padding = EdgeInsets::symmetric(6.0, 12.0);
+        style.bg = Some(zenthra_core::Background::Solid(Color::rgb(0.2, 0.2, 0.25)));
+        style.radius = [4.0; 4];
+
+        let mut text_style = zenthra_text::prelude::TextStyle::default();
+        text_style.font_size = 14.0;
+        text_style.color = Color::WHITE;
+        text_style.wrap = zenthra_text::prelude::TextWrap::Word;
+
         Self {
             ui,
             id,
             label: label.to_string(),
             pos: None,
-            width: None,
-            height: None,
-            padding: EdgeInsets::symmetric(6.0, 12.0),
-            bg: zenthra_core::Background::Solid(Color::rgb(0.2, 0.2, 0.25)),
-            text_color: Color::WHITE,
-            radius: [4.0; 4],
-            font_size: 14.0,
-            border_width: 0.0,
-            border_color: Color::TRANSPARENT,
-            shadow_offset: [0.0, 0.0],
-            shadow_blur: 0.0,
-            shadow_color: Color::TRANSPARENT,
-            shadow_opacity: 0.0,
+            style,
+            text_style,
             hover_bg: None,
             active_bg: None,
-            opacity: 1.0,
             render_mode: None,
-            hover_brightness: 1.0,
             hover_scale: 1.0,
             hover_border_color: None,
             hover_border_width: None,
             active_border_color: None,
             active_border_width: None,
-            wrap: zenthra_text::prelude::TextWrap::Word,
-            fill_x: false,
             align: zenthra_core::Align::Center,
-            font_family: None,
         }
     }
 
@@ -100,26 +93,6 @@ impl<'u, 'a> ButtonBuilder<'u, 'a> {
         self
     }
 
-    pub fn width(mut self, w: f32) -> Self {
-        self.width = Some(w);
-        self
-    }
-
-    pub fn height(mut self, h: f32) -> Self {
-        self.height = Some(h);
-        self
-    }
-
-    pub fn bg(mut self, bg: impl Into<zenthra_core::Background>) -> Self {
-        self.bg = bg.into();
-        self
-    }
-
-    pub fn text_color(mut self, color: Color) -> Self {
-        self.text_color = color;
-        self
-    }
-
     pub fn hover_bg(mut self, bg: impl Into<zenthra_core::Background>) -> Self {
         self.hover_bg = Some(bg.into());
         self
@@ -130,164 +103,36 @@ impl<'u, 'a> ButtonBuilder<'u, 'a> {
         self
     }
 
-    pub fn bg_gradient(mut self, start: Color, end: Color, direction: zenthra_core::GradientDirection) -> Self {
-        self.bg = zenthra_core::Gradient::linear(direction, [start, end]).into();
-        self
-    }
-
-    pub fn hover_bg_gradient(mut self, start: Color, end: Color, direction: zenthra_core::GradientDirection) -> Self {
-        self.hover_bg = Some(zenthra_core::Gradient::linear(direction, [start, end]).into());
-        self
-    }
-
-    pub fn active_bg_gradient(mut self, start: Color, end: Color, direction: zenthra_core::GradientDirection) -> Self {
-        self.active_bg = Some(zenthra_core::Gradient::linear(direction, [start, end]).into());
-        self
-    }
-
-    pub fn radius(mut self, tl: f32, tr: f32, br: f32, bl: f32) -> Self {
-        self.radius = [tl, tr, br, bl];
-        self
-    }
-
-    pub fn radius_all(mut self, r: f32) -> Self {
-        self.radius = [r, r, r, r];
-        self
-    }
-
-    pub fn radius_top(mut self, r: f32) -> Self {
-        self.radius[0] = r;
-        self.radius[1] = r;
-        self
-    }
-
-    pub fn radius_bottom(mut self, r: f32) -> Self {
-        self.radius[2] = r;
-        self.radius[3] = r;
-        self
-    }
-
-    pub fn radius_top_left(mut self, r: f32) -> Self {
-        self.radius[0] = r;
-        self
-    }
-
-    pub fn radius_top_right(mut self, r: f32) -> Self {
-        self.radius[1] = r;
-        self
-    }
-
-    pub fn radius_bottom_right(mut self, r: f32) -> Self {
-        self.radius[2] = r;
-        self
-    }
-
-    pub fn radius_bottom_left(mut self, r: f32) -> Self {
-        self.radius[3] = r;
-        self
-    }
-
-    pub fn radius_left(mut self, r: f32) -> Self {
-        self.radius[0] = r;
-        self.radius[3] = r;
-        self
-    }
-
-    pub fn radius_right(mut self, r: f32) -> Self {
-        self.radius[1] = r;
-        self.radius[2] = r;
-        self
-    }
-
-    pub fn border(mut self, color: Color, width: f32) -> Self {
-        self.border_color = color;
-        self.border_width = width;
-        self
-    }
-
-    pub fn shadow(mut self, color: Color, x: f32, y: f32, blur: f32) -> Self {
-        self.shadow_color = color;
-        self.shadow_offset = [x, y];
-        self.shadow_blur = blur;
-        self
-    }
-
-    pub fn shadow_opacity(mut self, opacity: f32) -> Self {
-        self.shadow_opacity = opacity;
-        self
-    }
-
-    pub fn padding(mut self, t: f32, r: f32, b: f32, l: f32) -> Self {
-        self.padding = zenthra_core::EdgeInsets { top: t, right: r, bottom: b, left: l };
-        self
-    }
-
-    pub fn padding_all(mut self, p: f32) -> Self {
-        self.padding = zenthra_core::EdgeInsets { top: p, right: p, bottom: p, left: p };
-        self
-    }
-
-    pub fn padding_x(mut self, x: f32) -> Self {
-        self.padding.left = x;
-        self.padding.right = x;
-        self
-    }
-
-    pub fn padding_y(mut self, y: f32) -> Self {
-        self.padding.top = y;
-        self.padding.bottom = y;
-        self
-    }
-
-    pub fn padding_top(mut self, t: f32) -> Self {
-        self.padding.top = t;
-        self
-    }
-
-    pub fn padding_bottom(mut self, b: f32) -> Self {
-        self.padding.bottom = b;
-        self
-    }
-
-    pub fn padding_left(mut self, l: f32) -> Self {
-        self.padding.left = l;
-        self
-    }
-
-    pub fn padding_right(mut self, r: f32) -> Self {
-        self.padding.right = r;
-        self
-    }
-
-    pub fn opacity(mut self, o: f32) -> Self {
-        self.opacity = o;
-        self
-    }
-
-    pub fn hover_brightness(mut self, b: f32) -> Self {
-        self.hover_brightness = b;
-        self
-    }
-
     pub fn hover_scale(mut self, s: f32) -> Self {
         self.hover_scale = s;
         self
     }
 
-    pub fn hover_border(mut self, color: Color, weight: f32) -> Self {
-        self.hover_border_color = Some(color);
-        self.hover_border_width = Some(weight);
+    pub fn hover_border(mut self, border: impl Into<zenthra_core::Border>) -> Self {
+        match border.into() {
+            zenthra_core::Border::None => {
+                self.hover_border_color = Some(Color::TRANSPARENT);
+                self.hover_border_width = Some(0.0);
+            }
+            zenthra_core::Border::Solid(c, w) => {
+                self.hover_border_color = Some(c);
+                self.hover_border_width = Some(w);
+            }
+        }
         self
     }
 
-    pub fn active_border(mut self, color: Color, weight: f32) -> Self {
-        self.active_border_color = Some(color);
-        self.active_border_width = Some(weight);
-        self
-    }
-
-    pub fn size(mut self, size: f32) -> Self {
-        self.font_size = size;
+    pub fn active_border(mut self, border: impl Into<zenthra_core::Border>) -> Self {
+        match border.into() {
+            zenthra_core::Border::None => {
+                self.active_border_color = Some(Color::TRANSPARENT);
+                self.active_border_width = Some(0.0);
+            }
+            zenthra_core::Border::Solid(c, w) => {
+                self.active_border_color = Some(c);
+                self.active_border_width = Some(w);
+            }
+        }
         self
     }
 
@@ -296,23 +141,8 @@ impl<'u, 'a> ButtonBuilder<'u, 'a> {
         self
     }
 
-    pub fn wrap(mut self, strategy: impl Into<zenthra_text::prelude::TextWrap>) -> Self {
-        self.wrap = strategy.into();
-        self
-    }
-
-    pub fn fill_x(mut self) -> Self {
-        self.fill_x = true;
-        self
-    }
-
     pub fn align(mut self, strategy: zenthra_core::Align) -> Self {
         self.align = strategy;
-        self
-    }
-
-    pub fn font_family(mut self, family: impl Into<String>) -> Self {
-        self.font_family = Some(family.into());
         self
     }
 
@@ -340,18 +170,6 @@ impl<'u, 'a> ButtonBuilder<'u, 'a> {
         self
     }
 
-    pub fn on_scroll<F>(self, mut f: F) -> Self
-    where
-        F: FnMut(f32, f32) + 'a,
-    {
-        self.ui.add_listener(self.id, crate::ui::EventPhase::Bubble, move |_, event| {
-            if let crate::ui::WidgetEvent::Scroll(dx, dy) = event {
-                f(*dx, *dy);
-            }
-        });
-        self
-    }
-
     pub fn on_event<F>(self, phase: crate::ui::EventPhase, f: F) -> Self
     where
         F: FnMut(&mut crate::ui::EventContext, &crate::ui::WidgetEvent) + 'a,
@@ -367,20 +185,68 @@ impl<'u, 'a> ButtonBuilder<'u, 'a> {
 
         let (x, y) = self.pos.unwrap_or((self.ui.cursor_x, self.ui.cursor_y));
 
-        let mut clicked = false;
-        let ox = x + self.ui.offset_x;
-        let oy = y + self.ui.offset_y;
+        // 1. Measure text FIRST to get true content dimensions (no magic fallbacks)
+        let mut text_w = 0.0;
+        let mut text_h = 0.0;
+        if let Some(fs) = self.ui.font_system.as_ref() {
+            let mut adapter =
+                zenthra_text::prelude::CosmicFontProvider::new_with_system(fs.clone());
+            let options = self.text_style.to_options(0.0, 0.0, self.ui.scale_factor, self.ui.font_scale);
+            let buffer = adapter.shape(&self.label, &options);
+            let (cw, ch) = buffer.content_size();
+            text_w = cw;
+            text_h = ch;
+        }
+
+        let mut final_w = if self.style.fill_x {
+            self.ui.available_width
+        } else {
+            self.style.width.unwrap_or(text_w + self.style.padding.horizontal())
+        };
+        let mut final_h = if self.style.fill_y {
+            (self.ui.max_y - y).max(self.style.height.unwrap_or(text_h + self.style.padding.vertical()))
+        } else {
+            self.style.height.unwrap_or(text_h + self.style.padding.vertical())
+        };
+
+        if let Some(min_w) = self.style.min_width { final_w = final_w.max(min_w); }
+        if let Some(max_w) = self.style.max_width { final_w = final_w.min(max_w); }
+        if let Some(min_h) = self.style.min_height { final_h = final_h.max(min_h); }
+        if let Some(max_h) = self.style.max_height { final_h = final_h.min(max_h); }
+
+        // 2. Hit-testing with recorded layout support
+        let (actual_ox, actual_oy) = if let Some((rect, _)) = self.ui.get_recorded_layout(self.id) {
+            (rect.origin.x + self.ui.offset_x, rect.origin.y + self.ui.offset_y)
+        } else {
+            (x + self.ui.offset_x, y + self.ui.offset_y)
+        };
 
         let is_hovered = self.ui.is_hovered(
             self.id,
-            ox,
-            oy,
-            self.width.unwrap_or(100.0),
-            self.height.unwrap_or(40.0),
+            actual_ox,
+            actual_oy,
+            final_w,
+            final_h,
         );
 
-        let is_pressed = is_hovered && self.ui.mouse_down;
+        let is_pressed = if self.ui.mouse_down {
+            if self.ui.active_widget_id == Some(self.id) {
+                true
+            } else if self.ui.active_widget_id.is_none() && is_hovered {
+                self.ui.active_widget_id = Some(self.id);
+                true
+            } else {
+                false
+            }
+        } else {
+            false
+        };
 
+        if is_hovered {
+            self.ui.cursor_icon = crate::text::CursorIcon::Pointer;
+        }
+
+        let mut clicked = false;
         if self.ui.clicked && is_hovered {
             clicked = true;
             self.ui.consume_click();
@@ -393,74 +259,30 @@ impl<'u, 'a> ButtonBuilder<'u, 'a> {
             self.ui.dispatch_event(self.id, crate::ui::WidgetEvent::Click);
         }
 
-        let events = std::mem::take(&mut self.ui.input_events);
-        for event in &events {
-            if let zenthra_platform::event::PlatformEvent::MouseWheel { delta_x, delta_y } = event {
-                if is_hovered {
-                    self.ui.dispatch_event(self.id, crate::ui::WidgetEvent::Scroll(*delta_x, *delta_y));
-                }
-            }
-        }
-        self.ui.input_events = events;
-
-        // Determine effective background based on state
+        // 3. Determine effective background and border based on state
         let effective_bg = if is_pressed && self.active_bg.is_some() {
-            &self.active_bg
+            self.active_bg.as_ref()
         } else if is_hovered && self.hover_bg.is_some() {
-            &self.hover_bg
+            self.hover_bg.as_ref()
         } else {
-            &Some(self.bg.clone())
+            self.style.bg.as_ref()
         };
 
-        let current_text = self.text_color;
-        let mut current_brightness = 1.0;
-
-        if is_pressed {
-            current_brightness = 0.8;
+        let effective_border_w = if is_pressed {
+            self.active_border_width.unwrap_or_else(|| self.style.border_width())
         } else if is_hovered {
-            current_brightness = self.hover_brightness;
-        }
-
-        let mut final_border_w = self.border_width;
-        let mut final_border_c = self.border_color;
-
-        if is_pressed {
-            if let Some(c) = self.active_border_color { final_border_c = c; }
-            if let Some(w) = self.active_border_width { final_border_w = w; }
-        } else if is_hovered {
-            if let Some(c) = self.hover_border_color { final_border_c = c; }
-            if let Some(w) = self.hover_border_width { final_border_w = w; }
-        }
-
-        // Measure Text
-        let mut text_w = 0.0;
-        let mut text_h = 0.0;
-        if let Some(fs) = self.ui.font_system.as_ref() {
-            // use zenthra_text::traits::FontProvider;
-            let mut adapter =
-                zenthra_text::prelude::CosmicFontProvider::new_with_system(fs.clone());
-            let mut options = zenthra_text::prelude::TextOptions::new()
-                .font_size(self.font_size * self.ui.font_scale)
-                .scale_factor(self.ui.scale_factor)
-                .wrap(self.wrap);
-            if let Some(ref family) = self.font_family {
-                options = options.font_family(family.clone());
-            }
-            let buffer = adapter.shape(&self.label, &options);
-            let (cw, ch) = buffer.content_size();
-            text_w = cw;
-            text_h = ch;
-        }
-
-        let mut final_w = if self.fill_x {
-            self.ui.available_width
+            self.hover_border_width.unwrap_or_else(|| self.style.border_width())
         } else {
-            self.width.unwrap_or(text_w + self.padding.horizontal())
+            self.style.border_width()
         };
-        let mut final_h = self.height.unwrap_or(text_h + self.padding.vertical());
 
-        let final_border_w = final_border_w;
-        let final_border_c = final_border_c;
+        let effective_border_c = if is_pressed {
+            self.active_border_color.or_else(|| self.style.border_color())
+        } else if is_hovered {
+            self.hover_border_color.or_else(|| self.style.border_color())
+        } else {
+            self.style.border_color()
+        };
 
         if is_hovered {
             final_w *= self.hover_scale;
@@ -469,69 +291,38 @@ impl<'u, 'a> ButtonBuilder<'u, 'a> {
 
         let start_draw = self.ui.draws.len();
 
-        // 1. Draw Background
-        let (bg_c1, bg_c2, bg_c3, bg_c4, bg_grad_params, bg_grad_stops, _) =
-            crate::container::resolve_background(effective_bg);
+        // 4. Draw Background
+        let rect_inst = self.style.build_rect_instance(
+            x,
+            y,
+            final_w,
+            final_h,
+            effective_bg,
+            effective_border_c,
+            Some(effective_border_w),
+            1.0,
+        );
+        self.ui.draws.push(DrawCommand::Rect(RectDraw { instance: rect_inst }));
 
-        self.ui.draws.push(DrawCommand::Rect(RectDraw {
-            instance: RectInstance {
-                pos: [x, y],
-                size: [final_w, final_h],
-                color: bg_c1,
-                color2: bg_c2,
-                color3: bg_c3,
-                color4: bg_c4,
-                gradient_params: bg_grad_params,
-                gradient_stops: bg_grad_stops,
-                radius: [
-                    self.radius[3],
-                    self.radius[2],
-                    self.radius[1],
-                    self.radius[0],
-                ],
-                border_width: final_border_w,
-                border_color: final_border_c.to_array(),
-                shadow_color: {
-                    let mut c = self.shadow_color;
-                    c.a *= self.shadow_opacity;
-                    c.to_array()
-                },
-                shadow_offset: self.shadow_offset,
-                shadow_blur: self.shadow_blur,
-                clip_rect: [0.0, 0.0, 9999.0, 9999.0],
-                grayscale: 0.0,
-                brightness: current_brightness,
-                opacity: self.opacity,
-                ..Default::default()
-            },
-        }));
-
-        // 2. Draw Text (aligned accordingly and snapped to physical pixels)
+        // 5. Draw Text (aligned inside allocated button bounds)
         let tx = match self.align {
-            zenthra_core::Align::Left => (x + self.padding.left).round(),
-            zenthra_core::Align::Right => (x + final_w - text_w - self.padding.right).round(),
+            zenthra_core::Align::Left => (x + self.style.padding.left).round(),
+            zenthra_core::Align::Right => (x + final_w - text_w - self.style.padding.right).round(),
             _ => (x + (final_w - text_w) / 2.0).round(),
         };
         let ty = (y + (final_h - text_h) / 2.0).round();
 
-        let mut text_opts = zenthra_text::prelude::TextOptions::new()
-            .font_size(self.font_size * self.ui.font_scale)
-            .scale_factor(self.ui.scale_factor)
-            .color(current_text)
-            .wrap(self.wrap)
-            .at(tx, ty);
-        if let Some(ref family) = self.font_family {
-            text_opts = text_opts.font_family(family.clone());
-        }
+        let mut text_opts = self.text_style.to_options(tx, ty, self.ui.scale_factor, self.ui.font_scale);
+        text_opts.color = self.text_style.color;
 
         self.ui.draws.push(DrawCommand::Text(TextDraw {
             text: self.label.clone(),
             pos: [tx, ty],
             options: text_opts,
-            clip: [0.0, 0.0, 9999.0, 9999.0],
+            clip: [x, y, final_w, final_h],
         }));
 
-        // 3. Register Semantic
+        // 6. Register Semantics & Layout
         self.ui.register_semantic(
             SemanticNode::new(self.id, Role::Button, Rect::new(x, y, final_w, final_h))
                 .with_label(self.label.clone()),
@@ -550,6 +341,146 @@ impl<'u, 'a> ButtonBuilder<'u, 'a> {
             hovered: is_hovered,
             pressed: is_pressed,
             submitted: false,
+            changed: false,
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::collections::HashMap;
+
+    #[test]
+    fn test_button_styling_and_borders() {
+        let mut scroll_state = HashMap::new();
+        let mut cursor_state = HashMap::new();
+        let mut interaction_state = HashMap::new();
+        let layout_cache = HashMap::new();
+        let mut next_layout_cache = HashMap::new();
+        let screen_layout_cache = HashMap::new();
+        let mut next_screen_layout_cache = HashMap::new();
+        let widget_window_map = HashMap::new();
+        let mut next_widget_window_map = HashMap::new();
+        let image_sizes = HashMap::new();
+
+        // 1. Standard Raised Button from docs/api/container.md Section 3.4
+        {
+            let mut ui = Ui::new(
+                800, 600, 1.0, None, Vec::new(), None,
+                (0.0, 0.0), false,
+                &mut scroll_state, &mut cursor_state, &mut interaction_state,
+                None, None, false, false, 0.0,
+                &layout_cache, &mut next_layout_cache,
+                &screen_layout_cache, &mut next_screen_layout_cache,
+                &widget_window_map, &mut next_widget_window_map,
+                &image_sizes,
+            );
+
+            ui.button("Export")
+                .bg(Color::rgb(0.20, 0.40, 0.85))
+                .border((Color::rgb(0.30, 0.50, 0.95), 1.0))
+                .radius_all(6.0)
+                .shadow(Color::BLACK, 0.0, 2.0, 4.0)
+                .shadow_opacity(0.5)
+                .show();
+
+            assert_eq!(ui.draws.len(), 2, "Expected 1 RectDraw background and 1 TextDraw");
+            if let DrawCommand::Rect(rd) = &ui.draws[0] {
+                assert_eq!(rd.instance.color, Color::rgb(0.20, 0.40, 0.85).to_array());
+                assert_eq!(rd.instance.border_width, 1.0);
+                assert_eq!(rd.instance.border_color, Color::rgb(0.30, 0.50, 0.95).to_array());
+                assert_eq!(rd.instance.radius, [6.0, 6.0, 6.0, 6.0]);
+                assert_eq!(rd.instance.shadow_color, [0.0, 0.0, 0.0, 0.5]);
+            } else {
+                panic!("Expected RectDraw for button background");
+            }
+        }
+
+        // 2. Ghost / Text-Only Button (Link Style) from Section 3.4
+        {
+            let mut ui = Ui::new(
+                800, 600, 1.0, None, Vec::new(), None,
+                (0.0, 0.0), false,
+                &mut scroll_state, &mut cursor_state, &mut interaction_state,
+                None, None, false, false, 0.0,
+                &layout_cache, &mut next_layout_cache,
+                &screen_layout_cache, &mut next_screen_layout_cache,
+                &widget_window_map, &mut next_widget_window_map,
+                &image_sizes,
+            );
+
+            ui.button("Cancel")
+                .bg(None)
+                .border(None)
+                .color(Color::rgb(0.70, 0.75, 0.85))
+                .show();
+
+            assert_eq!(ui.draws.len(), 2);
+            if let DrawCommand::Rect(rd) = &ui.draws[0] {
+                assert_eq!(rd.instance.color, Color::TRANSPARENT.to_array());
+                assert_eq!(rd.instance.border_width, 0.0);
+            } else {
+                panic!("Expected RectDraw for ghost button background");
+            }
+        }
+
+        // 3. Button with idle border and hover_border(None)
+        {
+            let mut ui = Ui::new(
+                800, 600, 1.0, None, Vec::new(), None,
+                (0.0, 0.0), false,
+                &mut scroll_state, &mut cursor_state, &mut interaction_state,
+                None, None, false, false, 0.0,
+                &layout_cache, &mut next_layout_cache,
+                &screen_layout_cache, &mut next_screen_layout_cache,
+                &widget_window_map, &mut next_widget_window_map,
+                &image_sizes,
+            );
+
+            let btn = ui.button("Interactive")
+                .border((Color::WHITE, 1.0))
+                .hover_border(None)
+                .active_border(None);
+
+            assert_eq!(btn.hover_border_width, Some(0.0));
+            assert_eq!(btn.hover_border_color, Some(Color::TRANSPARENT));
+            assert_eq!(btn.active_border_width, Some(0.0));
+            assert_eq!(btn.active_border_color, Some(Color::TRANSPARENT));
+        }
+
+        // 4. BoxStyle unification on ButtonBuilder
+        {
+            let mut ui = Ui::new(
+                800, 600, 1.0, None, Vec::new(), None,
+                (0.0, 0.0), false,
+                &mut scroll_state, &mut cursor_state, &mut interaction_state,
+                None, None, false, false, 0.0,
+                &layout_cache, &mut next_layout_cache,
+                &screen_layout_cache, &mut next_screen_layout_cache,
+                &widget_window_map, &mut next_widget_window_map,
+                &image_sizes,
+            );
+
+            let btn = ui.button("Styled")
+                .width(180.0)
+                .height(45.0)
+                .padding_all(10.0)
+                .radius(8.0, 8.0, 4.0, 4.0)
+                .bg(Color::RED)
+                .border((Color::BLUE, 2.0));
+
+            assert_eq!(btn.style.width, Some(180.0));
+            assert_eq!(btn.style.height, Some(45.0));
+            assert_eq!(btn.style.padding, EdgeInsets::all(10.0));
+            assert_eq!(btn.style.radius, [8.0, 8.0, 4.0, 4.0]);
+            assert_eq!(btn.style.bg, Some(zenthra_core::Background::Solid(Color::RED)));
+            assert_eq!(btn.style.border, zenthra_core::Border::Solid(Color::BLUE, 2.0));
+
+            let mut custom_style = BoxStyle::new();
+            custom_style.fill_x = true;
+            let btn2 = ui.button("Custom").style(custom_style);
+            assert!(btn2.style.fill_x);
         }
     }
 }

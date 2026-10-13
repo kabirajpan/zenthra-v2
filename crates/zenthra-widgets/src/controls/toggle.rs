@@ -1,7 +1,8 @@
 // crates/zenthra-widgets/src/controls/toggle.rs
 
+use crate::style_ext::BoxStyleExt;
 use crate::ui::{DrawCommand, RectDraw, TextDraw, Ui};
-use zenthra_core::{Color, Id, Rect, Response, Role, SemanticNode};
+use zenthra_core::{Background, BoxStyle, Color, EdgeInsets, Id, Rect, Response, Role, SemanticNode, Styleable};
 use zenthra_render::RectInstance;
 
 pub enum LabelSide {
@@ -16,16 +17,14 @@ pub struct ToggleBuilder<'u, 'a, 'b> {
     label: Option<String>,
     label_side: LabelSide,
 
-    // Track Style
-    width: f32,
-    height: f32,
-    radius: [f32; 4],
-    padding: f32,
-    
+    // Track Box & Typography Styles
+    pub style: BoxStyle,
+    pub text_style: zenthra_text::prelude::TextStyle,
+
     // Colors
     on_color: Color,
     off_color: Color,
-    
+
     // Thumb
     thumb_color: Color,
     thumb_radius: Option<[f32; 4]>,
@@ -37,19 +36,12 @@ pub struct ToggleBuilder<'u, 'a, 'b> {
     inner_text_color: Color,
     inner_font_size: f32,
 
-    // External Label Style
-    label_size: f32,
-    label_color: Color,
+    // External Label
     active_label_color: Option<Color>,
     label_gap: f32,
 
     // Premium Effects
     glow: bool,
-    shadow_color: Color,
-    shadow_offset: [f32; 2],
-    shadow_blur: f32,
-    shadow_opacity: f32,
-    shadow_enabled: bool,
     hover_scale: f32,
     pressed_scale: f32,
 
@@ -58,12 +50,46 @@ pub struct ToggleBuilder<'u, 'a, 'b> {
     animation_speed: f32,
     is_pill: bool,
     hover_brightness: f32,
-    opacity: f32,
 }
+
+impl<'u, 'a, 'b> Styleable for ToggleBuilder<'u, 'a, 'b> {
+    #[inline]
+    fn box_style_mut(&mut self) -> &mut BoxStyle {
+        &mut self.style
+    }
+
+    #[inline]
+    fn box_style(&self) -> &BoxStyle {
+        &self.style
+    }
+}
+
+// Implement box dimensions, corner radius, and visuals
+impl_dimensions!(ToggleBuilder, 'u, 'a, 'b);
+impl_radius!(ToggleBuilder, 'u, 'a, 'b);
+impl_visuals!(ToggleBuilder, 'u, 'a, 'b);
+
+// Implement typography methods for the external label
+impl_text_style_methods!(ToggleBuilder, 'u, 'a, 'b);
 
 impl<'u, 'a, 'b> ToggleBuilder<'u, 'a, 'b> {
     pub fn new(ui: &'u mut Ui<'a>, state: &'b mut bool, label: Option<&str>) -> Self {
         let id = ui.id();
+
+        let mut style = BoxStyle::new();
+        style.width = Some(48.0);
+        style.height = Some(24.0);
+        style.radius = [12.0; 4];
+        style.padding = EdgeInsets::all(3.0);
+        style.shadow_offset = [0.0, 2.0];
+        style.shadow_blur = 8.0;
+        style.shadow_opacity = 0.4;
+        style.opacity = 1.0;
+
+        let mut text_style = zenthra_text::prelude::TextStyle::default();
+        text_style.font_size = 14.0;
+        text_style.color = Color::WHITE;
+
         Self {
             ui,
             state,
@@ -71,10 +97,8 @@ impl<'u, 'a, 'b> ToggleBuilder<'u, 'a, 'b> {
             label: label.map(|s| s.to_string()),
             label_side: LabelSide::Right,
 
-            width: 48.0,
-            height: 24.0,
-            radius: [12.0; 4],
-            padding: 3.0,
+            style,
+            text_style,
 
             on_color: Color::rgb(0.0, 0.5, 1.0),
             off_color: Color::rgb(0.2, 0.2, 0.2),
@@ -87,17 +111,10 @@ impl<'u, 'a, 'b> ToggleBuilder<'u, 'a, 'b> {
             inner_text_color: Color::WHITE,
             inner_font_size: 10.0,
 
-            label_size: 14.0,
-            label_color: Color::WHITE,
             active_label_color: None,
             label_gap: 10.0,
 
             glow: false,
-            shadow_enabled: false,
-            shadow_color: Color::rgb(0.0, 0.0, 0.0),
-            shadow_offset: [0.0, 2.0],
-            shadow_blur: 8.0,
-            shadow_opacity: 0.4,
             hover_scale: 1.0,
             pressed_scale: 1.0,
 
@@ -105,8 +122,168 @@ impl<'u, 'a, 'b> ToggleBuilder<'u, 'a, 'b> {
             animation_speed: 15.0,
             is_pill: true,
             hover_brightness: 1.05,
-            opacity: 1.0,
         }
+    }
+
+    #[inline]
+    pub fn size(mut self, w: f32, h: f32) -> Self {
+        self.style.width = Some(w);
+        self.style.height = Some(h);
+        self
+    }
+
+    #[inline]
+    pub fn padding(mut self, p: f32) -> Self {
+        self.style.padding = EdgeInsets::all(p);
+        self
+    }
+
+    #[inline]
+    pub fn padding_all(self, p: f32) -> Self {
+        self.padding(p)
+    }
+
+    #[inline]
+    pub fn track_padding(self, p: f32) -> Self {
+        self.padding(p)
+    }
+
+    #[inline]
+    pub fn square(mut self) -> Self {
+        self.style.radius = [0.0; 4];
+        self.is_pill = false;
+        self
+    }
+
+    #[inline]
+    pub fn pill(mut self) -> Self {
+        self.style.radius = [12.0; 4];
+        self.is_pill = true;
+        self
+    }
+
+    #[inline]
+    pub fn inner_labels(mut self, on: &str, off: &str) -> Self {
+        self.inner_on = Some(on.to_string());
+        self.inner_off = Some(off.to_string());
+        self
+    }
+
+    #[inline]
+    pub fn label_left(mut self) -> Self {
+        self.label_side = LabelSide::Left;
+        self
+    }
+
+    #[inline]
+    pub fn label_right(mut self) -> Self {
+        self.label_side = LabelSide::Right;
+        self
+    }
+
+    #[inline]
+    pub fn disabled(mut self, disabled: bool) -> Self {
+        self.disabled = disabled;
+        self
+    }
+
+    #[inline]
+    pub fn colors(mut self, on: Color, off: Color, thumb: Color) -> Self {
+        self.on_color = on;
+        self.off_color = off;
+        self.thumb_color = thumb;
+        self
+    }
+
+    #[inline]
+    pub fn on_color(mut self, color: Color) -> Self {
+        self.on_color = color;
+        self
+    }
+
+    #[inline]
+    pub fn off_color(mut self, color: Color) -> Self {
+        self.off_color = color;
+        self
+    }
+
+    #[inline]
+    pub fn thumb_color(mut self, color: Color) -> Self {
+        self.thumb_color = color;
+        self
+    }
+
+    #[inline]
+    pub fn thumb_radius(mut self, r: f32) -> Self {
+        self.thumb_radius = Some([r; 4]);
+        self
+    }
+
+    #[inline]
+    pub fn thumb_width(mut self, w: f32) -> Self {
+        self.thumb_width = Some(w);
+        self
+    }
+
+    #[inline]
+    pub fn inner_color(mut self, color: Color) -> Self {
+        self.inner_text_color = color;
+        self
+    }
+
+    #[inline]
+    pub fn inner_size(mut self, size: f32) -> Self {
+        self.inner_font_size = size;
+        self
+    }
+
+    #[inline]
+    pub fn label_size(mut self, size: f32) -> Self {
+        self.text_style.font_size = size;
+        self
+    }
+
+    #[inline]
+    pub fn label_color(mut self, color: Color) -> Self {
+        self.text_style.color = color;
+        self
+    }
+
+    #[inline]
+    pub fn active_label(mut self, color: Color) -> Self {
+        self.active_label_color = Some(color);
+        self
+    }
+
+    #[inline]
+    pub fn glow(mut self, enabled: bool) -> Self {
+        self.glow = enabled;
+        self
+    }
+
+    #[inline]
+    pub fn scaling(mut self, hover: f32, pressed: f32) -> Self {
+        self.hover_scale = hover;
+        self.pressed_scale = pressed;
+        self
+    }
+
+    #[inline]
+    pub fn label_gap(mut self, gap: f32) -> Self {
+        self.label_gap = gap;
+        self
+    }
+
+    #[inline]
+    pub fn animation_speed(mut self, speed: f32) -> Self {
+        self.animation_speed = speed;
+        self
+    }
+
+    #[inline]
+    pub fn hover_brightness(mut self, b: f32) -> Self {
+        self.hover_brightness = b;
+        self
     }
 
     pub fn id(mut self, id: impl std::hash::Hash) -> Self {
@@ -117,209 +294,62 @@ impl<'u, 'a, 'b> ToggleBuilder<'u, 'a, 'b> {
         self
     }
 
-    pub fn size(mut self, w: f32, h: f32) -> Self {
-        self.width = w;
-        self.height = h;
-        self
-    }
-    pub fn width(mut self, w: f32) -> Self {
-        self.width = w;
-        self
-    }
-    pub fn height(mut self, h: f32) -> Self {
-        self.height = h;
-        self
-    }
-    pub fn padding(mut self, p: f32) -> Self {
-        self.padding = p;
-        self
-    }
-    pub fn opacity(mut self, a: f32) -> Self {
-        self.opacity = a;
+    pub fn on_click<F>(self, mut f: F) -> Self
+    where
+        F: FnMut() + 'a,
+    {
+        self.ui.add_listener(self.id, crate::ui::EventPhase::Bubble, move |_, event| {
+            if let crate::ui::WidgetEvent::Click = event {
+                f();
+            }
+        });
         self
     }
 
-    pub fn radius(mut self, tl: f32, tr: f32, br: f32, bl: f32) -> Self {
-        self.radius = [tl, tr, br, bl];
-        self.is_pill = false;
+    pub fn on_change<F>(self, mut f: F) -> Self
+    where
+        F: FnMut(bool) + 'a,
+    {
+        self.ui.add_listener(self.id, crate::ui::EventPhase::Bubble, move |_, event| {
+            if let crate::ui::WidgetEvent::Change(crate::ui::EventValue::Bool(val)) = event {
+                f(*val);
+            }
+        });
         self
     }
 
-    pub fn radius_all(mut self, r: f32) -> Self {
-        self.radius = [r; 4];
-        self.is_pill = false;
+    pub fn on_hover<F>(self, mut f: F) -> Self
+    where
+        F: FnMut(bool) + 'a,
+    {
+        self.ui.add_listener(self.id, crate::ui::EventPhase::Bubble, move |_, event| {
+            if let crate::ui::WidgetEvent::Hover(hovered) = event {
+                f(*hovered);
+            }
+        });
         self
     }
 
-    pub fn radius_top(mut self, r: f32) -> Self {
-        self.radius[0] = r;
-        self.radius[1] = r;
-        self.is_pill = false;
-        self
-    }
-
-    pub fn radius_bottom(mut self, r: f32) -> Self {
-        self.radius[2] = r;
-        self.radius[3] = r;
-        self.is_pill = false;
-        self
-    }
-
-    pub fn radius_top_left(mut self, r: f32) -> Self {
-        self.radius[0] = r;
-        self.is_pill = false;
-        self
-    }
-
-    pub fn radius_top_right(mut self, r: f32) -> Self {
-        self.radius[1] = r;
-        self.is_pill = false;
-        self
-    }
-
-    pub fn radius_bottom_right(mut self, r: f32) -> Self {
-        self.radius[2] = r;
-        self.is_pill = false;
-        self
-    }
-
-    pub fn radius_bottom_left(mut self, r: f32) -> Self {
-        self.radius[3] = r;
-        self.is_pill = false;
-        self
-    }
-
-    pub fn radius_left(mut self, r: f32) -> Self {
-        self.radius[0] = r;
-        self.radius[3] = r;
-        self.is_pill = false;
-        self
-    }
-
-    pub fn radius_right(mut self, r: f32) -> Self {
-        self.radius[1] = r;
-        self.radius[2] = r;
-        self.is_pill = false;
-        self
-    }
-
-    pub fn square(mut self) -> Self {
-        self.radius = [0.0; 4];
-        self.is_pill = false;
-        self
-    }
-
-    pub fn pill(mut self) -> Self {
-        self.is_pill = true;
-        self
-    }
-
-    pub fn inner_labels(mut self, on: &str, off: &str) -> Self {
-        self.inner_on = Some(on.to_string());
-        self.inner_off = Some(off.to_string());
-        self
-    }
-
-    pub fn label_left(mut self) -> Self {
-        self.label_side = LabelSide::Left;
-        self
-    }
-
-    pub fn disabled(mut self, disabled: bool) -> Self {
-        self.disabled = disabled;
-        self
-    }
-
-    pub fn colors(mut self, on: Color, off: Color, thumb: Color) -> Self {
-        self.on_color = on;
-        self.off_color = off;
-        self.thumb_color = thumb;
-        self
-    }
-
-    pub fn thumb_radius(mut self, r: f32) -> Self {
-        self.thumb_radius = Some([r; 4]);
-        self
-    }
-
-    pub fn inner_color(mut self, color: Color) -> Self {
-        self.inner_text_color = color;
-        self
-    }
-
-    pub fn inner_size(mut self, size: f32) -> Self {
-        self.inner_font_size = size;
-        self
-    }
-
-    pub fn label_size(mut self, size: f32) -> Self {
-        self.label_size = size;
-        self
-    }
-
-    pub fn label_color(mut self, color: Color) -> Self {
-        self.label_color = color;
-        self
-    }
-
-    pub fn active_label(mut self, color: Color) -> Self {
-        self.active_label_color = Some(color);
-        self
-    }
-
-    pub fn glow(mut self, enabled: bool) -> Self {
-        self.glow = enabled;
-        self
-    }
-
-    pub fn scaling(mut self, hover: f32, pressed: f32) -> Self {
-        self.hover_scale = hover;
-        self.pressed_scale = pressed;
-        self
-    }
-
-    pub fn label_gap(mut self, gap: f32) -> Self {
-        self.label_gap = gap;
-        self
-    }
-
-    pub fn label_right(mut self) -> Self {
-        self.label_side = LabelSide::Right;
-        self
-    }
-
-    pub fn animation_speed(mut self, speed: f32) -> Self {
-        self.animation_speed = speed;
-        self
-    }
-
-    pub fn hover_brightness(mut self, b: f32) -> Self {
-        self.hover_brightness = b;
-        self
-    }
-    pub fn shadow(mut self, color: Color, x: f32, y: f32, blur: f32) -> Self {
-        self.shadow_color = color;
-        self.shadow_offset = [x, y];
-        self.shadow_blur = blur;
-        self.shadow_enabled = true;
-        self
-    }
-    pub fn shadow_opacity(mut self, opacity: f32) -> Self {
-        self.shadow_opacity = opacity;
+    pub fn on_event<F>(self, phase: crate::ui::EventPhase, f: F) -> Self
+    where
+        F: FnMut(&mut crate::ui::EventContext, &crate::ui::WidgetEvent) + 'a,
+    {
+        self.ui.add_listener(self.id, phase, f);
         self
     }
 
     pub fn show(self) -> Response {
         let (x, y) = (self.ui.cursor_x, self.ui.cursor_y);
-        
+        let width = self.style.width.unwrap_or(48.0);
+        let height = self.style.height.unwrap_or(24.0);
+
         // 1. Measure External Label
         let mut label_w = 0.0;
         let mut label_h = 0.0;
         if let Some(label_text) = &self.label {
-            // Use the internal text measurement helper
             if let Some(fs) = self.ui.font_system.as_ref() {
                 let mut adapter = zenthra_text::prelude::CosmicFontProvider::new_with_system(fs.clone());
-                let options = zenthra_text::prelude::TextOptions::new().font_size(self.label_size);
+                let options = zenthra_text::prelude::TextOptions::new().font_size(self.text_style.font_size);
                 let buffer = adapter.shape(label_text, &options);
                 let (cw, ch) = buffer.content_size();
                 label_w = cw;
@@ -327,8 +357,8 @@ impl<'u, 'a, 'b> ToggleBuilder<'u, 'a, 'b> {
             }
         }
 
-        let total_w = if label_w > 0.0 { self.width + self.label_gap + label_w } else { self.width };
-        let total_h = self.height.max(label_h);
+        let total_w = if label_w > 0.0 { width + self.label_gap + label_w } else { width };
+        let total_h = height.max(label_h);
 
         // 2. Hit-testing
         let (actual_ox, actual_oy, actual_w, actual_h) = if let Some((rect, _)) = self.ui.get_recorded_layout(self.id) {
@@ -336,7 +366,7 @@ impl<'u, 'a, 'b> ToggleBuilder<'u, 'a, 'b> {
                 rect.origin.x + self.ui.offset_x,
                 rect.origin.y + self.ui.offset_y,
                 rect.size.width.max(total_w),
-                rect.size.height.max(total_h)
+                rect.size.height.max(total_h),
             )
         } else {
             (x + self.ui.offset_x, y + self.ui.offset_y, total_w, total_h)
@@ -346,10 +376,18 @@ impl<'u, 'a, 'b> ToggleBuilder<'u, 'a, 'b> {
         let is_pressed = is_hovered && self.ui.mouse_down;
         let mut clicked = false;
 
+        if is_hovered {
+            self.ui.cursor_icon = crate::text::CursorIcon::Pointer;
+        }
+
+        self.ui.dispatch_event(self.id, crate::ui::WidgetEvent::Hover(is_hovered));
+
         if self.ui.clicked && is_hovered {
             *self.state = !*self.state;
             self.ui.needs_redraw = true;
             clicked = true;
+            self.ui.dispatch_event(self.id, crate::ui::WidgetEvent::Click);
+            self.ui.dispatch_event(self.id, crate::ui::WidgetEvent::Change(crate::ui::EventValue::Bool(*self.state)));
         }
 
         // 3. Animation (Generic & Selection)
@@ -362,7 +400,7 @@ impl<'u, 'a, 'b> ToggleBuilder<'u, 'a, 'b> {
 
         let mut final_pos = current_sel;
         let mut final_scale = current_scale;
-        
+
         let s_delta = sel_target - current_sel;
         if s_delta.abs() > 0.001 {
             final_pos += s_delta * (0.15 * self.animation_speed).min(1.0);
@@ -384,62 +422,67 @@ impl<'u, 'a, 'b> ToggleBuilder<'u, 'a, 'b> {
         let start_draw = self.ui.draws.len();
 
         // 4. Calculate Layout & Radius
-        let base_w = self.width * final_scale;
-        let base_h = self.height * final_scale;
-        
-        let current_radius = if self.is_pill { [base_h / 2.0; 4] } else { 
-            let mut r = self.radius;
-            for i in 0..4 { r[i] *= final_scale; }
+        let base_w = width * final_scale;
+        let base_h = height * final_scale;
+
+        let current_radius = if self.is_pill && self.style.radius == [12.0; 4] {
+            [base_h / 2.0; 4]
+        } else {
+            let mut r = self.style.radius;
+            for i in 0..4 {
+                r[i] *= final_scale;
+            }
             r
         };
-        
+
         let toggle_x = if let LabelSide::Left = self.label_side { x + label_w + self.label_gap } else { x };
-        let toggle_y_orig = y + (total_h - self.height) / 2.0;
-        
+        let toggle_y_orig = y + (total_h - height) / 2.0;
+
         // Midpoint of the original toggle track
-        let mid_x = toggle_x + self.width / 2.0;
-        let mid_y = toggle_y_orig + self.height / 2.0;
-        
+        let mid_x = toggle_x + width / 2.0;
+        let mid_y = toggle_y_orig + height / 2.0;
+
         // Final position for scaled track
         let tx = mid_x - base_w / 2.0;
         let ty = mid_y - base_h / 2.0;
 
         // 5. Draw Track
         let mut track_color = if final_pos > 0.5 { self.on_color } else { self.off_color };
-        track_color.a *= self.opacity;
+        track_color.a *= self.style.opacity;
         if self.disabled {
             track_color.a *= 0.5;
         }
 
-        self.ui.draws.push(DrawCommand::Rect(RectDraw {
-            instance: RectInstance {
-                pos: [tx, ty],
-                size: [base_w, base_h],
-                color: track_color.to_array(),
-                radius: current_radius,
-                brightness: if is_hovered { self.hover_brightness } else { 1.0 },
-                shadow_color: if self.shadow_enabled {
-                    let mut a = self.shadow_color.to_array();
-                    a[3] *= self.shadow_opacity;
-                    a
-                } else if self.glow {
-                    let mut sc = self.on_color.to_array();
-                    sc[3] *= 0.4 * final_pos;
-                    sc
-                } else { [0.0, 0.0, 0.0, 0.0] },
-                shadow_offset: if self.shadow_enabled { self.shadow_offset } else { [0.0, 0.0] },
-                shadow_blur: if self.shadow_enabled { self.shadow_blur } else if self.glow { 12.0 * final_pos } else { 0.0 },
-                ..Default::default()
-            }
-        }));
+        let mut instance = self.style.build_rect_instance(
+            tx,
+            ty,
+            base_w,
+            base_h,
+            Some(&Background::Solid(track_color)),
+            None,
+            None,
+            1.0,
+        );
+        instance.radius = current_radius;
+        if is_hovered {
+            instance.brightness = self.hover_brightness;
+        }
+        if self.style.shadow_color.is_none() && self.glow {
+            let mut sc = self.on_color.to_array();
+            sc[3] *= 0.4 * final_pos;
+            instance.shadow_color = sc;
+            instance.shadow_blur = 12.0 * final_pos;
+        }
+
+        self.ui.draws.push(DrawCommand::Rect(RectDraw { instance }));
 
         // 6. Draw Inner Labels (clipped to track)
         let clip = [tx, ty, base_w, base_h];
+        let padding = self.style.padding.top.max(self.style.padding.left);
         if let Some(on_text) = &self.inner_on {
             if let Some(off_text) = &self.inner_off {
-                // Determine which text to show and where
                 let (text, is_on) = if final_pos > 0.5 { (on_text, true) } else { (off_text, false) };
-                
+
                 let mut text_w = 0.0;
                 let mut text_h = 0.0;
                 if let Some(fs) = self.ui.font_system.as_ref() {
@@ -451,24 +494,20 @@ impl<'u, 'a, 'b> ToggleBuilder<'u, 'a, 'b> {
                     text_h = ch;
                 }
 
-                let thumb_h_adj = base_h - (self.padding * 2.0 * final_scale);
+                let thumb_h_adj = base_h - (padding * 2.0 * final_scale);
                 let thumb_w_adj = self.thumb_width.map(|w| w * final_scale).unwrap_or(thumb_h_adj);
-                let track_w_internal = base_w - thumb_w_adj - (self.padding * 2.0 * final_scale);
-                
-                // Position text in the space NOT occupied by the thumb
+                let track_w_internal = base_w - thumb_w_adj - (padding * 2.0 * final_scale);
+
                 let inner_tx = if is_on {
-                    // ON state: thumb is on the right, text on the left
-                    tx + (self.padding * final_scale) + (track_w_internal - text_w) / 2.0
+                    tx + (padding * final_scale) + (track_w_internal - text_w) / 2.0
                 } else {
-                    // OFF state: thumb is on the left, text on the right
-                    tx + (self.padding * final_scale) + thumb_w_adj + (track_w_internal - text_w) / 2.0
+                    tx + (padding * final_scale) + thumb_w_adj + (track_w_internal - text_w) / 2.0
                 };
                 let inner_ty = ty + (base_h - text_h) / 2.0;
 
-                // Adjust opacity based on animation progress to avoid flickering
                 let mut t_color = self.inner_text_color;
                 let opacity = if is_on { (final_pos - 0.5) * 2.0 } else { (0.5 - final_pos) * 2.0 };
-                t_color.a *= opacity.clamp(0.0, 1.0) * self.opacity;
+                t_color.a *= opacity.clamp(0.0, 1.0) * self.style.opacity;
 
                 if t_color.a > 0.05 {
                     self.ui.draws.push(DrawCommand::Text(TextDraw {
@@ -484,23 +523,32 @@ impl<'u, 'a, 'b> ToggleBuilder<'u, 'a, 'b> {
         }
 
         // 7. Draw Thumb
-        let thumb_h_adj = base_h - (self.padding * 2.0 * final_scale);
+        let thumb_h_adj = base_h - (padding * 2.0 * final_scale);
         let thumb_w_adj = self.thumb_width.map(|w| w * final_scale).unwrap_or(thumb_h_adj);
-        let move_range = base_w - thumb_w_adj - (self.padding * 2.0 * final_scale);
-        let thumb_x = tx + (self.padding * final_scale) + (final_pos * move_range);
-        let thumb_y = ty + (self.padding * final_scale);
+        let move_range = base_w - thumb_w_adj - (padding * 2.0 * final_scale);
+        let thumb_x = tx + (padding * final_scale) + (final_pos * move_range);
+        let thumb_y = ty + (padding * final_scale);
 
-        let t_radius = self.thumb_radius.map(|mut r| { for i in 0..4 { r[i] *= final_scale; } r }).unwrap_or_else(|| {
+        let t_radius = self.thumb_radius.map(|mut r| {
+            for i in 0..4 {
+                r[i] *= final_scale;
+            }
+            r
+        }).unwrap_or_else(|| {
             let r = thumb_h_adj / 2.0;
-            if self.is_pill { [r; 4] } else { 
-                let tr = self.radius[0] * final_scale;
+            if self.is_pill {
+                [r; 4]
+            } else {
+                let tr = self.style.radius[0] * final_scale;
                 if tr < r { [tr; 4] } else { [r; 4] }
             }
         });
 
         let mut t_color = self.thumb_color;
-        t_color.a *= self.opacity;
-        if self.disabled { t_color.a *= 0.8; }
+        t_color.a *= self.style.opacity;
+        if self.disabled {
+            t_color.a *= 0.8;
+        }
 
         self.ui.draws.push(DrawCommand::Rect(RectDraw {
             instance: RectInstance {
@@ -509,27 +557,27 @@ impl<'u, 'a, 'b> ToggleBuilder<'u, 'a, 'b> {
                 color: t_color.to_array(),
                 radius: t_radius,
                 ..Default::default()
-            }
+            },
         }));
 
         // 8. Draw External Label (Color Transition)
         if let Some(label_text) = &self.label {
-            let lx = if let LabelSide::Left = self.label_side { x } else { toggle_x + self.width + self.label_gap };
+            let lx = if let LabelSide::Left = self.label_side { x } else { toggle_x + width + self.label_gap };
             let ly = y + (total_h - label_h) / 2.0;
-            
-            let mut l_color = self.label_color;
+
+            let mut l_color = self.text_style.color;
             if let Some(active_c) = self.active_label_color {
                 if final_pos > 0.5 {
                     l_color = active_c;
                 }
             }
-            l_color.a *= self.opacity;
+            l_color.a *= self.style.opacity;
 
             self.ui.draws.push(DrawCommand::Text(TextDraw {
                 text: label_text.clone(),
                 pos: [lx, ly],
                 options: zenthra_text::prelude::TextOptions::new()
-                    .font_size(self.label_size)
+                    .font_size(self.text_style.font_size)
                     .color(l_color),
                 clip: [0.0, 0.0, 9999.0, 9999.0],
             }));
@@ -550,6 +598,63 @@ impl<'u, 'a, 'b> ToggleBuilder<'u, 'a, 'b> {
             hovered: is_hovered,
             pressed: is_hovered && self.ui.mouse_down,
             submitted: false,
+            changed: clicked,
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::collections::HashMap;
+
+    #[test]
+    fn test_toggle_box_styling_and_label() {
+        let mut scroll_state = HashMap::new();
+        let mut cursor_state = HashMap::new();
+        let mut interaction_state = HashMap::new();
+        let layout_cache = HashMap::new();
+        let mut next_layout_cache = HashMap::new();
+        let screen_layout_cache = HashMap::new();
+        let mut next_screen_layout_cache = HashMap::new();
+        let widget_window_map = HashMap::new();
+        let mut next_widget_window_map = HashMap::new();
+        let image_sizes = HashMap::new();
+
+        let mut active = false;
+
+        let mut ui = Ui::new(
+            800, 600, 1.0, None, Vec::new(), None,
+            (0.0, 0.0), false,
+            &mut scroll_state, &mut cursor_state, &mut interaction_state,
+            None, None, false, false, 0.0,
+            &layout_cache, &mut next_layout_cache,
+            &screen_layout_cache, &mut next_screen_layout_cache,
+            &widget_window_map, &mut next_widget_window_map,
+            &image_sizes,
+        );
+
+        ui.toggle(&mut active, "Airplane Mode")
+            .width(52.0)
+            .height(26.0)
+            .padding(4.0)
+            .shadow(Color::BLACK, 0.0, 2.0, 6.0)
+            .shadow_opacity(0.4)
+            .show();
+
+        // 1 RectDraw for Track, 1 RectDraw for Thumb, 1 TextDraw for Label
+        assert_eq!(ui.draws.len(), 3);
+        if let DrawCommand::Rect(track) = &ui.draws[0] {
+            assert_eq!(track.instance.size, [52.0, 26.0]);
+            assert_eq!(track.instance.shadow_color, [0.0, 0.0, 0.0, 0.4]);
+        } else {
+            panic!("Expected RectDraw for track");
+        }
+
+        if let DrawCommand::Rect(thumb) = &ui.draws[1] {
+            assert_eq!(thumb.instance.size, [18.0, 18.0]); // 26 - 4*2 = 18
+        } else {
+            panic!("Expected RectDraw for thumb");
         }
     }
 }

@@ -93,11 +93,12 @@ fn vs_main(
 }
 
 fn sdf_rounded_box(p: vec2<f32>, b: vec2<f32>, r: vec4<f32>) -> f32 {
-    let corner = select(
+    var corner = select(
         select(r.w, r.z, p.x > 0.0),
         select(r.x, r.y, p.x > 0.0),
         p.y > 0.0
     );
+    corner = min(corner, min(b.x, b.y));
     let q = abs(p) - b + corner;
     return length(max(q, vec2<f32>(0.0))) + min(max(q.x, q.y), 0.0) - corner;
 }

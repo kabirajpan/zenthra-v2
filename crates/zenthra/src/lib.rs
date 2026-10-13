@@ -3,8 +3,8 @@ pub mod app;
 // Re-export everything the user needs
 pub use app::App;
 pub use zenthra_core::{
-    Color, EdgeInsets, Event, Id, Point, Rect, RenderMode, Response, Role, Size, Align, BorderAlignment,
-    ImageSource, ObjectFit, BackdropFilter, Filter, style, Placement, PopoverAlign, GradientDirection,
+    Color, EdgeInsets, Event, Id, Point, Rect, RenderMode, Response, Role, Size, Align, Border, BorderAlignment,
+    BoxStyle, Styleable, ImageSource, ObjectFit, BackdropFilter, Filter, style, Placement, PopoverAlign, GradientDirection,
     Gradient, Background, ColorStop, Direction, IntoStops, IntoAnchor, IntoMeshPoints,
 };
 pub use zenthra_widgets::container::{Direction as LayoutDirection, Wrap};
@@ -13,10 +13,10 @@ pub use zenthra_widgets::{
     Ui, ButtonBuilder, ContainerBuilder, InputBuilder, SliderBuilder, TextBuilder,
     TextAreaBuilder, FloatingWindowBuilder, ImageBuilder, CardBuilder, PanelBuilder,
     StackBuilder, ProgressBarBuilder, CheckboxBuilder, ToggleBuilder, RadioBuilder, DropdownBuilder,
-    MenuBarBuilder, MenuBuilder, SubMenuBuilder, MenuItemBuilder, PopoverBuilder, icons,
+    MenuBarBuilder, MenuBuilder, MenuItemBuilder, PopoverBuilder, DragValueBuilder, NumericValue, icons,
 };
 pub use zenthra_platform::app::WindowAction;
-pub use zenthra_platform::event::PlatformEvent;
+pub use zenthra_platform::event::{PlatformEvent, KeyCode};
 pub use zenthra_platform as platform;
 pub use zenthra_state::{
     ArcSignal, Computed, Effect, Signal, Store, batch, clear_context, has_context, on_state_change,
@@ -27,8 +27,8 @@ pub use zenthra_state as state;
 pub mod prelude {
     pub use crate::App;
     pub use zenthra_core::{
-        Color, EdgeInsets, RenderMode, Response, Role, Align, BorderAlignment, ImageSource, ObjectFit,
-        BackdropFilter, Filter, style, Placement, PopoverAlign, GradientDirection,
+        Color, EdgeInsets, RenderMode, Response, Role, Align, Border, BorderAlignment, BoxStyle, Styleable,
+        ImageSource, ObjectFit, BackdropFilter, Filter, style, Placement, PopoverAlign, GradientDirection,
         Gradient, Background, ColorStop, Direction, IntoStops, IntoAnchor, IntoMeshPoints,
     };
     pub use zenthra_widgets::container::{Direction as LayoutDirection, Wrap};
@@ -37,10 +37,10 @@ pub mod prelude {
         Ui, ButtonBuilder, ContainerBuilder, InputBuilder, SliderBuilder, TextBuilder,
         TextAreaBuilder, FloatingWindowBuilder, ImageBuilder, CardBuilder, PanelBuilder,
         StackBuilder, ProgressBarBuilder, CheckboxBuilder, ToggleBuilder, RadioBuilder, DropdownBuilder,
-        MenuBarBuilder, MenuBuilder, SubMenuBuilder, MenuItemBuilder, PopoverBuilder, icons,
+        MenuBarBuilder, MenuBuilder, MenuItemBuilder, PopoverBuilder, DragValueBuilder, NumericValue, icons,
     };
     pub use zenthra_platform::app::WindowAction;
-    pub use zenthra_platform::event::PlatformEvent;
+    pub use zenthra_platform::event::{PlatformEvent, KeyCode};
     pub use zenthra_platform as platform;
     pub use zenthra_state::{
         ArcSignal, Computed, Effect, Signal, Store, batch, clear_context, has_context, provide_context,

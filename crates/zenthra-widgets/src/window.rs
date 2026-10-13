@@ -90,8 +90,8 @@ impl<'u, 'a, 'b> FloatingWindowBuilder<'u, 'a, 'b> {
         self
     }
 
-    pub fn bg(mut self, bg: Color) -> Self {
-        self.bg = bg;
+    pub fn bg(mut self, bg: impl Into<Option<Color>>) -> Self {
+        self.bg = bg.into().unwrap_or(Color::TRANSPARENT);
         self
     }
 
@@ -105,9 +105,17 @@ impl<'u, 'a, 'b> FloatingWindowBuilder<'u, 'a, 'b> {
         self
     }
 
-    pub fn border(mut self, border_color: Color, border_width: f32) -> Self {
-        self.border_color = border_color;
-        self.border_width = border_width;
+    pub fn border(mut self, border: impl Into<zenthra_core::Border>) -> Self {
+        match border.into() {
+            zenthra_core::Border::None => {
+                self.border_color = Color::TRANSPARENT;
+                self.border_width = 0.0;
+            }
+            zenthra_core::Border::Solid(c, w) => {
+                self.border_color = c;
+                self.border_width = w;
+            }
+        }
         self
     }
 
@@ -142,7 +150,7 @@ impl<'u, 'a, 'b> FloatingWindowBuilder<'u, 'a, 'b> {
         let id = self.id;
         let z_key = Id::from_u64((id.raw() << 8) | 4);
         let modal_key = Id::from_u64((id.raw() << 8) | 5);
-        let overlay_key = Id::from_u64((id.raw() << 8) | 99);
+        let overlay_key = crate::ui::overlay_key(id);
         let opened_key = Id::from_u64((id.raw() << 8) | 6);
 
         if !*self.is_open {
@@ -150,7 +158,7 @@ impl<'u, 'a, 'b> FloatingWindowBuilder<'u, 'a, 'b> {
             self.ui.interaction_state.remove(&modal_key);
             self.ui.interaction_state.remove(&overlay_key);
             self.ui.interaction_state.remove(&opened_key);
-            return Response { clicked: false, hovered: false, pressed: false, submitted: false };
+            return Response { clicked: false, hovered: false, pressed: false, submitted: false, changed: false };
         }
 
         let drag_id = Id::from_u64((id.raw() << 8) | 1);
@@ -194,7 +202,7 @@ impl<'u, 'a, 'b> FloatingWindowBuilder<'u, 'a, 'b> {
             self.ui.interaction_state.remove(&overlay_key);
             self.ui.interaction_state.remove(&opened_key);
             self.ui.needs_redraw = true;
-            return Response { clicked: true, hovered: false, pressed: false, submitted: false };
+            return Response { clicked: true, hovered: false, pressed: false, submitted: false, changed: false };
         }
 
         // Active focus z-order promotion logic & click consumption
@@ -262,7 +270,7 @@ impl<'u, 'a, 'b> FloatingWindowBuilder<'u, 'a, 'b> {
                 .width(width)
                 .height(height)
                 .bg(bg)
-                .border(border_color, border_width)
+                .border((border_color, border_width))
                 .radius_all(radius)
                 .shadow(shadow_color, shadow_offset[0], shadow_offset[1], shadow_blur)
                 .shadow_opacity(shadow_opacity)
@@ -276,7 +284,7 @@ impl<'u, 'a, 'b> FloatingWindowBuilder<'u, 'a, 'b> {
             container.show(|ui| {
                     let mut close_clicked = false;
                     let mut header_c = ui.container()
-                        .full_width()
+                        .fill_x()
                         .height(header_height)
                         .bg(header_bg)
                         .padding_x(15.0)
@@ -299,10 +307,10 @@ impl<'u, 'a, 'b> FloatingWindowBuilder<'u, 'a, 'b> {
                                 if ui.button("×")
                                     .bg(Color::TRANSPARENT)
                                     .hover_bg(Color::rgba(1.0, 1.0, 1.0, 0.1))
-                                    .text_color(header_text_color)
+                                    .color(header_text_color)
                                     .padding(4.0, 8.0, 4.0, 8.0)
                                     .radius_all(4.0)
-                                    .size(16.0)
+                                    .font_size(16.0)
                                     .show()
                                     .clicked 
                                 {
@@ -349,7 +357,7 @@ impl<'u, 'a, 'b> FloatingWindowBuilder<'u, 'a, 'b> {
 
                     // --- Content ---
                     ui.container()
-                        .full_width()
+                        .fill_x()
                         .fill_y()
                         .padding_all(15.0)
                         .show(content);
@@ -401,6 +409,7 @@ impl<'u, 'a, 'b> FloatingWindowBuilder<'u, 'a, 'b> {
             hovered: is_hovered,
             pressed: is_dragging,
             submitted: false,
+            changed: false,
         }
     }
 }

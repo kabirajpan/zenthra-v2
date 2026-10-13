@@ -29,6 +29,10 @@ pub struct TextOptions {
     pub clip_rect: Option<[f32; 4]>,
     pub scale_factor: f32,
     pub ellipsis: bool,
+    pub underline: bool,
+    pub underline_color: Option<Color>,
+    pub strikethrough: bool,
+    pub strikethrough_color: Option<Color>,
 }
 
 
@@ -63,6 +67,10 @@ impl Default for TextOptions {
             clip_rect: None,
             scale_factor: 1.0,
             ellipsis: false,
+            underline: false,
+            underline_color: None,
+            strikethrough: false,
+            strikethrough_color: None,
         }
     }
 }
@@ -158,6 +166,28 @@ impl TextOptions {
 
     pub fn ellipsis(mut self, enabled: bool) -> Self {
         self.ellipsis = enabled;
+        self
+    }
+
+    pub fn underline(mut self, underline: bool) -> Self {
+        self.underline = underline;
+        self
+    }
+
+    pub fn underline_color(mut self, color: Color) -> Self {
+        self.underline = true;
+        self.underline_color = Some(color);
+        self
+    }
+
+    pub fn strikethrough(mut self, strikethrough: bool) -> Self {
+        self.strikethrough = strikethrough;
+        self
+    }
+
+    pub fn strikethrough_color(mut self, color: Color) -> Self {
+        self.strikethrough = true;
+        self.strikethrough_color = Some(color);
         self
     }
 
@@ -326,6 +356,202 @@ impl From<HorizontalAlignment> for Align {
             HorizontalAlignment::Center => Align::Center,
             HorizontalAlignment::Right => Align::Right,
             HorizontalAlignment::Justified => Align::Justified,
+        }
+    }
+}
+
+/// Standardized, reusable typography styling model across all widgets in Zenthra.
+#[derive(Debug, Clone, PartialEq)]
+pub struct TextStyle {
+    pub font_size: f32,
+    pub color: Color,
+    pub font_family: Option<String>,
+    pub font_weight: FontWeight,
+    pub font_style: FontStyle,
+    pub line_height: f32,
+    pub wrap: TextWrap,
+    pub align: Option<HorizontalAlignment>,
+    pub valign: Option<VerticalAlignment>,
+    pub highlight_color: Option<Color>,
+    pub ellipsis: bool,
+    pub underline: bool,
+    pub underline_color: Option<Color>,
+    pub strikethrough: bool,
+    pub strikethrough_color: Option<Color>,
+}
+
+impl Default for TextStyle {
+    fn default() -> Self {
+        Self {
+            font_size: 14.0,
+            color: Color::WHITE,
+            font_family: None,
+            font_weight: FontWeight::Regular,
+            font_style: FontStyle::Normal,
+            line_height: 1.2,
+            wrap: TextWrap::None,
+            align: None,
+            valign: None,
+            highlight_color: None,
+            ellipsis: false,
+            underline: false,
+            underline_color: None,
+            strikethrough: false,
+            strikethrough_color: None,
+        }
+    }
+}
+
+impl TextStyle {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    #[inline]
+    pub fn font_size(mut self, size: f32) -> Self {
+        self.font_size = size;
+        self
+    }
+
+    #[inline]
+    pub fn color(mut self, color: Color) -> Self {
+        self.color = color;
+        self
+    }
+
+    #[inline]
+    pub fn font_family(mut self, family: impl Into<String>) -> Self {
+        self.font_family = Some(family.into());
+        self
+    }
+
+    #[inline]
+    pub fn font_weight(mut self, weight: impl Into<FontWeight>) -> Self {
+        self.font_weight = weight.into();
+        self
+    }
+
+    #[inline]
+    pub fn bold(mut self) -> Self {
+        self.font_weight = FontWeight::Bold;
+        self
+    }
+
+    #[inline]
+    pub fn bold_when(mut self, bold: bool) -> Self {
+        if bold {
+            self.font_weight = FontWeight::Bold;
+        }
+        self
+    }
+
+    #[inline]
+    pub fn font_style(mut self, style: FontStyle) -> Self {
+        self.font_style = style;
+        self
+    }
+
+    #[inline]
+    pub fn italic(mut self) -> Self {
+        self.font_style = FontStyle::Italic;
+        self
+    }
+
+    #[inline]
+    pub fn italic_when(mut self, italic: bool) -> Self {
+        if italic {
+            self.font_style = FontStyle::Italic;
+        }
+        self
+    }
+
+    #[inline]
+    pub fn line_height(mut self, lh: f32) -> Self {
+        self.line_height = lh;
+        self
+    }
+
+    #[inline]
+    pub fn wrap(mut self, wrap: impl Into<TextWrap>) -> Self {
+        self.wrap = wrap.into();
+        self
+    }
+
+    #[inline]
+    pub fn align(mut self, align: HorizontalAlignment) -> Self {
+        self.align = Some(align);
+        self
+    }
+
+    #[inline]
+    pub fn valign(mut self, valign: VerticalAlignment) -> Self {
+        self.valign = Some(valign);
+        self
+    }
+
+    #[inline]
+    pub fn highlight(mut self, color: Color) -> Self {
+        self.highlight_color = Some(color);
+        self
+    }
+
+    #[inline]
+    pub fn ellipsis(mut self, ellipsis: bool) -> Self {
+        self.ellipsis = ellipsis;
+        self
+    }
+
+    #[inline]
+    pub fn underline(mut self, underline: bool) -> Self {
+        self.underline = underline;
+        self
+    }
+
+    #[inline]
+    pub fn underline_color(mut self, color: Color) -> Self {
+        self.underline = true;
+        self.underline_color = Some(color);
+        self
+    }
+
+    #[inline]
+    pub fn strikethrough(mut self, strikethrough: bool) -> Self {
+        self.strikethrough = strikethrough;
+        self
+    }
+
+    #[inline]
+    pub fn strikethrough_color(mut self, color: Color) -> Self {
+        self.strikethrough = true;
+        self.strikethrough_color = Some(color);
+        self
+    }
+
+    /// Converts this `TextStyle` into `TextOptions` for rendering at `(x, y)` with scale factors applied.
+    pub fn to_options(&self, x: f32, y: f32, scale_factor: f32, font_scale: f32) -> TextOptions {
+        TextOptions {
+            x,
+            y,
+            font_size: self.font_size * font_scale,
+            color: self.color,
+            font_family: self.font_family.clone(),
+            font_weight: self.font_weight,
+            font_style: self.font_style,
+            highlight_color: self.highlight_color,
+            max_width: None,
+            max_height: None,
+            line_height: self.line_height,
+            wrap: self.wrap,
+            align: self.align,
+            valign: self.valign,
+            min_width: None,
+            clip_rect: None,
+            scale_factor,
+            ellipsis: self.ellipsis,
+            underline: self.underline,
+            underline_color: self.underline_color,
+            strikethrough: self.strikethrough,
+            strikethrough_color: self.strikethrough_color,
         }
     }
 }

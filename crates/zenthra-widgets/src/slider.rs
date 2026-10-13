@@ -136,6 +136,16 @@ impl<'u, 'a, 'b> SliderBuilder<'u, 'a, 'b> {
         self
     }
 
+    pub fn fill_x(mut self) -> Self {
+        self.width = Some(self.ui.available_width);
+        self
+    }
+
+    pub fn fill_y(mut self) -> Self {
+        self.height = Some((self.ui.max_y - self.ui.cursor_y).max(20.0));
+        self
+    }
+
     pub fn radius(mut self, tl: f32, tr: f32, br: f32, bl: f32) -> Self {
         self.radius = [tl, tr, br, bl];
         self
@@ -190,8 +200,8 @@ impl<'u, 'a, 'b> SliderBuilder<'u, 'a, 'b> {
         self
     }
 
-    pub fn bg(mut self, color: Color) -> Self {
-        self.bg = Some(color);
+    pub fn bg(mut self, bg: impl Into<Option<Color>>) -> Self {
+        self.bg = bg.into();
         self
     }
 
@@ -200,9 +210,17 @@ impl<'u, 'a, 'b> SliderBuilder<'u, 'a, 'b> {
         self
     }
 
-    pub fn border(mut self, color: Color, width: f32) -> Self {
-        self.border_color = Some(color);
-        self.border_width = width;
+    pub fn border(mut self, border: impl Into<zenthra_core::Border>) -> Self {
+        match border.into() {
+            zenthra_core::Border::None => {
+                self.border_color = None;
+                self.border_width = 0.0;
+            }
+            zenthra_core::Border::Solid(c, w) => {
+                self.border_color = Some(c);
+                self.border_width = w;
+            }
+        }
         self
     }
 
@@ -225,6 +243,23 @@ impl<'u, 'a, 'b> SliderBuilder<'u, 'a, 'b> {
 
     pub fn padding(mut self, t: f32, r: f32, b: f32, l: f32) -> Self {
         self.padding = EdgeInsets { top: t, right: r, bottom: b, left: l };
+        self
+    }
+
+    pub fn padding_all(mut self, p: f32) -> Self {
+        self.padding = EdgeInsets::all(p);
+        self
+    }
+
+    pub fn padding_x(mut self, x: f32) -> Self {
+        self.padding.left = x;
+        self.padding.right = x;
+        self
+    }
+
+    pub fn padding_y(mut self, y: f32) -> Self {
+        self.padding.top = y;
+        self.padding.bottom = y;
         self
     }
 
@@ -359,6 +394,7 @@ impl<'u, 'a, 'b> SliderBuilder<'u, 'a, 'b> {
 
         let is_hovered = self.ui.is_hovered(self.id, actual_ox, actual_oy, actual_w, actual_h);
         let mut clicked = false;
+        let mut changed = false;
 
         self.ui.dispatch_event(self.id, crate::ui::WidgetEvent::Hover(is_hovered));
 
@@ -372,7 +408,7 @@ impl<'u, 'a, 'b> SliderBuilder<'u, 'a, 'b> {
             self.ui.cursor_icon = crate::text::CursorIcon::Pointer;
         }
 
-        if (self.ui.clicked && is_hovered) || is_active {
+        if (self.ui.clicked && is_hovered && self.ui.can_interact(self.id)) || is_active {
             if track_w_hit > 0.0 {
                 let relative_mouse_x = self.ui.mouse_x - track_x_start_hit;
                 let new_percent = (relative_mouse_x / track_w_hit).clamp(0.0, 1.0);
@@ -382,8 +418,9 @@ impl<'u, 'a, 'b> SliderBuilder<'u, 'a, 'b> {
                     new_val = (new_val / s).round() * s;
                 }
                 
-                if (*self.value - new_val).abs() > 0.0001 {
+                if (*self.value - new_val).abs() > 0.001 {
                     *self.value = new_val;
+                    changed = true;
                     self.ui.needs_redraw = true;
                     self.ui.dispatch_event(self.id, crate::ui::WidgetEvent::Change(crate::ui::EventValue::Float(new_val)));
                 }
@@ -391,6 +428,7 @@ impl<'u, 'a, 'b> SliderBuilder<'u, 'a, 'b> {
 
             if self.ui.clicked && is_hovered {
                 clicked = true;
+                self.ui.claim_active(self.id);
                 self.ui.active_drag = Some(crate::ui::ScrollDrag {
                     id: self.id,
                     start_mouse: self.ui.mouse_x,
@@ -402,6 +440,9 @@ impl<'u, 'a, 'b> SliderBuilder<'u, 'a, 'b> {
         
         if is_active && !self.ui.mouse_down {
             self.ui.active_drag = None;
+            if self.ui.is_active(self.id) {
+                self.ui.release_active();
+            }
         }
 
         // --- Rendering ---
@@ -410,12 +451,12 @@ impl<'u, 'a, 'b> SliderBuilder<'u, 'a, 'b> {
         let track_w = w - self.padding.horizontal();
 
         // 0. Background
-        if let Some(bg) = self.bg {
+        if self.bg.is_some() || self.bg_gradient.is_some() || self.border_color.is_some() || self.shadow_color.is_some() {
             let (bg_c1, bg_c2, bg_params) = if let Some((s, e, d)) = self.bg_gradient {
                 let (t, a) = d.to_type_and_angle();
                 (s.to_array(), e.to_array(), [t, a, 0.0, 0.0])
             } else {
-                (bg.to_array(), [0.0; 4], [0.0; 4])
+                (self.bg.unwrap_or(Color::TRANSPARENT).to_array(), [0.0; 4], [0.0; 4])
             };
 
             self.ui.draws.push(DrawCommand::Rect(RectDraw {
@@ -425,7 +466,12 @@ impl<'u, 'a, 'b> SliderBuilder<'u, 'a, 'b> {
                     color: bg_c1,
                     color2: bg_c2,
                     gradient_params: bg_params,
-                    radius: self.radius,
+                    radius: [
+                        self.radius[3],
+                        self.radius[2],
+                        self.radius[1],
+                        self.radius[0],
+                    ],
                     border_width: self.border_width,
                     border_color: self.border_color.map(|c| c.to_array()).unwrap_or([0.0; 4]),
                     shadow_color: self.shadow_color.map(|mut c| { c.a *= self.shadow_opacity; c.to_array() }).unwrap_or([0.0; 4]),
@@ -453,7 +499,12 @@ impl<'u, 'a, 'b> SliderBuilder<'u, 'a, 'b> {
                 color: track_c1,
                 color2: track_c2,
                 gradient_params: track_params,
-                radius: self.track_radius,
+                radius: [
+                    self.track_radius[3],
+                    self.track_radius[2],
+                    self.track_radius[1],
+                    self.track_radius[0],
+                ],
                 shadow_color: self.track_shadow_color.map(|mut c| { c.a *= self.track_shadow_opacity; c.to_array() }).unwrap_or([0.0; 4]),
                 shadow_offset: self.track_shadow_offset,
                 shadow_blur: self.track_shadow_blur,
@@ -488,7 +539,12 @@ impl<'u, 'a, 'b> SliderBuilder<'u, 'a, 'b> {
                 color: thumb_c1,
                 color2: thumb_c2,
                 gradient_params: thumb_params,
-                radius: self.thumb_radius,
+                radius: [
+                    self.thumb_radius[3],
+                    self.thumb_radius[2],
+                    self.thumb_radius[1],
+                    self.thumb_radius[0],
+                ],
                 brightness,
                 shadow_color: self.thumb_shadow_color.map(|mut c| { c.a *= self.thumb_shadow_opacity; c.to_array() }).unwrap_or([0.0; 4]),
                 shadow_offset: self.thumb_shadow_offset,
@@ -514,6 +570,106 @@ impl<'u, 'a, 'b> SliderBuilder<'u, 'a, 'b> {
             hovered: is_hovered,
             pressed: is_active || (self.ui.clicked && is_hovered),
             submitted: false,
+            changed,
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::collections::HashMap;
+
+    #[test]
+    fn test_slider_styling_and_decorations() {
+        let mut scroll_state = HashMap::new();
+        let mut cursor_state = HashMap::new();
+        let mut interaction_state = HashMap::new();
+        let layout_cache = HashMap::new();
+        let mut next_layout_cache = HashMap::new();
+        let screen_layout_cache = HashMap::new();
+        let mut next_screen_layout_cache = HashMap::new();
+        let widget_window_map = HashMap::new();
+        let mut next_widget_window_map = HashMap::new();
+        let image_sizes = HashMap::new();
+
+        let mut val = 0.5;
+
+        // 1. Default Slider without container decoration: 2 draws (track, thumb)
+        {
+            let mut ui = Ui::new(
+                800, 600, 1.0, None, Vec::new(), None,
+                (0.0, 0.0), false,
+                &mut scroll_state, &mut cursor_state, &mut interaction_state,
+                None, None, false, false, 0.0,
+                &layout_cache, &mut next_layout_cache,
+                &screen_layout_cache, &mut next_screen_layout_cache,
+                &widget_window_map, &mut next_widget_window_map,
+                &image_sizes,
+            );
+
+            ui.slider(&mut val, "test_slider").width(200.0).show();
+            assert_eq!(ui.draws.len(), 2, "Default slider should emit Track and Thumb");
+        }
+
+        // 2. Decorated Slider with border & shadow (bg=None): 3 draws (bg/border, track, thumb)
+        {
+            let mut ui = Ui::new(
+                800, 600, 1.0, None, Vec::new(), None,
+                (0.0, 0.0), false,
+                &mut scroll_state, &mut cursor_state, &mut interaction_state,
+                None, None, false, false, 0.0,
+                &layout_cache, &mut next_layout_cache,
+                &screen_layout_cache, &mut next_screen_layout_cache,
+                &widget_window_map, &mut next_widget_window_map,
+                &image_sizes,
+            );
+
+            ui.slider(&mut val, "test_slider")
+                .width(200.0)
+                .border((Color::WHITE, 1.5))
+                .radius_all(6.0)
+                .shadow(Color::BLACK, 0.0, 2.0, 4.0)
+                .shadow_opacity(0.4)
+                .show();
+
+            assert_eq!(ui.draws.len(), 3, "Decorated slider must emit Background/Border quad");
+            if let DrawCommand::Rect(rd) = &ui.draws[0] {
+                assert_eq!(rd.instance.color, Color::TRANSPARENT.to_array());
+                assert_eq!(rd.instance.border_width, 1.5);
+                assert_eq!(rd.instance.border_color, Color::WHITE.to_array());
+                assert_eq!(rd.instance.radius, [6.0, 6.0, 6.0, 6.0]);
+                assert_eq!(rd.instance.shadow_color, [0.0, 0.0, 0.0, 0.4]);
+            } else {
+                panic!("Expected RectDraw for slider background quad");
+            }
+        }
+
+        // 3. Decorated Slider with solid background
+        {
+            let mut ui = Ui::new(
+                800, 600, 1.0, None, Vec::new(), None,
+                (0.0, 0.0), false,
+                &mut scroll_state, &mut cursor_state, &mut interaction_state,
+                None, None, false, false, 0.0,
+                &layout_cache, &mut next_layout_cache,
+                &screen_layout_cache, &mut next_screen_layout_cache,
+                &widget_window_map, &mut next_widget_window_map,
+                &image_sizes,
+            );
+
+            ui.slider(&mut val, "test_slider")
+                .width(200.0)
+                .bg(Color::rgb(0.1, 0.1, 0.15))
+                .radius_all(8.0)
+                .show();
+
+            assert_eq!(ui.draws.len(), 3);
+            if let DrawCommand::Rect(rd) = &ui.draws[0] {
+                assert_eq!(rd.instance.color, Color::rgb(0.1, 0.1, 0.15).to_array());
+            } else {
+                panic!("Expected RectDraw for solid slider background");
+            }
         }
     }
 }

@@ -22,18 +22,28 @@ The `Input` widget is a single-line text entry field designed for forms, search 
 | Method | Description |
 |--------|-------------|
 | `.width(f32)` | Sets a fixed width. |
-| `.min_width(f32)` | Sets a minimum width (Default is `200.0`). |
-| `.full_width()` | Expands the input to fill all available horizontal space. |
+| `.min_width(f32)` | Sets a minimum width. |
+| `.full_width()` / `.fill_x()` | Expands the input to fill all available horizontal space. |
 | `.padding(t, r, b, l)` | Spacing outside the text area (the "box" padding). |
+| `.padding_all(f32)`, `.padding_x(f32)`, `.padding_y(f32)` | Uniform or directional padding shortcuts. |
 | `.text_padding(t, r, b, l)` | Spacing between the text and the box edge. |
 
-### Visuals
+### Visuals & Styling
 | Method | Description |
 |--------|-------------|
-| `.bg(Color)` | The background color of the input field. |
-| `.size(f32)` | The font size of the entered text. |
-| `.color(Color)` | The color of the text. |
-| `.highlight(Color)` | The color of the text background when selected. |
+| `.style(BoxStyle)` | Applies a complete, reusable `BoxStyle` theme. |
+| `.text_style(TextStyle)` | Applies a complete, reusable `TextStyle` typography theme. |
+| `.bg(...)` | Solid color or gradient background surface (`None` for transparent). |
+| `.border(...)` | Border color and width (`(Color, f32)` or `Border::Solid`). |
+| `.focus_border(...)` | Custom border displayed when the input has active keyboard focus. |
+| `.radius(...)` / `.radius_all(f32)` | Corner radii. |
+| `.shadow(...)` / `.shadow_opacity(f32)` | Elevation drop shadow. |
+| `.size(f32)` / `.font_size(f32)` | Font size of the text. |
+| `.color(Color)` / `.text_color(Color)` | Color of the text. |
+| `.bold()`, `.italic()`, `.monospace()` | Typography style shortcuts. |
+| `.font_family(...)` | Custom font family name. |
+| `.highlight(Color)` | Color of the selection highlight. |
+| `.placeholder(...)` | Placeholder hint text when buffer is empty. |
 
 ## Interaction Rules
 

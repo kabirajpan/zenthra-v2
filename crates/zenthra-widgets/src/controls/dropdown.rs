@@ -1,7 +1,7 @@
 // crates/zenthra-widgets/src/controls/dropdown.rs
 
 use crate::ui::{DrawCommand, RectDraw, TextDraw, Ui};
-use zenthra_core::{Color, Id, Rect, Response};
+use zenthra_core::{Border, Color, Id, Rect, Response};
 use zenthra_render::RectInstance;
 
 pub struct DropdownBuilder<'u, 'a, 'b, T: PartialEq + Clone + ToString> {
@@ -13,18 +13,25 @@ pub struct DropdownBuilder<'u, 'a, 'b, T: PartialEq + Clone + ToString> {
     // Layout
     width: f32,
     height: f32,
+    fill_x: bool,
+    fill_y: bool,
     radius: [f32; 4],
+    padding_x: f32,
+    font_size: f32,
 
     // Colors
     bg: Color,
     border_color: Color,
     border_width: f32,
     text_color: Color,
-    hover_bg: Color,
-    
+    hover_bg: Option<Color>,
+
     // Menu Style
     menu_bg: Color,
     menu_max_height: f32,
+    menu_border_color: Option<Color>,
+    menu_border_width: Option<f32>,
+    menu_radius: Option<[f32; 4]>,
 
     // Styling
     glow: bool,
@@ -49,16 +56,23 @@ impl<'u, 'a, 'b, T: PartialEq + Clone + ToString> DropdownBuilder<'u, 'a, 'b, T>
 
             width: 180.0,
             height: 32.0,
+            fill_x: false,
+            fill_y: false,
             radius: [4.0; 4],
+            padding_x: 10.0,
+            font_size: 14.0,
 
             bg: Color::rgb(0.12, 0.12, 0.14), // Solid default
             border_color: Color::rgb(0.25, 0.25, 0.3),
             border_width: 1.0,
             text_color: Color::WHITE,
-            hover_bg: Color::rgb(0.18, 0.18, 0.22),
+            hover_bg: Some(Color::rgb(0.18, 0.18, 0.22)),
 
             menu_bg: Color::rgb(0.1, 0.1, 0.12), // Solid default
             menu_max_height: 250.0,
+            menu_border_color: None,
+            menu_border_width: None,
+            menu_radius: None,
 
             glow: false,
             shadow_enabled: false, // OFF BY DEFAULT
@@ -90,30 +104,62 @@ impl<'u, 'a, 'b, T: PartialEq + Clone + ToString> DropdownBuilder<'u, 'a, 'b, T>
         self
     }
 
-    pub fn bg(mut self, color: Color) -> Self {
-        self.bg = color;
+    pub fn bg(mut self, bg: impl Into<Option<Color>>) -> Self {
+        self.bg = bg.into().unwrap_or(Color::TRANSPARENT);
         self
     }
 
-    pub fn border(mut self, color: Color, width: f32) -> Self {
-        self.border_color = color;
-        self.border_width = width;
+    pub fn border(mut self, border: impl Into<Border>) -> Self {
+        match border.into() {
+            Border::None => {
+                self.border_color = Color::TRANSPARENT;
+                self.border_width = 0.0;
+            }
+            Border::Solid(c, w) => {
+                self.border_color = c;
+                self.border_width = w;
+            }
+        }
         self
     }
 
     pub fn width(mut self, width: f32) -> Self {
         self.width = width;
+        self.fill_x = false;
+        self
+    }
+
+    pub fn fill_x(mut self) -> Self {
+        self.fill_x = true;
         self
     }
 
     pub fn height(mut self, height: f32) -> Self {
         self.height = height;
+        self.fill_y = false;
+        self
+    }
+
+    pub fn fill_y(mut self) -> Self {
+        self.fill_y = true;
         self
     }
 
     pub fn size(mut self, w: f32, h: f32) -> Self {
         self.width = w;
         self.height = h;
+        self.fill_x = false;
+        self.fill_y = false;
+        self
+    }
+
+    pub fn font_size(mut self, size: f32) -> Self {
+        self.font_size = size;
+        self
+    }
+
+    pub fn padding_x(mut self, px: f32) -> Self {
+        self.padding_x = px;
         self
     }
 
@@ -127,13 +173,42 @@ impl<'u, 'a, 'b, T: PartialEq + Clone + ToString> DropdownBuilder<'u, 'a, 'b, T>
         self
     }
 
+    pub fn menu_border(mut self, border: impl Into<Border>) -> Self {
+        match border.into() {
+            Border::None => {
+                self.menu_border_color = Some(Color::TRANSPARENT);
+                self.menu_border_width = Some(0.0);
+            }
+            Border::Solid(c, w) => {
+                self.menu_border_color = Some(c);
+                self.menu_border_width = Some(w);
+            }
+        }
+        self
+    }
+
+    pub fn menu_radius(mut self, tl: f32, tr: f32, br: f32, bl: f32) -> Self {
+        self.menu_radius = Some([tl, tr, br, bl]);
+        self
+    }
+
+    pub fn menu_radius_all(mut self, r: f32) -> Self {
+        self.menu_radius = Some([r; 4]);
+        self
+    }
+
     pub fn text_color(mut self, color: Color) -> Self {
         self.text_color = color;
         self
     }
 
-    pub fn hover_bg(mut self, color: Color) -> Self {
-        self.hover_bg = color;
+    pub fn color(mut self, color: Color) -> Self {
+        self.text_color = color;
+        self
+    }
+
+    pub fn hover_bg(mut self, color: impl Into<Option<Color>>) -> Self {
+        self.hover_bg = color.into();
         self
     }
 
@@ -217,6 +292,17 @@ impl<'u, 'a, 'b, T: PartialEq + Clone + ToString> DropdownBuilder<'u, 'a, 'b, T>
 
     pub fn show(self) -> Response {
         let (x, y) = (self.ui.cursor_x, self.ui.cursor_y);
+        let width = if self.fill_x {
+            self.ui.available_width
+        } else {
+            self.width
+        };
+        let height = if self.fill_y {
+            (self.ui.max_y - y).max(self.height)
+        } else {
+            self.height
+        };
+
         let open_id = Id::from_u64(self.id.raw().wrapping_add(4000000));
         let mut is_open = self.ui.interaction_state.get(&open_id).map(|&v| v > 0.5).unwrap_or(false);
 
@@ -225,15 +311,16 @@ impl<'u, 'a, 'b, T: PartialEq + Clone + ToString> DropdownBuilder<'u, 'a, 'b, T>
             (
                 rect.origin.x + self.ui.offset_x,
                 rect.origin.y + self.ui.offset_y,
-                rect.size.width.max(self.width),
-                rect.size.height.max(self.height)
+                rect.size.width.max(width),
+                rect.size.height.max(height)
             )
         } else {
-            (x + self.ui.offset_x, y + self.ui.offset_y, self.width, self.height)
+            (x + self.ui.offset_x, y + self.ui.offset_y, width, height)
         };
 
         let is_hovered = self.ui.is_hovered(self.id, actual_ox, actual_oy, actual_w, actual_h);
-        
+        let mut changed = false;
+
         if self.ui.clicked && is_hovered {
             is_open = !is_open;
             self.ui.interaction_state.insert(open_id, if is_open { 1.0 } else { 0.0 });
@@ -249,29 +336,53 @@ impl<'u, 'a, 'b, T: PartialEq + Clone + ToString> DropdownBuilder<'u, 'a, 'b, T>
             self.border_color
         };
 
+        // Determine effective background
+        let effective_bg = if is_hovered {
+            self.hover_bg.unwrap_or(self.bg)
+        } else {
+            self.bg
+        };
+
+        // Header shadow
+        let (header_shadow_color, header_shadow_offset, header_shadow_blur) = if self.glow && is_hovered {
+            ([0.4, 0.7, 1.0, 0.3], [0.0, 0.0], 15.0)
+        } else if self.shadow_enabled {
+            let mut a = self.shadow_color.to_array();
+            a[3] *= self.shadow_opacity;
+            (a, self.shadow_offset, self.shadow_blur)
+        } else {
+            ([0.0, 0.0, 0.0, 0.0], [0.0, 0.0], 0.0)
+        };
+
         // 2. Draw Header
         self.ui.draws.push(DrawCommand::Rect(RectDraw {
             instance: RectInstance {
                 pos: [x, y],
-                size: [self.width, self.height],
-                color: (if is_hovered { self.hover_bg } else { self.bg }).to_array(),
-                radius: self.radius,
+                size: [width, height],
+                color: effective_bg.to_array(),
+                radius: [
+                    self.radius[3],
+                    self.radius[2],
+                    self.radius[1],
+                    self.radius[0],
+                ],
                 border_width: self.border_width,
                 border_color: border_color.to_array(),
-                // Subtle glow if enabled
-                shadow_color: if self.glow && is_hovered { [0.4, 0.7, 1.0, 0.3] } else { [0.0, 0.0, 0.0, 0.0] },
-                shadow_blur: if self.glow && is_hovered { 15.0 } else { 0.0 },
+                shadow_color: header_shadow_color,
+                shadow_offset: header_shadow_offset,
+                shadow_blur: header_shadow_blur,
                 ..Default::default()
             }
         }));
 
         // Selected Text
         let selected_text = self.selected.to_string();
+        let text_clip_w = (width - self.padding_x - 18.0).max(0.0);
         self.ui.draws.push(DrawCommand::Text(TextDraw {
             text: selected_text,
-            pos: [x + 10.0, y + (self.height - 14.0) / 2.0],
-            options: zenthra_text::prelude::TextOptions::new().font_size(14.0).color(self.text_color),
-            clip: [x, y, self.width, self.height],
+            pos: [x + self.padding_x, y + (height - self.font_size) / 2.0],
+            options: zenthra_text::prelude::TextOptions::new().font_size(self.font_size).color(self.text_color),
+            clip: [x, y, text_clip_w, height],
         }));
 
         // Chevron
@@ -282,19 +393,19 @@ impl<'u, 'a, 'b, T: PartialEq + Clone + ToString> DropdownBuilder<'u, 'a, 'b, T>
         };
         self.ui.draws.push(DrawCommand::Text(TextDraw {
             text: chevron.to_string(),
-            pos: [x + self.width - 20.0, y + (self.height - 14.0) / 2.0],
+            pos: [x + width - 20.0, y + (height - 12.0) / 2.0],
             options: zenthra_text::prelude::TextOptions::new().font_size(12.0).color(self.text_color),
-            clip: [x, y, self.width, self.height],
+            clip: [x, y, width, height],
         }));
 
         // 3. Draw Menu (Overlay)
         if is_open {
-            let item_h = 28.0;
+            let item_h = (self.font_size + 14.0).max(28.0);
             let menu_h = (self.options.len() as f32 * item_h).min(self.menu_max_height);
             let anchor_rect = Rect::new(actual_ox, actual_oy, actual_w, actual_h);
             let (menu_ox, menu_oy) = crate::controls::popover::compute_placement_pos(
                 anchor_rect,
-                self.width,
+                width,
                 menu_h,
                 self.placement,
                 zenthra_core::PopoverAlign::Start,
@@ -303,7 +414,7 @@ impl<'u, 'a, 'b, T: PartialEq + Clone + ToString> DropdownBuilder<'u, 'a, 'b, T>
                 self.ui.width,
                 self.ui.height,
             );
-            
+
             // Background catcher (to close menu)
             self.ui.overlays.push(DrawCommand::Rect(RectDraw {
                 instance: RectInstance {
@@ -313,45 +424,58 @@ impl<'u, 'a, 'b, T: PartialEq + Clone + ToString> DropdownBuilder<'u, 'a, 'b, T>
                     ..Default::default()
                 }
             }));
-            
+
             // If clicked outside the menu but on the catcher
             if self.ui.clicked && !is_hovered {
-                let menu_hovered = self.ui.mouse_in_rect(menu_ox, menu_oy, self.width, menu_h);
+                let menu_hovered = self.ui.mouse_in_rect(menu_ox, menu_oy, width, menu_h);
                 if !menu_hovered {
                     self.ui.interaction_state.insert(open_id, 0.0);
                     self.ui.needs_redraw = true;
                 }
             }
 
-            // Menu Background (Opaque)
+            let menu_r = self.menu_radius.unwrap_or(self.radius);
+            let final_menu_border_c = self.menu_border_color.unwrap_or(self.border_color);
+            let final_menu_border_w = self.menu_border_width.unwrap_or(self.border_width.max(1.0));
+
+            // Menu Background (Opaque with elevation shadow)
             self.ui.overlays.push(DrawCommand::Rect(RectDraw {
                 instance: RectInstance {
                     pos: [menu_ox, menu_oy],
-                    size: [self.width, menu_h],
+                    size: [width, menu_h],
                     color: self.menu_bg.to_array(),
-                    radius: self.radius,
-                    border_width: 1.0,
-                    border_color: self.border_color.to_array(),
+                    radius: [
+                        menu_r[3],
+                        menu_r[2],
+                        menu_r[1],
+                        menu_r[0],
+                    ],
+                    border_width: final_menu_border_w,
+                    border_color: final_menu_border_c.to_array(),
                     shadow_color: if self.shadow_enabled {
                         let mut a = self.shadow_color.to_array();
                         a[3] *= self.shadow_opacity;
                         a
-                    } else { [0.0, 0.0, 0.0, 0.0] },
+                    } else {
+                        [0.0, 0.0, 0.0, 0.35]
+                    },
                     shadow_offset: self.shadow_offset,
-                    shadow_blur: if self.shadow_enabled { self.shadow_blur } else { 0.0 },
+                    shadow_blur: if self.shadow_enabled { self.shadow_blur } else { 16.0 },
                     ..Default::default()
                 }
             }));
 
             // Items
+            let hover_color = self.hover_bg.unwrap_or(Color::rgb(0.18, 0.18, 0.22));
             for (i, opt) in self.options.iter().enumerate() {
                 let item_oy = menu_oy + (i as f32 * item_h);
-                if item_oy + item_h > menu_oy + menu_h { break; } 
-                
-                let item_hovered = self.ui.mouse_in_rect(menu_ox, item_oy, self.width, item_h);
-                
+                if item_oy + item_h > menu_oy + menu_h { break; }
+
+                let item_hovered = self.ui.mouse_in_rect(menu_ox, item_oy, width, item_h);
+
                 if item_hovered && self.ui.clicked {
                     *self.selected = opt.clone();
+                    changed = true;
                     self.ui.interaction_state.insert(open_id, 0.0);
                     self.ui.needs_redraw = true;
                 }
@@ -361,13 +485,13 @@ impl<'u, 'a, 'b, T: PartialEq + Clone + ToString> DropdownBuilder<'u, 'a, 'b, T>
                     self.ui.overlays.push(DrawCommand::Rect(RectDraw {
                         instance: RectInstance {
                             pos: [menu_ox + 2.0, item_oy + 2.0],
-                            size: [self.width - 4.0, item_h - 4.0],
-                            color: self.hover_bg.to_array(),
+                            size: [width - 4.0, item_h - 4.0],
+                            color: hover_color.to_array(),
                             radius: [
-                                self.radius[0] - 2.0,
-                                self.radius[1] - 2.0,
-                                self.radius[2] - 2.0,
-                                self.radius[3] - 2.0,
+                                (menu_r[3] - 2.0).max(0.0),
+                                (menu_r[2] - 2.0).max(0.0),
+                                (menu_r[1] - 2.0).max(0.0),
+                                (menu_r[0] - 2.0).max(0.0),
                             ],
                             ..Default::default()
                         }
@@ -377,21 +501,255 @@ impl<'u, 'a, 'b, T: PartialEq + Clone + ToString> DropdownBuilder<'u, 'a, 'b, T>
                 // Item text
                 self.ui.overlays.push(DrawCommand::Text(TextDraw {
                     text: opt.to_string(),
-                    pos: [menu_ox + 10.0, item_oy + (item_h - 14.0) / 2.0],
-                    options: zenthra_text::prelude::TextOptions::new().font_size(13.0).color(self.text_color),
-                    clip: [menu_ox, menu_oy, self.width, menu_h],
+                    pos: [menu_ox + self.padding_x, item_oy + (item_h - (self.font_size - 1.0)) / 2.0],
+                    options: zenthra_text::prelude::TextOptions::new().font_size((self.font_size - 1.0).max(11.0)).color(self.text_color),
+                    clip: [menu_ox, menu_oy, width, menu_h],
                 }));
             }
         }
 
-        self.ui.record_layout(self.id, Rect::new(x, y, self.width, self.height));
-        self.ui.advance(self.width, self.height, start_draw);
+        self.ui.record_layout(self.id, Rect::new(x, y, width, height));
+        self.ui.advance(width, height, start_draw);
 
         Response {
             clicked: false, // Dropdown handles its own clicks
             hovered: is_hovered,
             pressed: is_hovered && self.ui.mouse_down,
             submitted: false,
+            changed,
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::collections::HashMap;
+
+    fn create_test_ui<'a>(
+        scroll_state: &'a mut HashMap<Id, (f32, f32)>,
+        cursor_state: &'a mut HashMap<Id, usize>,
+        interaction_state: &'a mut HashMap<Id, f32>,
+        layout_cache: &'a HashMap<Id, (Rect, u64)>,
+        next_layout_cache: &'a mut HashMap<Id, (Rect, u64)>,
+        screen_layout_cache: &'a HashMap<Id, Rect>,
+        next_screen_layout_cache: &'a mut HashMap<Id, Rect>,
+        widget_window_map: &'a HashMap<Id, Id>,
+        next_widget_window_map: &'a mut HashMap<Id, Id>,
+        image_sizes: &'a HashMap<zenthra_core::ImageSource, (u32, u32)>,
+    ) -> Ui<'a> {
+        Ui::new(
+            800, 600, 1.0, None, Vec::new(), None,
+            (0.0, 0.0), false,
+            scroll_state, cursor_state, interaction_state,
+            None, None, false, false, 0.0,
+            layout_cache, next_layout_cache,
+            screen_layout_cache, next_screen_layout_cache,
+            widget_window_map, next_widget_window_map,
+            image_sizes,
+        )
+    }
+
+    #[test]
+    fn test_dropdown_builder_defaults() {
+        let mut scroll_state = HashMap::new();
+        let mut cursor_state = HashMap::new();
+        let mut interaction_state = HashMap::new();
+        let layout_cache = HashMap::new();
+        let mut next_layout_cache = HashMap::new();
+        let screen_layout_cache = HashMap::new();
+        let mut next_screen_layout_cache = HashMap::new();
+        let widget_window_map = HashMap::new();
+        let mut next_widget_window_map = HashMap::new();
+        let image_sizes = HashMap::new();
+
+        let mut ui = create_test_ui(
+            &mut scroll_state, &mut cursor_state, &mut interaction_state,
+            &layout_cache, &mut next_layout_cache,
+            &screen_layout_cache, &mut next_screen_layout_cache,
+            &widget_window_map, &mut next_widget_window_map,
+            &image_sizes,
+        );
+
+        let mut selected = "Option 1".to_string();
+        let options = vec!["Option 1".to_string(), "Option 2".to_string(), "Option 3".to_string()];
+
+        let builder = DropdownBuilder::new(&mut ui, &mut selected, options);
+        assert_eq!(builder.width, 180.0);
+        assert_eq!(builder.height, 32.0);
+        assert_eq!(builder.radius, [4.0, 4.0, 4.0, 4.0]);
+        assert_eq!(builder.padding_x, 10.0);
+        assert_eq!(builder.font_size, 14.0);
+        assert_eq!(builder.border_width, 1.0);
+        assert_eq!(builder.shadow_enabled, false);
+    }
+
+    #[test]
+    fn test_dropdown_styling_api() {
+        let mut scroll_state = HashMap::new();
+        let mut cursor_state = HashMap::new();
+        let mut interaction_state = HashMap::new();
+        let layout_cache = HashMap::new();
+        let mut next_layout_cache = HashMap::new();
+        let screen_layout_cache = HashMap::new();
+        let mut next_screen_layout_cache = HashMap::new();
+        let widget_window_map = HashMap::new();
+        let mut next_widget_window_map = HashMap::new();
+        let image_sizes = HashMap::new();
+
+        let mut ui = create_test_ui(
+            &mut scroll_state, &mut cursor_state, &mut interaction_state,
+            &layout_cache, &mut next_layout_cache,
+            &screen_layout_cache, &mut next_screen_layout_cache,
+            &widget_window_map, &mut next_widget_window_map,
+            &image_sizes,
+        );
+
+        let mut selected = "Rust".to_string();
+        let options = vec!["Rust".to_string(), "Go".to_string(), "C++".to_string()];
+
+        let builder = DropdownBuilder::new(&mut ui, &mut selected, options)
+            .bg(None)
+            .border(None)
+            .radius_all(8.0)
+            .font_size(16.0)
+            .padding_x(14.0)
+            .color(Color::WHITE)
+            .shadow(Color::BLACK, 0.0, 4.0, 12.0)
+            .shadow_opacity(0.8)
+            .menu_bg(Color::rgb(0.08, 0.08, 0.10))
+            .menu_max_height(300.0)
+            .menu_border((Color::rgb(0.3, 0.3, 0.35), 1.5))
+            .menu_radius_all(6.0);
+
+        assert_eq!(builder.bg, Color::TRANSPARENT);
+        assert_eq!(builder.border_width, 0.0);
+        assert_eq!(builder.border_color, Color::TRANSPARENT);
+        assert_eq!(builder.radius, [8.0, 8.0, 8.0, 8.0]);
+        assert_eq!(builder.font_size, 16.0);
+        assert_eq!(builder.padding_x, 14.0);
+        assert_eq!(builder.text_color, Color::WHITE);
+        assert_eq!(builder.shadow_enabled, true);
+        assert_eq!(builder.shadow_opacity, 0.8);
+        assert_eq!(builder.menu_bg, Color::rgb(0.08, 0.08, 0.10));
+        assert_eq!(builder.menu_max_height, 300.0);
+        assert_eq!(builder.menu_border_width, Some(1.5));
+        assert_eq!(builder.menu_radius, Some([6.0; 4]));
+    }
+
+    #[test]
+    fn test_dropdown_individual_radii() {
+        let mut scroll_state = HashMap::new();
+        let mut cursor_state = HashMap::new();
+        let mut interaction_state = HashMap::new();
+        let layout_cache = HashMap::new();
+        let mut next_layout_cache = HashMap::new();
+        let screen_layout_cache = HashMap::new();
+        let mut next_screen_layout_cache = HashMap::new();
+        let widget_window_map = HashMap::new();
+        let mut next_widget_window_map = HashMap::new();
+        let image_sizes = HashMap::new();
+
+        let mut ui = create_test_ui(
+            &mut scroll_state, &mut cursor_state, &mut interaction_state,
+            &layout_cache, &mut next_layout_cache,
+            &screen_layout_cache, &mut next_screen_layout_cache,
+            &widget_window_map, &mut next_widget_window_map,
+            &image_sizes,
+        );
+
+        let mut selected = "One".to_string();
+        let options = vec!["One".to_string(), "Two".to_string()];
+
+        let builder = DropdownBuilder::new(&mut ui, &mut selected, options)
+            .radius_top(10.0)
+            .radius_bottom(2.0);
+
+        // radius format: [tl, tr, br, bl]
+        assert_eq!(builder.radius[0], 10.0);
+        assert_eq!(builder.radius[1], 10.0);
+        assert_eq!(builder.radius[2], 2.0);
+        assert_eq!(builder.radius[3], 2.0);
+    }
+
+    #[test]
+    fn test_dropdown_show_draw_commands() {
+        let mut scroll_state = HashMap::new();
+        let mut cursor_state = HashMap::new();
+        let mut interaction_state = HashMap::new();
+        let layout_cache = HashMap::new();
+        let mut next_layout_cache = HashMap::new();
+        let screen_layout_cache = HashMap::new();
+        let mut next_screen_layout_cache = HashMap::new();
+        let widget_window_map = HashMap::new();
+        let mut next_widget_window_map = HashMap::new();
+        let image_sizes = HashMap::new();
+
+        let mut ui = create_test_ui(
+            &mut scroll_state, &mut cursor_state, &mut interaction_state,
+            &layout_cache, &mut next_layout_cache,
+            &screen_layout_cache, &mut next_screen_layout_cache,
+            &widget_window_map, &mut next_widget_window_map,
+            &image_sizes,
+        );
+
+        let mut selected = "Alpha".to_string();
+        let options = vec!["Alpha".to_string(), "Beta".to_string()];
+
+        let resp = ui.dropdown(&mut selected, options)
+            .width(200.0)
+            .height(36.0)
+            .radius_all(6.0)
+            .show();
+
+        assert!(!resp.clicked);
+        assert!(!resp.changed);
+        // Should have pushed at least 3 draw commands: background Rect, selected Text, chevron Text
+        assert!(ui.draws.len() >= 3);
+
+        if let DrawCommand::Rect(rect) = &ui.draws[0] {
+            assert_eq!(rect.instance.size, [200.0, 36.0]);
+            // Verify inverted corner radius mapping: [bl, br, tr, tl]
+            assert_eq!(rect.instance.radius, [6.0, 6.0, 6.0, 6.0]);
+        } else {
+            panic!("Expected first draw command to be Rect");
+        }
+    }
+
+    #[test]
+    fn test_dropdown_fill_x_and_fill_y() {
+        let mut scroll_state = HashMap::new();
+        let mut cursor_state = HashMap::new();
+        let mut interaction_state = HashMap::new();
+        let layout_cache = HashMap::new();
+        let mut next_layout_cache = HashMap::new();
+        let screen_layout_cache = HashMap::new();
+        let mut next_screen_layout_cache = HashMap::new();
+        let widget_window_map = HashMap::new();
+        let mut next_widget_window_map = HashMap::new();
+        let image_sizes = HashMap::new();
+
+        let mut ui = create_test_ui(
+            &mut scroll_state, &mut cursor_state, &mut interaction_state,
+            &layout_cache, &mut next_layout_cache,
+            &screen_layout_cache, &mut next_screen_layout_cache,
+            &widget_window_map, &mut next_widget_window_map,
+            &image_sizes,
+        );
+
+        let mut selected = "Filled".to_string();
+        let options = vec!["Filled".to_string()];
+
+        ui.dropdown(&mut selected, options)
+            .fill_x()
+            .fill_y()
+            .show();
+
+        if let DrawCommand::Rect(rect) = &ui.draws[0] {
+            assert_eq!(rect.instance.size, [800.0, 600.0]);
+        } else {
+            panic!("Expected Rect for dropdown");
+        }
+    }
+}
+

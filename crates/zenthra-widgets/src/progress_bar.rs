@@ -168,8 +168,8 @@ impl<'u, 'a> ProgressBarBuilder<'u, 'a> {
         self
     }
 
-    pub fn bg(mut self, color: Color) -> Self {
-        self.bg = Some(color);
+    pub fn bg(mut self, bg: impl Into<Option<Color>>) -> Self {
+        self.bg = bg.into();
         self
     }
 
@@ -178,9 +178,17 @@ impl<'u, 'a> ProgressBarBuilder<'u, 'a> {
         self
     }
 
-    pub fn border(mut self, color: Color, width: f32) -> Self {
-        self.border_color = Some(color);
-        self.border_width = width;
+    pub fn border(mut self, border: impl Into<zenthra_core::Border>) -> Self {
+        match border.into() {
+            zenthra_core::Border::None => {
+                self.border_color = None;
+                self.border_width = 0.0;
+            }
+            zenthra_core::Border::Solid(c, w) => {
+                self.border_color = Some(c);
+                self.border_width = w;
+            }
+        }
         self
     }
 
@@ -260,7 +268,7 @@ impl<'u, 'a> ProgressBarBuilder<'u, 'a> {
             self.track_h.max(12.0) + self.padding.vertical()
         });
 
-        let is_hovered = self.ui.mouse_in_rect(x + self.ui.offset_x, y + self.ui.offset_y, w, h);
+        let is_hovered = self.ui.is_hovered(self.id, x + self.ui.offset_x, y + self.ui.offset_y, w, h);
         let start_draw = self.ui.draws.len();
 
         // 0. Background
@@ -390,6 +398,7 @@ impl<'u, 'a> ProgressBarBuilder<'u, 'a> {
             hovered: is_hovered,
             pressed: self.ui.mouse_down && is_hovered,
             submitted: false,
+            changed: false,
         }
     }
 }
