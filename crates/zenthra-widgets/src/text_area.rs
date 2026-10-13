@@ -587,7 +587,7 @@ impl<'u, 'a, 'b> TextAreaBuilder<'u, 'a, 'b> {
         }
         
         // --- 1. Handle Scroll State ---
-        let (scroll_x, mut scroll_y) = if self.scrollable || self.style.max_height.is_some() {
+        let (scroll_x, mut scroll_y) = if self.scrollable || self.style.height.is_some() || self.style.max_height.is_some() {
             *self.ui.scroll_state.get(&self.id).unwrap_or(&(0.0, 0.0))
         } else {
             (0.0, 0.0)
@@ -639,15 +639,13 @@ impl<'u, 'a, 'b> TextAreaBuilder<'u, 'a, 'b> {
             } else {
                 (natural_h, false) // content fits: natural height, no scroll
             }
+        } else if let Some(explicit_h) = self.style.height {
+            (explicit_h, true)
         } else if self.scrollable {
-            (self.style.height.unwrap_or(200.0), true)
+            (200.0, true)
         } else {
             (h_content + self.style.padding.vertical(), false)
         };
-
-        if self.scrollable && self.style.height.unwrap_or(0.0) == 0.0 && self.style.max_height.is_none() {
-            h_box = 200.0;
-        }
 
         if self.style.fill_y {
             h_box = (self.ui.max_y - self.y - self.style.margin.bottom).max(h_box);
@@ -1352,12 +1350,7 @@ impl<'u, 'a, 'b> TextAreaBuilder<'u, 'a, 'b> {
         self.ui.draws.push(DrawCommand::Rect(RectDraw { instance }));
 
         // --- 5. Render Text (ALWAYS CLIPPED TO BOX) ---
-        let pos_y = if !is_multiline && !effective_scrollable && h_box > h_content + self.style.padding.vertical() {
-            // When box is taller than content (only for single-line inputs), center vertically!
-            self.y + ((h_box - h_content) / 2.0).max(self.style.padding.top)
-        } else {
-            self.y + self.style.padding.top - scroll_y
-        };
+        let pos_y = self.y + self.style.padding.top - scroll_y;
         let display_text = if self.buffer.is_empty() {
             self.placeholder.as_deref().unwrap_or("")
         } else {
@@ -1459,12 +1452,7 @@ impl<'u, 'a, 'b> TextAreaBuilder<'u, 'a, 'b> {
                             continue;
                         }
 
-                        let line_cy = if !is_multiline && !effective_scrollable && h_box > h_content + self.style.padding.vertical() {
-                            let y_offset = ((h_box - h_content) / 2.0).max(self.style.padding.top);
-                            line.y + self.y + y_offset + v_shift - visual_ascent
-                        } else {
-                            line.y + self.y + self.style.padding.top + v_shift - visual_ascent - scroll_y
-                        };
+                        let line_cy = line.y + self.y + self.style.padding.top + v_shift - visual_ascent - scroll_y;
 
                         if line_cy + cursor_height < self.y - 4.0 || line_cy > self.y + h_box + 4.0 {
                             continue;
@@ -1552,12 +1540,7 @@ impl<'u, 'a, 'b> TextAreaBuilder<'u, 'a, 'b> {
                 }
                 
                 let cx = lx + self.x + self.style.padding.left;
-                let cy = if !is_multiline && !effective_scrollable && h_box > h_content + self.style.padding.vertical() {
-                    let y_offset = ((h_box - h_content) / 2.0).max(self.style.padding.top);
-                    ly + self.y + y_offset + v_shift - visual_ascent
-                } else {
-                    ly + self.y + self.style.padding.top + v_shift - visual_ascent - scroll_y
-                };
+                let cy = ly + self.y + self.style.padding.top + v_shift - visual_ascent - scroll_y;
                 
                  // Smart Blink: Solid while typing, blink when idle
                  let last_activity = *self.ui.interaction_state.get(&self.id).unwrap_or(&0.0);
