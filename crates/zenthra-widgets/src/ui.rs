@@ -397,6 +397,50 @@ impl<'a> Ui<'a> {
         self.id_log.push(id);
     }
 
+    /// Renders a floating hover tooltip over the scene in the overlay pass.
+    pub fn draw_tooltip(&mut self, text: &str) {
+        let mx = (self.mouse_x + 12.0).round();
+        let my = (self.mouse_y + 12.0).round();
+        let pad_x = 8.0;
+        let pad_y = 5.0;
+        let font_size = 11.0;
+        let approx_w = (text.len() as f32 * font_size * 0.55).max(40.0) + pad_x * 2.0;
+        let approx_h = font_size + pad_y * 2.0;
+
+        let rect_inst = RectInstance {
+            pos: [mx, my],
+            size: [approx_w, approx_h],
+            color: Color::rgb(0.10, 0.12, 0.16).to_array(),
+            radius: [4.0, 4.0, 4.0, 4.0],
+            border_width: 1.0,
+            border_color: Color::rgb(0.25, 0.30, 0.40).to_array(),
+            shadow_color: [0.0, 0.0, 0.0, 0.5],
+            shadow_offset: [0.0, 3.0],
+            shadow_blur: 8.0,
+            clip_rect: [-100000.0, -100000.0, 2000000.0, 2000000.0],
+            grayscale: 0.0,
+            brightness: 1.0,
+            opacity: 1.0,
+            border_alignment: 0.0,
+            color2: [1.0, 1.0, 1.0, 1.0],
+            color3: [1.0, 1.0, 1.0, 1.0],
+            color4: [1.0, 1.0, 1.0, 1.0],
+            gradient_params: [0.0, 0.0, 0.5, 0.5],
+            gradient_stops: [0.0, 0.333, 0.667, 1.0],
+        };
+        self.overlays.push(DrawCommand::Rect(RectDraw { instance: rect_inst }));
+
+        let mut text_opts = zenthra_text::prelude::TextStyle::new().to_options(mx + pad_x, my + pad_y, self.scale_factor, self.font_scale);
+        text_opts.font_size = font_size;
+        text_opts.color = Color::rgb(0.90, 0.92, 0.96);
+        self.overlays.push(DrawCommand::Text(TextDraw {
+            text: text.to_string(),
+            pos: [mx + pad_x, my + pad_y],
+            options: text_opts,
+            clip: [-100000.0, -100000.0, 2000000.0, 2000000.0],
+        }));
+    }
+
     /// Consumes the primary click event for this frame so subsequent/underlying widgets do not trigger.
     pub fn consume_click(&mut self) {
         self.clicked = false;
@@ -1069,6 +1113,7 @@ pub struct EventHandler<'a> {
 mod tests {
     use super::*;
     use std::collections::HashMap;
+    use crate::macros::Style;
 
     #[test]
     fn test_hover_viewport_bounds() {
@@ -1288,7 +1333,8 @@ mod tests {
                                 .clip(true)
                                 .show(|ui| {
                                     ui.image(zenthra_core::ImageSource::Bytes(std::sync::Arc::from(&[][..])))
-                                        .size(64.0, 64.0)
+                                        .width(64.0)
+                                        .height(64.0)
                                         .fit(zenthra_core::ObjectFit::Contain)
                                         .show();
                                     ui.container().row().gap(4.0).valign(zenthra_core::Align::Center).show(|ui| {
@@ -1547,8 +1593,8 @@ mod tests {
                             // Messages scroll area
                             ui.container().id(msgs_scroll_id).width(ai_w).height(350.0).scroll_y(true).column().show(|ui| {
                                 // Message bubble
-                                ui.container().id(bubble_id).width(200.0).height(40.0).hover_bg(Color::RED).row().show(|ui| {
-                                    ui.container().id(copy_btn_id).width(20.0).height(20.0).hover_bg(Color::GREEN).interactive(true).role(zenthra_core::Role::Button).show(|_| {});
+                                ui.container().id(bubble_id).width(200.0).height(40.0).hover(Style::bg(Color::RED)).row().show(|ui| {
+                                    ui.container().id(copy_btn_id).width(20.0).height(20.0).hover(Style::bg(Color::GREEN)).interactive(true).role(zenthra_core::Role::Button).show(|_| {});
                                 });
                             });
 
@@ -1579,7 +1625,7 @@ mod tests {
                                     .fill_x()
                                     .padding(4.0, 6.0, 4.0, 6.0)
                                     .radius_all(3.5)
-                                    .hover_bg(Color::BLUE)
+                                    .hover(Style::bg(Color::BLUE))
                                     .interactive(true).role(zenthra_core::Role::Button)
                                     .show(|ui| {
                                         ui.text("ZENE").show();
@@ -1599,7 +1645,7 @@ mod tests {
                                     .fill_x()
                                     .padding(4.0, 6.0, 4.0, 6.0)
                                     .radius_all(3.5)
-                                    .hover_bg(Color::BLUE)
+                                    .hover(Style::bg(Color::BLUE))
                                     .interactive(true).role(zenthra_core::Role::Button)
                                     .show(|ui| {
                                         ui.text("Google Antigravity").show();
@@ -1613,7 +1659,7 @@ mod tests {
                                     .fill_x()
                                     .padding(4.0, 6.0, 4.0, 6.0)
                                     .radius_all(3.5)
-                                    .hover_bg(Color::BLUE)
+                                    .hover(Style::bg(Color::BLUE))
                                     .interactive(true).role(zenthra_core::Role::Button)
                                     .show(|ui| {
                                         ui.text("AI & Agent Settings...").show();
@@ -1729,7 +1775,7 @@ mod tests {
                         ui.container().width(ai_w).height(content_h).column().show(|ui| {
                             // Messages scroll area
                             ui.container().id(msgs_scroll_id).width(ai_w).height(350.0).scroll_y(true).column().show(|ui| {
-                                ui.container().width(200.0).height(200.0).hover_bg(Color::RED).show(|_| {});
+                                ui.container().width(200.0).height(200.0).hover(Style::bg(Color::RED)).show(|_| {});
                             });
 
                             // Prompt dock (height 120, at y = 36 + 32 + 350 = 418)
@@ -1769,7 +1815,7 @@ mod tests {
                                             .interactive(true).role(zenthra_core::Role::Button)
                                             .fill_x()
                                             .height(26.0)
-                                            .hover_bg(Color::BLUE)
+                                            .hover(Style::bg(Color::BLUE))
                                             .row()
                                             .show(|ui| {
                                                 ui.text(&format!("Model {}", i)).show();

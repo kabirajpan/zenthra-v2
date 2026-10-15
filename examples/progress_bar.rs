@@ -66,12 +66,12 @@ fn main() {
 
                             ui.toggle(&mut is_animating, "Auto-Simulate Progress")
                                 .size(13.0)
-                                .active_label(Color::rgb(0.40, 0.85, 1.0))
+                                .active(Text::color(Color::rgb(0.40, 0.85, 1.0)))
                                 .show();
 
                             if ui.button("Reset (0%)")
                                 .bg(Color::rgb(0.18, 0.20, 0.26))
-                                .hover_bg(Color::rgb(0.25, 0.28, 0.36))
+                                .hover(Style::bg(Color::rgb(0.25, 0.28, 0.36)))
                                 .padding(6.0, 12.0, 6.0, 12.0)
                                 .radius_all(6.0)
                                 .show()
@@ -83,7 +83,7 @@ fn main() {
 
                             if ui.button("Complete (100%)")
                                 .bg(Color::rgb(0.18, 0.20, 0.26))
-                                .hover_bg(Color::rgb(0.25, 0.28, 0.36))
+                                .hover(Style::bg(Color::rgb(0.25, 0.28, 0.36)))
                                 .padding(6.0, 12.0, 6.0, 12.0)
                                 .radius_all(6.0)
                                 .show()

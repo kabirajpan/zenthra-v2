@@ -129,7 +129,7 @@ fn main() {
                                     let resp1 = ui.radio(&mut selected_theme, ThemeMode::Dark, "Dark Mode")
                                         .size(18.0)
                                         .dot_color(Color::rgb(0.35, 0.65, 1.0))
-                                        .active_label(Color::rgb(0.40, 0.75, 1.0))
+                                        .active(Text::color(Color::rgb(0.40, 0.75, 1.0)))
                                         .show();
                                     if resp1.clicked {
                                         event_log = String::from("Selected Dark Mode");
@@ -138,7 +138,7 @@ fn main() {
                                     let resp2 = ui.radio(&mut selected_theme, ThemeMode::Light, "Light Mode")
                                         .size(18.0)
                                         .dot_color(Color::rgb(0.35, 0.65, 1.0))
-                                        .active_label(Color::rgb(0.40, 0.75, 1.0))
+                                        .active(Text::color(Color::rgb(0.40, 0.75, 1.0)))
                                         .show();
                                     if resp2.clicked {
                                         event_log = String::from("Selected Light Mode");
@@ -147,7 +147,7 @@ fn main() {
                                     let resp3 = ui.radio(&mut selected_theme, ThemeMode::System, "System Default")
                                         .size(18.0)
                                         .dot_color(Color::rgb(0.35, 0.65, 1.0))
-                                        .active_label(Color::rgb(0.40, 0.75, 1.0))
+                                        .active(Text::color(Color::rgb(0.40, 0.75, 1.0)))
                                         .show();
                                     if resp3.clicked {
                                         event_log = String::from("Selected System Default");
@@ -179,7 +179,7 @@ fn main() {
                                         .colors(Color::rgb(0.10, 0.80, 0.50), Color::rgb(0.10, 0.80, 0.50))
                                         .glow(true)
                                         .scaling(1.08, 0.95)
-                                        .active_label(Color::rgb(0.20, 0.90, 0.60))
+                                        .active(Text::color(Color::rgb(0.20, 0.90, 0.60)))
                                         .show();
 
                                     // Violet
@@ -187,7 +187,7 @@ fn main() {
                                         .colors(Color::rgb(0.65, 0.35, 1.00), Color::rgb(0.70, 0.45, 1.00))
                                         .glow(true)
                                         .scaling(1.08, 0.95)
-                                        .active_label(Color::rgb(0.75, 0.50, 1.0))
+                                        .active(Text::color(Color::rgb(0.75, 0.50, 1.0)))
                                         .show();
 
                                     // Crimson
@@ -195,7 +195,7 @@ fn main() {
                                         .colors(Color::rgb(0.95, 0.25, 0.35), Color::rgb(0.95, 0.25, 0.35))
                                         .glow(true)
                                         .scaling(1.08, 0.95)
-                                        .active_label(Color::rgb(1.0, 0.40, 0.50))
+                                        .active(Text::color(Color::rgb(1.0, 0.40, 0.50)))
                                         .show();
 
                                     // Amber
@@ -203,7 +203,7 @@ fn main() {
                                         .colors(Color::rgb(0.95, 0.65, 0.20), Color::rgb(0.95, 0.65, 0.20))
                                         .glow(true)
                                         .scaling(1.08, 0.95)
-                                        .active_label(Color::rgb(1.0, 0.75, 0.30))
+                                        .active(Text::color(Color::rgb(1.0, 0.75, 0.30)))
                                         .show();
                                 });
                         });
@@ -231,21 +231,21 @@ fn main() {
                                         .size(14.0)
                                         .gap(6.0)
                                         .label_size(12.0)
-                                        .active_label(Color::rgb(0.70, 0.45, 1.0))
+                                        .active(Text::color(Color::rgb(0.70, 0.45, 1.0)))
                                         .show();
 
                                     ui.radio(&mut selected_density, LayoutDensity::Comfortable, "Comfortable (18px)")
                                         .size(18.0)
                                         .gap(10.0)
                                         .label_size(14.0)
-                                        .active_label(Color::rgb(0.70, 0.45, 1.0))
+                                        .active(Text::color(Color::rgb(0.70, 0.45, 1.0)))
                                         .show();
 
                                     ui.radio(&mut selected_density, LayoutDensity::Spacious, "Spacious (24px)")
                                         .size(24.0)
                                         .gap(12.0)
                                         .label_size(15.0)
-                                        .active_label(Color::rgb(0.70, 0.45, 1.0))
+                                        .active(Text::color(Color::rgb(0.70, 0.45, 1.0)))
                                         .show();
                                 });
                         });
@@ -265,14 +265,14 @@ fn main() {
                                 .show();
 
                             ui.radio(&mut selected_tier, StorageTier::Free, "Starter Tier (5 GB Cloud Storage)")
-                                .active_label(Color::rgb(0.95, 0.80, 0.30))
+                                .active(Text::color(Color::rgb(0.95, 0.80, 0.30)))
                                 .on_change(|tier| {
                                     println!("Selected tier changed to: {:?}", tier);
                                 })
                                 .show();
 
                             ui.radio(&mut selected_tier, StorageTier::Pro, "Pro Developer (1 TB NVMe Storage + GPU Accel)")
-                                .active_label(Color::rgb(0.95, 0.80, 0.30))
+                                .active(Text::color(Color::rgb(0.95, 0.80, 0.30)))
                                 .font_weight(FontWeight::Medium)
                                 .on_change(|tier| {
                                     println!("Selected tier changed to: {:?}", tier);
@@ -280,7 +280,7 @@ fn main() {
                                 .show();
 
                             ui.radio(&mut selected_tier, StorageTier::Enterprise, "Enterprise Dedicated Cluster (Unlimited Storage)")
-                                .active_label(Color::rgb(0.95, 0.80, 0.30))
+                                .active(Text::color(Color::rgb(0.95, 0.80, 0.30)))
                                 .on_change(|tier| {
                                     println!("Selected tier changed to: {:?}", tier);
                                 })

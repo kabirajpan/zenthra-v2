@@ -33,10 +33,8 @@ pub struct ImageBuilder<'u, 'a> {
     shadow_blur: f32,
 
     // Interaction Styling (Hover & Active States)
-    hover_opacity: Option<f32>,
-    hover_grayscale: Option<f32>,
-    hover_border: Option<Color>,
-    active_opacity: Option<f32>,
+    pub hover_state: Option<crate::macros::WidgetStateOverrides>,
+    pub active_state: Option<crate::macros::WidgetStateOverrides>,
 
     // Advanced Controls
     internal_scale: [f32; 2],
@@ -74,10 +72,8 @@ impl<'u, 'a> ImageBuilder<'u, 'a> {
             shadow_color: Color::TRANSPARENT,
             shadow_offset: [0.0, 0.0],
             shadow_blur: 0.0,
-            hover_opacity: None,
-            hover_grayscale: None,
-            hover_border: None,
-            active_opacity: None,
+            hover_state: None,
+            active_state: None,
             aspect_ratio: None,
             original_size: false,
             internal_scale: [1.0, 1.0],
@@ -99,11 +95,6 @@ impl<'u, 'a> ImageBuilder<'u, 'a> {
         self
     }
     pub fn height(mut self, h: f32) -> Self {
-        self.height = Some(h);
-        self
-    }
-    pub fn size(mut self, w: f32, h: f32) -> Self {
-        self.width = Some(w);
         self.height = Some(h);
         self
     }
@@ -195,10 +186,6 @@ impl<'u, 'a> ImageBuilder<'u, 'a> {
     // Appearance
     pub fn fit(mut self, fit: ObjectFit) -> Self {
         self.fit = fit;
-        self
-    }
-    pub fn border_radius(mut self, radius: f32) -> Self {
-        self.radius = [radius; 4] ;
         self
     }
 
@@ -334,27 +321,24 @@ impl<'u, 'a> ImageBuilder<'u, 'a> {
     }
 
     // Interaction Styling
-    pub fn hover_opacity(mut self, alpha: f32) -> Self {
-        self.hover_opacity = Some(alpha);
-        self
-    }
-    pub fn hover_grayscale(mut self, amount: f32) -> Self {
-        self.hover_grayscale = Some(amount);
-        self
-    }
-    pub fn hover_border(mut self, border: impl Into<zenthra_core::Border>) -> Self {
-        match border.into() {
-            zenthra_core::Border::None => {
-                self.hover_border = None;
-            }
-            zenthra_core::Border::Solid(c, _) => {
-                self.hover_border = Some(c);
-            }
+    #[inline]
+    pub fn hover(mut self, props: impl crate::macros::IntoStateProps) -> Self {
+        if self.hover_state.is_none() {
+            self.hover_state = Some(crate::macros::WidgetStateOverrides::new());
+        }
+        if let Some(ref mut h) = self.hover_state {
+            props.apply_to_overrides(h);
         }
         self
     }
-    pub fn active_opacity(mut self, alpha: f32) -> Self {
-        self.active_opacity = Some(alpha);
+    #[inline]
+    pub fn active(mut self, props: impl crate::macros::IntoStateProps) -> Self {
+        if self.active_state.is_none() {
+            self.active_state = Some(crate::macros::WidgetStateOverrides::new());
+        }
+        if let Some(ref mut a) = self.active_state {
+            props.apply_to_overrides(a);
+        }
         self
     }
 
@@ -428,21 +412,17 @@ impl<'u, 'a> ImageBuilder<'u, 'a> {
 
         // Interaction state overrides
         let current_opacity = if is_pressed {
-            self.active_opacity.unwrap_or(self.opacity)
+            self.active_state.as_ref().map(|s| s.style.opacity).filter(|&o| (o - 1.0).abs() > f32::EPSILON).unwrap_or(self.opacity)
         } else if is_hovered {
-            self.hover_opacity.unwrap_or(self.opacity)
+            self.hover_state.as_ref().map(|s| s.style.opacity).filter(|&o| (o - 1.0).abs() > f32::EPSILON).unwrap_or(self.opacity)
         } else {
             self.opacity
         };
 
-        let current_grayscale = if is_hovered && !is_pressed {
-            self.hover_grayscale.unwrap_or(self.grayscale)
-        } else {
-            self.grayscale
-        };
+        let current_grayscale = self.grayscale;
 
         let current_border_color = if is_hovered && !is_pressed {
-            self.hover_border.unwrap_or(self.border_color)
+            self.hover_state.as_ref().and_then(|s| s.style.border_color()).unwrap_or(self.border_color)
         } else {
             self.border_color
         };

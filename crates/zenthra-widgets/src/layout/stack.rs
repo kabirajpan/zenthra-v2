@@ -83,11 +83,6 @@ impl<'u, 'a> StackBuilder<'u, 'a> {
         self
     }
 
-    pub fn size(mut self, w: f32, h: f32) -> Self {
-        self.width = Some(w);
-        self.height = Some(h);
-        self
-    }
 
 
     pub fn fill(mut self) -> Self {

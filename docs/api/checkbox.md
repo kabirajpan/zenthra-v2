@@ -188,20 +188,17 @@ pub fn color(mut self, color: impl Into<Color>) -> Self
 pub fn font_weight(mut self, weight: impl Into<FontWeight>) -> Self
 pub fn font_family(mut self, family: impl Into<String>) -> Self
 pub fn decoration(mut self, dec: impl IntoDecoration) -> Self
-
-// Active Checked Label
-pub fn active_label(mut self, color: Color) -> Self
 ```
 
 #### Defaults
 - `size`: `14.0`
 - `color`: `Color::WHITE`
-- `active_label`: If set, the text smoothly transitions to this color when checked.
+- Use `.active(Text::color(c))` to transition text color when checked.
 
 ```rust
 ui.checkbox(&mut active, "Enable High Performance")
     .color(Color::rgb(0.6, 0.6, 0.7))
-    .active_label(Color::rgb(0.3, 0.7, 1.0)) // Illuminates text when active
+    .active(Text::color(Color::rgb(0.3, 0.7, 1.0))) // Illuminates text when active
     .show();
 ```
 
@@ -214,14 +211,14 @@ ui.checkbox(&mut active, "Enable High Performance")
 ```rust
 pub fn glow(mut self, enabled: bool) -> Self
 pub fn scaling(mut self, hover: f32, pressed: f32) -> Self
-pub fn hover_bg(mut self, color: Color) -> Self
-pub fn active_bg(mut self, color: Color) -> Self
+pub fn hover(mut self, props: impl IntoStateProps) -> Self
+pub fn active(mut self, props: impl IntoStateProps) -> Self
 ```
 
 #### Description
 - `glow(true)`: Emits a soft outer neon glow matching `check_bg` when the checkbox is active.
 - `scaling(hover, pressed)`: Smoothly scales the box on hover (e.g. `1.05`) and press (e.g. `0.95`).
-- `hover_bg` / `active_bg`: Overrides box color on hover or mouse down.
+- `hover` / `active`: State Sibling overrides (e.g., `.hover(Style::bg(...))`, `.active(Style::bg(...))`, or `.active(Text::color(...))`).
 
 ---
 
@@ -311,7 +308,7 @@ Dimmed inactive label that illuminates into white/accent color upon activation:
 ```rust
 ui.checkbox(&mut sync_enabled, "Cloud Synchronization")
     .color(Color::rgb(0.50, 0.55, 0.65))
-    .active_label(Color::rgb(0.95, 0.98, 1.00))
+    .active(Text::color(Color::rgb(0.95, 0.98, 1.00)))
     .check_bg(Color::rgb(0.30, 0.60, 1.00))
     .show();
 ```

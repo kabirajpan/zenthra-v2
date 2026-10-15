@@ -120,7 +120,7 @@ fn main() {
                                     ui.checkbox(&mut lint_on_type, "Large Box (24px)")
                                         .box_size(24.0)
                                         .size(15.0)
-                                        .active_label(Color::rgb(0.40, 0.75, 1.0))
+                                        .active(Text::color(Color::rgb(0.40, 0.75, 1.0)))
                                         .show();
                                 });
                         });
@@ -149,7 +149,7 @@ fn main() {
                                         .check_bg(Color::rgb(0.10, 0.80, 0.50))
                                         .glow(true)
                                         .scaling(1.08, 0.95)
-                                        .active_label(Color::rgb(0.20, 0.90, 0.60))
+                                        .active(Text::color(Color::rgb(0.20, 0.90, 0.60)))
                                         .show();
 
                                     // Neon Violet
@@ -158,14 +158,14 @@ fn main() {
                                         .check_color(Color::rgb(0.95, 0.90, 1.0))
                                         .glow(true)
                                         .scaling(1.08, 0.95)
-                                        .active_label(Color::rgb(0.75, 0.50, 1.0))
+                                        .active(Text::color(Color::rgb(0.75, 0.50, 1.0)))
                                         .show();
 
                                     // Crimson Danger
                                     ui.checkbox(&mut crimson_alert, "Crimson Alert")
                                         .check_bg(Color::rgb(0.95, 0.25, 0.35))
                                         .glow(true)
-                                        .active_label(Color::rgb(1.0, 0.40, 0.50))
+                                        .active(Text::color(Color::rgb(1.0, 0.40, 0.50)))
                                         .show();
                                 });
                         });
@@ -229,7 +229,7 @@ fn main() {
                                 .show();
 
                             ui.checkbox(&mut terms_agreed, "I agree to the Terms of Service & Privacy Policy")
-                                .active_label(Color::rgb(0.35, 0.75, 1.0))
+                                .active(Text::color(Color::rgb(0.35, 0.75, 1.0)))
                                 .font_weight(FontWeight::Medium)
                                 .on_change(|checked| {
                                     println!("Terms of Service toggled: {}", checked);
@@ -237,11 +237,11 @@ fn main() {
                                 .show();
 
                             ui.checkbox(&mut newsletter, "Receive monthly engineering newsletter and product updates")
-                                .active_label(Color::rgb(0.40, 0.85, 0.90))
+                                .active(Text::color(Color::rgb(0.40, 0.85, 0.90)))
                                 .show();
 
                             ui.checkbox(&mut telemetry, "Send anonymous crash diagnostics and performance reports")
-                                .active_label(Color::rgb(0.75, 0.80, 0.95))
+                                .active(Text::color(Color::rgb(0.75, 0.80, 0.95)))
                                 .show();
                         });
 

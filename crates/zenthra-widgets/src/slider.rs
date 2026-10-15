@@ -1,52 +1,62 @@
 use crate::ui::{Ui, DrawCommand, RectDraw};
-use zenthra_core::{Color, EdgeInsets, Id, Response};
+use zenthra_core::{Color, EdgeInsets, Id, Response, BoxStyle, Styleable};
 use zenthra_render::RectInstance;
+use crate::style_ext::BoxStyleExt;
 
 pub struct SliderBuilder<'u, 'a, 'b> {
-    ui: &'u mut Ui<'a>,
-    value: &'b mut f32,
-    min: f32,
-    max: f32,
-    step: Option<f32>,
-    id: Id,
+    pub ui: &'u mut Ui<'a>,
+    pub value: &'b mut f32,
+    pub min: f32,
+    pub max: f32,
+    pub step: Option<f32>,
+    pub id: Id,
     
-    // 1. Overall Widget Style
-    width: Option<f32>,
-    height: Option<f32>,
-    padding: EdgeInsets,
-    bg: Option<zenthra_core::Background>,
-    radius: [f32; 4],
-    border_color: Option<Color>,
-    border_width: f32,
-    shadow_color: Option<Color>,
-    shadow_offset: [f32; 2],
-    shadow_blur: f32,
+    // Canonical BoxStyle for container
+    pub style: BoxStyle,
+    pub hover_state: Option<crate::macros::WidgetStateOverrides>,
+    pub active_state: Option<crate::macros::WidgetStateOverrides>,
 
     // 2. Track Style
-    track_w: Option<f32>,
-    track_h: f32,
-    track_radius: [f32; 4],
-    track_color: Color,
-    track_shadow_color: Option<Color>,
-    track_shadow_offset: [f32; 2],
-    track_shadow_blur: f32,
+    pub track_w: Option<f32>,
+    pub track_h: f32,
+    pub track_radius: [f32; 4],
+    pub track_color: Color,
+    pub track_shadow_color: Option<Color>,
+    pub track_shadow_offset: [f32; 2],
+    pub track_shadow_blur: f32,
+    pub track_gradient: Option<(Color, Color, zenthra_core::GradientDirection)>,
 
     // 3. Thumb Style
-    thumb_w: f32,
-    thumb_h: f32,
-    thumb_radius: [f32; 4],
-    thumb_color: Color,
-    thumb_shadow_color: Option<Color>,
-    thumb_shadow_offset: [f32; 2],
-    thumb_shadow_blur: f32,
-
-    track_gradient: Option<(Color, Color, zenthra_core::GradientDirection)>,
-    thumb_gradient: Option<(Color, Color, zenthra_core::GradientDirection)>,
+    pub thumb_w: f32,
+    pub thumb_h: f32,
+    pub thumb_radius: [f32; 4],
+    pub thumb_color: Color,
+    pub thumb_shadow_color: Option<Color>,
+    pub thumb_shadow_offset: [f32; 2],
+    pub thumb_shadow_blur: f32,
+    pub thumb_gradient: Option<(Color, Color, zenthra_core::GradientDirection)>,
 }
+
+impl<'u, 'a, 'b> Styleable for SliderBuilder<'u, 'a, 'b> {
+    #[inline]
+    fn box_style_mut(&mut self) -> &mut BoxStyle {
+        &mut self.style
+    }
+
+    #[inline]
+    fn box_style(&self) -> &BoxStyle {
+        &self.style
+    }
+}
+
+crate::impl_box_style_methods!(SliderBuilder, 'u, 'a, 'b);
+crate::impl_interaction_state_methods!(SliderBuilder, 'u, 'a, 'b);
 
 impl<'u, 'a, 'b> SliderBuilder<'u, 'a, 'b> {
     pub fn new(ui: &'u mut Ui<'a>, value: &'b mut f32) -> Self {
         let id = ui.id();
+        let mut style = BoxStyle::new();
+        style.padding = EdgeInsets::symmetric(0.0, 10.0);
         Self {
             ui,
             value,
@@ -54,18 +64,9 @@ impl<'u, 'a, 'b> SliderBuilder<'u, 'a, 'b> {
             max: 1.0,
             step: None,
             id,
-            
-            // Default Widget Style
-            width: None,
-            height: None,
-            padding: EdgeInsets::symmetric(0.0, 10.0),
-            bg: None,
-            radius: [0.0; 4],
-            border_color: None,
-            border_width: 0.0,
-            shadow_color: None,
-            shadow_offset: [0.0; 2],
-            shadow_blur: 0.0,
+            style,
+            hover_state: None,
+            active_state: None,
 
             // Default Track Style
             track_w: None,
@@ -75,6 +76,7 @@ impl<'u, 'a, 'b> SliderBuilder<'u, 'a, 'b> {
             track_shadow_color: None,
             track_shadow_offset: [0.0; 2],
             track_shadow_blur: 0.0,
+            track_gradient: None,
 
             // Default Thumb Style
             thumb_w: 16.0,
@@ -84,7 +86,6 @@ impl<'u, 'a, 'b> SliderBuilder<'u, 'a, 'b> {
             thumb_shadow_color: None,
             thumb_shadow_offset: [0.0; 2],
             thumb_shadow_blur: 0.0,
-            track_gradient: None,
             thumb_gradient: None,
         }
     }
@@ -109,138 +110,6 @@ impl<'u, 'a, 'b> SliderBuilder<'u, 'a, 'b> {
         self
     }
 
-    // --- 1. Overall Widget Methods ---
-    pub fn size(mut self, w: f32, h: f32) -> Self {
-        self.width = Some(w);
-        self.height = Some(h);
-        self
-    }
-
-    pub fn width(mut self, w: f32) -> Self {
-        self.width = Some(w);
-        self
-    }
-
-    pub fn height(mut self, h: f32) -> Self {
-        self.height = Some(h);
-        self
-    }
-
-    pub fn fill_x(mut self) -> Self {
-        self.width = Some(self.ui.available_width);
-        self
-    }
-
-    pub fn fill_y(mut self) -> Self {
-        self.height = Some((self.ui.max_y - self.ui.cursor_y).max(20.0));
-        self
-    }
-
-    pub fn radius(mut self, tl: f32, tr: f32, br: f32, bl: f32) -> Self {
-        self.radius = [tl, tr, br, bl];
-        self
-    }
-
-    pub fn radius_all(mut self, r: f32) -> Self {
-        self.radius = [r; 4];
-        self
-    }
-
-    pub fn radius_top(mut self, r: f32) -> Self {
-        self.radius[0] = r;
-        self.radius[1] = r;
-        self
-    }
-
-    pub fn radius_bottom(mut self, r: f32) -> Self {
-        self.radius[2] = r;
-        self.radius[3] = r;
-        self
-    }
-
-    pub fn radius_top_left(mut self, r: f32) -> Self {
-        self.radius[0] = r;
-        self
-    }
-
-    pub fn radius_top_right(mut self, r: f32) -> Self {
-        self.radius[1] = r;
-        self
-    }
-
-    pub fn radius_bottom_right(mut self, r: f32) -> Self {
-        self.radius[2] = r;
-        self
-    }
-
-    pub fn radius_bottom_left(mut self, r: f32) -> Self {
-        self.radius[3] = r;
-        self
-    }
-
-    pub fn radius_left(mut self, r: f32) -> Self {
-        self.radius[0] = r;
-        self.radius[3] = r;
-        self
-    }
-
-    pub fn radius_right(mut self, r: f32) -> Self {
-        self.radius[1] = r;
-        self.radius[2] = r;
-        self
-    }
-
-    pub fn bg(mut self, bg: impl Into<zenthra_core::Background>) -> Self {
-        match bg.into() {
-            zenthra_core::Background::None => self.bg = None,
-            other => self.bg = Some(other),
-        }
-        self
-    }
-
-    pub fn border(mut self, border: impl Into<zenthra_core::Border>) -> Self {
-        match border.into() {
-            zenthra_core::Border::None => {
-                self.border_color = None;
-                self.border_width = 0.0;
-            }
-            zenthra_core::Border::Solid(c, w) => {
-                self.border_color = Some(c);
-                self.border_width = w;
-            }
-        }
-        self
-    }
-
-    pub fn shadow(mut self, color: Color, ox: f32, oy: f32, blur: f32) -> Self {
-        self.shadow_color = Some(color);
-        self.shadow_offset = [ox, oy];
-        self.shadow_blur = blur;
-        self
-    }
-
-    pub fn padding(mut self, t: f32, r: f32, b: f32, l: f32) -> Self {
-        self.padding = EdgeInsets { top: t, right: r, bottom: b, left: l };
-        self
-    }
-
-    pub fn padding_all(mut self, p: f32) -> Self {
-        self.padding = EdgeInsets::all(p);
-        self
-    }
-
-    pub fn padding_x(mut self, x: f32) -> Self {
-        self.padding.left = x;
-        self.padding.right = x;
-        self
-    }
-
-    pub fn padding_y(mut self, y: f32) -> Self {
-        self.padding.top = y;
-        self.padding.bottom = y;
-        self
-    }
-
     // --- 2. Track Methods ---
     pub fn track_size(mut self, w: f32, h: f32) -> Self {
         self.track_w = Some(w);
@@ -255,6 +124,11 @@ impl<'u, 'a, 'b> SliderBuilder<'u, 'a, 'b> {
 
     pub fn track_radius(mut self, tl: f32, tr: f32, br: f32, bl: f32) -> Self {
         self.track_radius = [tl, tr, br, bl];
+        self
+    }
+
+    pub fn track_radius_all(mut self, r: f32) -> Self {
+        self.track_radius = [r; 4];
         self
     }
 
@@ -282,8 +156,23 @@ impl<'u, 'a, 'b> SliderBuilder<'u, 'a, 'b> {
         self
     }
 
+    pub fn thumb_width(mut self, w: f32) -> Self {
+        self.thumb_w = w;
+        self
+    }
+
+    pub fn thumb_height(mut self, h: f32) -> Self {
+        self.thumb_h = h;
+        self
+    }
+
     pub fn thumb_radius(mut self, tl: f32, tr: f32, br: f32, bl: f32) -> Self {
         self.thumb_radius = [tl, tr, br, bl];
+        self
+    }
+
+    pub fn thumb_radius_all(mut self, r: f32) -> Self {
+        self.thumb_radius = [r; 4];
         self
     }
 
@@ -341,9 +230,9 @@ impl<'u, 'a, 'b> SliderBuilder<'u, 'a, 'b> {
         let y = self.ui.cursor_y;
         
         // 1. Resolve Layout Sizes
-        let w = self.width.or(self.track_w).unwrap_or(self.ui.available_width.max(100.0));
-        let h = self.height.unwrap_or_else(|| {
-            self.thumb_h.max(self.track_h).max(20.0) + self.padding.vertical()
+        let w = self.style.width.or(self.track_w).unwrap_or(self.ui.available_width.max(100.0));
+        let h = self.style.height.unwrap_or_else(|| {
+            self.thumb_h.max(self.track_h).max(20.0) + self.style.padding.vertical()
         });
 
         // 2. Hit-testing Bounds
@@ -372,8 +261,8 @@ impl<'u, 'a, 'b> SliderBuilder<'u, 'a, 'b> {
         self.ui.dispatch_event(self.id, crate::ui::WidgetEvent::Hover(is_hovered));
 
         // --- Interaction Logic ---
-        let track_w_hit = actual_w - self.padding.horizontal();
-        let track_x_start_hit = actual_ox + self.padding.left;
+        let track_w_hit = actual_w - self.style.padding.horizontal();
+        let track_x_start_hit = actual_ox + self.style.padding.left;
         
         let is_active = self.ui.active_drag.as_ref().map(|d| d.id == self.id).unwrap_or(false);
 
@@ -420,35 +309,39 @@ impl<'u, 'a, 'b> SliderBuilder<'u, 'a, 'b> {
 
         // --- Rendering ---
         let start_draw = self.ui.draws.len();
-        let track_x_start = x + self.padding.left;
-        let track_w = w - self.padding.horizontal();
+        let track_x_start = x + self.style.padding.left;
+        let track_w = w - self.style.padding.horizontal();
 
         // 0. Background
-        if self.bg.is_some() || self.border_color.is_some() || self.shadow_color.is_some() {
-            let (bg_c1, bg_c2, _c3, _c4, bg_params, _stops, _vis) = crate::style_ext::resolve_background(&self.bg);
+        let active_overrides = if is_active { self.active_state.as_ref() } else { None };
+        let hover_overrides = if is_hovered { self.hover_state.as_ref() } else { None };
 
-            self.ui.draws.push(DrawCommand::Rect(RectDraw {
-                instance: RectInstance {
-                    pos: [x, y],
-                    size: [w, h],
-                    color: bg_c1,
-                    color2: bg_c2,
-                    gradient_params: bg_params,
-                    radius: [
-                        self.radius[3],
-                        self.radius[2],
-                        self.radius[1],
-                        self.radius[0],
-                    ],
-                    border_width: self.border_width,
-                    border_color: self.border_color.map(|c| c.to_array()).unwrap_or([0.0; 4]),
-                    shadow_color: self.shadow_color.map(|c| c.to_array()).unwrap_or([0.0; 4]),
-                    shadow_offset: self.shadow_offset,
-                    shadow_blur: self.shadow_blur,
-                    opacity: 1.0,
-                    ..Default::default()
-                }
-            }));
+        let effective_bg = active_overrides
+            .and_then(|o| o.style.bg.as_ref())
+            .or_else(|| hover_overrides.and_then(|o| o.style.bg.as_ref()))
+            .or(self.style.bg.as_ref());
+
+        let effective_border_color = active_overrides
+            .and_then(|o| o.style.border_color())
+            .or_else(|| hover_overrides.and_then(|o| o.style.border_color()))
+            .or_else(|| self.style.border_color());
+
+        let effective_border_width = active_overrides
+            .map(|o| o.style.border_width())
+            .or_else(|| hover_overrides.map(|o| o.style.border_width()))
+            .unwrap_or_else(|| self.style.border_width());
+
+        if let Some(instance) = self.style.build_rect_styled(
+            x,
+            y,
+            w,
+            h,
+            effective_bg,
+            effective_border_color,
+            Some(effective_border_width),
+            1.0,
+        ) {
+            self.ui.draws.push(DrawCommand::Rect(RectDraw { instance }));
         }
 
         // 1. Track
@@ -637,6 +530,45 @@ mod tests {
             } else {
                 panic!("Expected RectDraw for solid slider background");
             }
+        }
+
+        // 4. Test Sibling Interaction states and Macro BoxStyle parity
+        {
+            let mut ui = Ui::new(
+                800, 600, 1.0, None, Vec::new(), None,
+                (0.0, 0.0), false,
+                &mut scroll_state, &mut cursor_state, &mut interaction_state,
+                None, None, false, false, 0.0,
+                &layout_cache, &mut next_layout_cache,
+                &screen_layout_cache, &mut next_screen_layout_cache,
+                &widget_window_map, &mut next_widget_window_map,
+                &image_sizes,
+            );
+
+            let s = ui.slider(&mut val, "test_slider")
+                .width(220.0)
+                .height(30.0)
+                .margin_all(5.0)
+                .padding_all(6.0)
+                .radius_all(10.0)
+                .track_radius_all(4.0)
+                .thumb_radius_all(8.0)
+                .thumb_width(20.0)
+                .thumb_height(20.0)
+                .hover(crate::macros::Style::bg(Color::rgb(0.2, 0.2, 0.3)))
+                .active(crate::macros::Style::bg(Color::rgb(0.3, 0.3, 0.4)));
+
+            assert_eq!(s.style.width, Some(220.0));
+            assert_eq!(s.style.height, Some(30.0));
+            assert_eq!(s.style.margin, EdgeInsets::all(5.0));
+            assert_eq!(s.style.padding, EdgeInsets::all(6.0));
+            assert_eq!(s.style.radius, [10.0; 4]);
+            assert_eq!(s.track_radius, [4.0; 4]);
+            assert_eq!(s.thumb_radius, [8.0; 4]);
+            assert_eq!(s.thumb_w, 20.0);
+            assert_eq!(s.thumb_h, 20.0);
+            assert!(s.hover_state.is_some());
+            assert!(s.active_state.is_some());
         }
     }
 }

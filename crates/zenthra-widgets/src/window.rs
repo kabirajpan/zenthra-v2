@@ -1,6 +1,7 @@
 // crates/zenthra-widgets/src/window.rs
 
 use crate::ui::{Ui, DrawCommand};
+use crate::macros::Style;
 use zenthra_core::{Color, Id, Response, Align};
 
 pub struct FloatingWindowBuilder<'u, 'a, 'b> {
@@ -73,8 +74,12 @@ impl<'u, 'a, 'b> FloatingWindowBuilder<'u, 'a, 'b> {
         self
     }
 
-    pub fn size(mut self, w: f32, h: f32) -> Self {
+    pub fn width(mut self, w: f32) -> Self {
         self.width = w;
+        self
+    }
+
+    pub fn height(mut self, h: f32) -> Self {
         self.height = h;
         self
     }
@@ -289,7 +294,7 @@ impl<'u, 'a, 'b> FloatingWindowBuilder<'u, 'a, 'b> {
                             if closable {
                                 if ui.button("×")
                                     .bg(Color::TRANSPARENT)
-                                    .hover_bg(Color::rgba(1.0, 1.0, 1.0, 0.1))
+                                    .hover(Style::bg(Color::rgba(1.0, 1.0, 1.0, 0.1)))
                                     .color(header_text_color)
                                     .padding(4.0, 8.0, 4.0, 8.0)
                                     .radius_all(4.0)

@@ -46,14 +46,6 @@ pub struct ContainerBuilder<'u, 'a> {
     pub id: zenthra_core::Id,
     is_absolute: bool,
     is_overlay: bool,
-    hover_bg: Option<zenthra_core::Background>,
-    hover_border_color: Option<Color>,
-    hover_border_width: Option<f32>,
-    hover_scale: f32,
-    active_bg: Option<zenthra_core::Background>,
-    active_border_color: Option<Color>,
-    active_border_width: Option<f32>,
-    active_scale: f32,
     backdrop_blur: Option<f32>,
     post_process_shader: Option<&'static str>,
     post_process_params: [f32; 8],
@@ -63,6 +55,8 @@ pub struct ContainerBuilder<'u, 'a> {
     pub custom_id: bool,
     pub interactive: bool,
     pub cursor: Option<crate::text::CursorIcon>,
+    pub hover_state: Option<crate::macros::WidgetStateOverrides>,
+    pub active_state: Option<crate::macros::WidgetStateOverrides>,
 }
 
 impl<'u, 'a> Styleable for ContainerBuilder<'u, 'a> {
@@ -79,16 +73,8 @@ impl<'u, 'a> Styleable for ContainerBuilder<'u, 'a> {
 
 // Single-source macro generates all BoxStyle builder methods (.width, .height, .padding, .radius, .bg, .border, .shadow, etc.)
 impl_box_style_methods!(ContainerBuilder);
+impl_interaction_state_methods!(ContainerBuilder);
 
-/// Parses an IntoBorder value into (color, width) overrides.
-#[inline]
-fn parse_border(border: impl crate::macros::IntoBorder) -> (Option<Color>, Option<f32>) {
-    let (b, _) = border.into_border();
-    match b {
-        zenthra_core::Border::None => (Some(Color::TRANSPARENT), Some(0.0)),
-        zenthra_core::Border::Solid(c, w) => (Some(c), Some(w)),
-    }
-}
 
 impl<'u, 'a> ContainerBuilder<'u, 'a> {
     pub fn new(ui: &'u mut Ui<'a>) -> Self {
@@ -120,20 +106,14 @@ impl<'u, 'a> ContainerBuilder<'u, 'a> {
             id,
             is_absolute: false,
             is_overlay: false,
-            hover_bg: None,
-            hover_border_color: None,
-            hover_border_width: None,
-            hover_scale: 1.0,
-            active_bg: None,
-            active_border_color: None,
-            active_border_width: None,
-            active_scale: 1.0,
             backdrop_blur: None,
             post_process_shader: None,
             post_process_params: [0.0, 1.0, 1.0, 1.0, 0.0, 1.0, 0.0, 0.0],
             backdrop_filter: None,
             draggable_window: false,
             role: None,
+            hover_state: None,
+            active_state: None,
         }
     }
 
@@ -217,22 +197,6 @@ impl<'u, 'a> ContainerBuilder<'u, 'a> {
         self
     }
 
-    pub fn active_bg(mut self, color: impl Into<zenthra_core::Background>) -> Self {
-        self.active_bg = Some(color.into());
-        self
-    }
-
-    pub fn active_border(mut self, border: impl crate::macros::IntoBorder) -> Self {
-        let (color, width) = parse_border(border);
-        self.active_border_color = color;
-        self.active_border_width = width;
-        self
-    }
-
-    pub fn active_scale(mut self, scale: f32) -> Self {
-        self.active_scale = scale;
-        self
-    }
 
     pub fn gap(mut self, g: f32) -> Self {
         self.gap = g;
@@ -264,23 +228,6 @@ impl<'u, 'a> ContainerBuilder<'u, 'a> {
 
     pub fn cursor(mut self, icon: crate::text::CursorIcon) -> Self {
         self.cursor = Some(icon);
-        self
-    }
-
-    pub fn hover_bg(mut self, color: impl Into<zenthra_core::Background>) -> Self {
-        self.hover_bg = Some(color.into());
-        self
-    }
-
-    pub fn hover_border(mut self, border: impl crate::macros::IntoBorder) -> Self {
-        let (color, width) = parse_border(border);
-        self.hover_border_color = color;
-        self.hover_border_width = width;
-        self
-    }
-
-    pub fn hover_scale(mut self, scale: f32) -> Self {
-        self.hover_scale = scale;
         self
     }
 
@@ -565,10 +512,17 @@ impl<'u, 'a> ContainerBuilder<'u, 'a> {
         let container_hover = raw_hover && can_interact;
 
         if container_hover {
-            if let Some(cursor) = self.cursor {
+            let eff_cursor = self.hover_state.as_ref().and_then(|h| h.cursor).or(self.cursor);
+            if let Some(cursor) = eff_cursor {
                 self.ui.cursor_icon = cursor;
             }
+            if let Some(ref tip) = self.hover_state.as_ref().and_then(|h| h.tooltip.as_ref()) {
+                self.ui.draw_tooltip(tip);
+            }
         }
+
+        let has_hover_overrides = self.hover_state.as_ref().map(|s| s.has_overrides).unwrap_or(false);
+        let has_active_overrides = self.active_state.as_ref().map(|s| s.has_overrides).unwrap_or(false);
 
         let is_interactive = self.role == Some(zenthra_core::Role::Button)
             || self.interactive
@@ -576,10 +530,8 @@ impl<'u, 'a> ContainerBuilder<'u, 'a> {
             || self.scroll_x
             || self.scroll_y
             || self.cursor.is_some()
-            || self.hover_bg.is_some()
-            || self.hover_border_color.is_some()
-            || self.active_bg.is_some()
-            || self.active_border_color.is_some();
+            || has_hover_overrides
+            || has_active_overrides;
 
         let container_active = if self.ui.mouse_down {
             if self.ui.active_widget_id == Some(id) {
@@ -758,19 +710,32 @@ impl<'u, 'a> ContainerBuilder<'u, 'a> {
 
         // Background, Border & Shadow (Single source via BoxStyleExt)
         {
+            let active_overrides = self.active_state.as_ref();
+            let hover_overrides = self.hover_state.as_ref();
+
             let (effective_bg, effective_bw, effective_bc, final_scale) = if container_active {
+                let act_bg = active_overrides.and_then(|o| o.style.bg.as_ref());
+                let act_bw = active_overrides.map(|o| o.style.border_width()).filter(|&w| w > 0.0);
+                let act_bc = active_overrides.and_then(|o| o.style.border_color());
+                let act_scale = active_overrides.map(|o| o.scale).filter(|&s| (s - 1.0).abs() > f32::EPSILON).unwrap_or(1.0);
+
                 (
-                    self.active_bg.as_ref().or(self.hover_bg.as_ref()).or(self.style.bg.as_ref()),
-                    self.active_border_width.or(self.hover_border_width).unwrap_or(border_width),
-                    self.active_border_color.or(self.hover_border_color).or(border_color),
-                    self.active_scale,
+                    act_bg.or(hover_overrides.and_then(|o| o.style.bg.as_ref())).or(self.style.bg.as_ref()),
+                    act_bw.or(hover_overrides.map(|o| o.style.border_width()).filter(|&w| w > 0.0)).unwrap_or(border_width),
+                    act_bc.or(hover_overrides.and_then(|o| o.style.border_color())).or(border_color),
+                    act_scale,
                 )
             } else if container_hover {
+                let hov_bg = hover_overrides.and_then(|o| o.style.bg.as_ref());
+                let hov_bw = hover_overrides.map(|o| o.style.border_width()).filter(|&w| w > 0.0);
+                let hov_bc = hover_overrides.and_then(|o| o.style.border_color());
+                let hov_scale = hover_overrides.map(|o| o.scale).filter(|&s| (s - 1.0).abs() > f32::EPSILON).unwrap_or(1.0);
+
                 (
-                    self.hover_bg.as_ref().or(self.style.bg.as_ref()),
-                    self.hover_border_width.unwrap_or(border_width),
-                    self.hover_border_color.or(border_color),
-                    self.hover_scale,
+                    hov_bg.or(self.style.bg.as_ref()),
+                    hov_bw.unwrap_or(border_width),
+                    hov_bc.or(border_color),
+                    hov_scale,
                 )
             } else {
                 (
@@ -1581,16 +1546,13 @@ mod tests {
         assert_eq!(border_only_draw.border_width, 2.0);
         assert_eq!(border_only_draw.border_color, Color::RED.to_array());
 
-        // 5. Container hover_border(Border::None) correctly sets zero border
+        // 5. Container hover(Style::border(Border::None)) correctly sets zero border
         let c_hover = ui.container()
             .border((Color::WHITE, 2.0))
-            .hover_border(zenthra_core::Border::None)
-            .active_border(zenthra_core::Border::None);
+            .hover(crate::macros::Style::border(zenthra_core::Border::None));
 
-        assert_eq!(c_hover.hover_border_width, Some(0.0));
-        assert_eq!(c_hover.hover_border_color, Some(Color::TRANSPARENT));
-        assert_eq!(c_hover.active_border_width, Some(0.0));
-        assert_eq!(c_hover.active_border_color, Some(Color::TRANSPARENT));
+        assert!(c_hover.hover_state.is_some());
+        assert_eq!(c_hover.hover_state.as_ref().unwrap().style.border, zenthra_core::Border::None);
     }
 }
 

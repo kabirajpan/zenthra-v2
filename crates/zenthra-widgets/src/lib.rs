@@ -30,7 +30,10 @@ pub use controls::*;
 pub use containers::{CardBuilder, PanelBuilder};
 pub use layout::StackBuilder;
 pub use zenthra_core::{BoxStyle, GradientDirection, Styleable, IntoBorder};
-pub use macros::{TextDecoration, IntoDecoration};
+pub use macros::{
+    TextDecoration, IntoDecoration, StateProp, Style, Text, Transform, Cursor, Tooltip, Animation,
+    IntoStateProps, WidgetStateOverrides, tooltip, scale, AnimationCurve, AnimationLoop, AnimationConfig,
+};
 pub mod icons;
 pub use image::ImageBuilder;
 pub use style_ext::{resolve_background, BoxStyleExt};

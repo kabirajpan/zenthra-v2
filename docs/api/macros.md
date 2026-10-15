@@ -163,6 +163,49 @@ Target field: `self.text_style` (`TextStyle`).
 
 ---
 
+### 3.7 Interaction States & Sibling Architecture (`impl_interaction_state_methods!`)
+
+Widgets with interactive capabilities (`ui.card()`, `ui.button()`, `ui.container()`) implement `impl_interaction_state_methods!`, exposing `.hover(...)` and `.active(...)` powered by Zenthra's zero-cost Sibling architecture. Rather than relying on fragmented ad-hoc builder methods (`hover_bg`, `hover_border`, `hover_scale`) or verbose closures (`|s| s.bg(...)`), interaction styling is organized into clean, domain-specific **Siblings** passed as a single item or a fixed-size array `[...]`.
+
+```rust
+ui.card()
+    .bg(Color::rgb(0.12, 0.14, 0.18))
+    .border((Color::rgb(0.20, 0.24, 0.30), 1.0))
+    .hover([
+        Style::bg(Color::rgb(0.16, 0.18, 0.24)),
+        Style::border((Color::rgb(0.40, 0.50, 0.90), 1.5)),
+        Transform::scale(1.03),
+        Cursor::Pointer,
+        Tooltip::new("Open dashboard metric details"),
+        Animation::duration(150).ease_out(),
+    ])
+    .active([
+        Style::bg(Color::rgb(0.10, 0.12, 0.15)),
+        Transform::scale(0.98),
+    ])
+    .show(|ui| { ... });
+```
+
+#### Sibling Namespaces
+
+| Sibling | Scope | Methods / Variants | Examples |
+| :--- | :--- | :--- | :--- |
+| **`Style`** | Surfaces & Box Geometry | `.bg(...)`<br>`.border(...)`<br>`.shadow(color, x, y, blur)`<br>`.radius(...)`, `.radius_all(...)`<br>`.padding(...)`, `.padding_all(...)`<br>`.margin(...)`, `.margin_all(...)`<br>`.width(...)`, `.height(...)`<br>`.opacity(f32)`<br>`.backdrop_blur(f32)` | `Style::bg(Color::rgb(0.2, 0.2, 0.3))`<br>`Style::border((Color::WHITE, 1.0))` |
+| **`Text`** | Typography & Glyphs | `.color(Color)`<br>`.size(f32)`<br>`.underline(bool)`<br>`.font_weight(FontWeight)` | `Text::color(Color::rgb(0.9, 0.9, 1.0))`<br>`Text::underline(true)` |
+| **`Transform`** | Spatial Coordinates & Micro-motion | `.scale(f32)`<br>`Transform::scale(1.03)` or `scale(1.03)` | `Transform::scale(1.04)` |
+| **`Cursor`** | Mouse Cursor Visual Feedback | `Cursor::Pointer`<br>`Cursor::Grab`<br>`Cursor::Grabbing`<br>`Cursor::Text`<br>`Cursor::Crosshair`<br>`Cursor::ColResize`<br>`Cursor::RowResize`<br>`Cursor::Default`<br>`.icon(CursorIcon)` | `Cursor::Pointer` |
+| **`Tooltip`** | Floating Context Hints | `Tooltip::new(&str)`<br>or `tooltip(&str)` | `Tooltip::new("Click to open")`<br>`tooltip("Helpful tip")` |
+| **`Animation`** | Motion Timing & Transitions | `.duration(ms)`<br>`.delay(ms)`<br>`.ease_out()`, `.ease_in()`, `.ease_in_out()`, `.linear()`<br>`.spring()`, `.spring_bouncy()`, `.spring_smooth()`<br>`.pulse()`, `.shimmer()`<br>`.none()` | `Animation::duration(200).ease_out()`<br>`Animation::spring()` |
+
+#### Zero Allocation Guarantee
+The `IntoStateProps` trait is implemented for:
+- Any individual `StateProp` (e.g. `.hover(Cursor::Pointer)`)
+- Fixed-size arrays `[StateProp; N]` for any `N` up to 16 without heap allocation
+- Slice `&[StateProp]` and `Vec<StateProp>` for dynamic composition
+- Direct values like `CursorIcon` or `Color`
+
+---
+
 ## 4. User Endpoints & How It Works
 
 Application developers consume these macro-generated methods through fluent builder chains initiated from the `Ui` instance.
@@ -175,15 +218,18 @@ The table below catalogs every primary user-facing endpoint on `Ui`, which macro
 
 | User Endpoint (`Ui` Method) | Builder Struct | Macro Packages Applied | Macro & Builder Methods Exposed | Terminal Execution Method | Return Type |
 | :--- | :--- | :--- | :--- | :--- | :--- |
-| **`ui.container()`** | `ContainerBuilder` | `impl_box_style_methods!` | **Box**: `.width()`, `.height()`, `.fill_x()`, `.fill_y()`, `.fill()`, `.min/max_width()`, `.min/max_height()`, `.padding()`, `.padding_all()`, `.padding_x/y()`, `.margin()`, `.margin_all()`, `.margin_x/y()`, `.radius()`, `.radius_all()`, `.radius_top/bottom/left/right()`, `.bg()`, `.border()`, `.shadow()`<br>**Layout**: `.align()`, `.halign()`, `.valign()`, `.gap()`, `.wrap(Wrap)` | `.show(\|ui\| { ... })` | `Response` |
-| **`ui.row()`** | `ContainerBuilder` | `impl_box_style_methods!` | Same as `ui.container()` (pre-configured with `Direction::Row`, supports `.halign()`, `.valign()`, `.align()`) | `.show(\|ui\| { ... })` | `Response` |
-| **`ui.column()`** | `ContainerBuilder` | `impl_box_style_methods!` | Same as `ui.container()` (pre-configured with `Direction::Column`, supports `.halign()`, `.valign()`, `.align()`) | `.show(\|ui\| { ... })` | `Response` |
-| **`ui.stack()`** | `ContainerBuilder` | `impl_box_style_methods!` | Same as `ui.container()` (pre-configured with `Direction::Stack`, supports `.halign()`, `.valign()`, `.align()`) | `.show(\|ui\| { ... })` | `Response` |
-| **`ui.button(label)`** | `ButtonBuilder` | `impl_box_style_methods!`<br>`impl_text_style_methods!` | **Box**: `.width()`, `.height()`, `.fill_x()`, `.padding()`, `.margin()`, `.radius()`, `.bg()`, `.border()`, `.shadow()`<br>**Text**: `.size()`, `.color()`, `.font_family()`, `.font_weight()`, `.decoration()`, `.wrap()`<br>**Layout**: `.align(Align)` (label alignment) | `.show()` | `Response` |
+| **`ui.container()`** | `ContainerBuilder` | `impl_box_style_methods!`<br>`impl_interaction_state_methods!` | **Box**: `.width()`, `.height()`, `.fill_x()`, `.fill_y()`, `.fill()`, `.min/max_width()`, `.min/max_height()`, `.padding()`, `.padding_all()`, `.padding_x/y()`, `.margin()`, `.margin_all()`, `.margin_x/y()`, `.radius()`, `.radius_all()`, `.radius_top/bottom/left/right()`, `.bg()`, `.border()`, `.shadow()`<br>**Interactions**: `.hover([ ... ])`, `.active([ ... ])`<br>**Layout**: `.align()`, `.halign()`, `.valign()`, `.gap()`, `.wrap(Wrap)` | `.show(\|ui\| { ... })` | `Response` |
+| **`ui.row()`** | `ContainerBuilder` | `impl_box_style_methods!`<br>`impl_interaction_state_methods!` | Same as `ui.container()` (pre-configured with `Direction::Row`, supports `.halign()`, `.valign()`, `.align()`) | `.show(\|ui\| { ... })` | `Response` |
+| **`ui.column()`** | `ContainerBuilder` | `impl_box_style_methods!`<br>`impl_interaction_state_methods!` | Same as `ui.container()` (pre-configured with `Direction::Column`, supports `.halign()`, `.valign()`, `.align()`) | `.show(\|ui\| { ... })` | `Response` |
+| **`ui.stack()`** | `ContainerBuilder` | `impl_box_style_methods!`<br>`impl_interaction_state_methods!` | Same as `ui.container()` (pre-configured with `Direction::Stack`, supports `.halign()`, `.valign()`, `.align()`) | `.show(\|ui\| { ... })` | `Response` |
+| **`ui.button(label)`** | `ButtonBuilder` | `impl_box_style_methods!`<br>`impl_text_style_methods!`<br>`impl_interaction_state_methods!` | **Box**: `.width()`, `.height()`, `.fill_x()`, `.padding()`, `.margin()`, `.radius()`, `.bg()`, `.border()`, `.shadow()`<br>**Text**: `.size()`, `.color()`, `.font_family()`, `.font_weight()`, `.decoration()`, `.wrap()`<br>**Interactions**: `.hover([ ... ])`, `.active([ ... ])`<br>**Layout**: `.align(Align)` (label alignment) | `.show()` | `Response` |
 | **`ui.text(content)`** | `TextBuilder` | `impl_box_style_methods!`<br>`impl_text_style_methods!` | **Box (Badges)**: `.padding()`, `.margin()`, `.radius()`, `.bg()`, `.border()`, `.shadow()`<br>**Text**: `.size()`, `.color()`, `.font_family()`, `.font_weight()`, `.decoration()`, `.wrap()`, `.ellipsis()`<br>**Alignment**: `.align(Align)`, `.valign(Align)` | `.show()` | `(Response, Option<ShapedBuffer>)` |
 | **`ui.h1(title)` .. `ui.h4`** | `TextBuilder` | `impl_box_style_methods!`<br>`impl_text_style_methods!` | Same as `ui.text()`, initialized with pre-scaled typographic sizing (h1: 28pt, h2: 22pt, h3: 18pt, h4: 16pt), supports `.align()`, `.valign()` | `.show()` | `(Response, Option<ShapedBuffer>)` |
 | **`ui.input(&mut buf)`** | `InputBuilder` | `impl_box_style_methods!`<br>`impl_font_style_methods!` | **Box**: `.width()`, `.height()`, `.fill_x()`, `.padding()`, `.margin()`, `.radius()`, `.bg()`, `.border()`, `.shadow()`<br>**Font**: `.size()`, `.color()`, `.font_family()`, `.font_weight()` | `.show()` | `Response` |
 | **`ui.text_area(&mut buf)`** | `TextAreaBuilder` | `impl_box_style_methods!`<br>`impl_font_style_methods!` | **Box**: `.width()`, `.height()`, `.fill_x()`, `.padding()`, `.margin()`, `.radius()`, `.bg()`, `.border()`, `.shadow()`<br>**Font**: `.size()`, `.color()`, `.font_family()`, `.font_weight()` | `.show()` | `Response` |
+| **`ui.panel()`** | `PanelBuilder` | `impl_box_style_methods!` | **Box**: Full BoxStyle methods<br>**Header**: `.title()`, `.subtitle()`, `.header_bg()`, `.header_padding()`<br>**Collapsible**: `.collapsed(&mut bool)` | `.show(\|ui\| { ... })` | `Response` |
+| **`ui.slider(&mut val, range)`** | `SliderBuilder` | `impl_box_style_methods!`<br>`impl_interaction_state_methods!` | **Box**: Full BoxStyle methods<br>**Track**: `.track_height()`, `.track_radius_all()`, `.track_bg()`, `.track_color()`, `.track_gradient()`, `.track_shadow()`<br>**Thumb**: `.thumb_width()`, `.thumb_height()`, `.thumb_radius_all()`, `.thumb_bg()`, `.thumb_gradient()`, `.thumb_shadow()`<br>**Interactions**: `.hover([ ... ])`, `.active([ ... ])` | `.show()` | `Response` |
+| **`ui.progress_bar(val)`** | `ProgressBarBuilder` | `impl_box_style_methods!`<br>`impl_interaction_state_methods!` | **Box**: Full BoxStyle methods<br>**Track**: `.track_height()`, `.track_radius_all()`, `.track_bg()`, `.track_color()`, `.track_gradient()`, `.track_shadow()`<br>**Fill**: `.fill_color()`, `.fill_gradient()`, `.fill_bg()`, `.fill_radius_all()`, `.fill_shadow()`<br>**Effects**: `.shimmer(bool)`<br>**Interactions**: `.hover([ ... ])`, `.active([ ... ])` | `.show()` | `Response` |
 
 ---
 

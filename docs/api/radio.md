@@ -90,7 +90,6 @@ Generated via `impl_visuals!`:
 pub fn bg(mut self, bg: impl Into<Background>) -> Self // Default: Transparent
 pub fn border(mut self, border: impl Into<Border>) -> Self
 pub fn shadow(mut self, color: Color, x: f32, y: f32, blur: f32) -> Self
-pub fn shadow_opacity(mut self, opacity: f32) -> Self
 pub fn opacity(mut self, opacity: f32) -> Self
 ```
 
@@ -103,9 +102,12 @@ Generated via `impl_text_style_methods!`:
 ```rust
 pub fn size(mut self, size: f32) -> Self      // Default: 14.0
 pub fn color(mut self, color: Color) -> Self  // Default: Color::WHITE
-pub fn active_label(mut self, color: Color) -> Self
 pub fn font_family(mut self, family: impl Into<String>) -> Self
 pub fn font_weight(mut self, weight: impl Into<zenthra_text::prelude::FontWeight>) -> Self
+
+// State Siblings (.active(Text::color(...)) for label transition when selected):
+pub fn hover(mut self, props: impl IntoStateProps) -> Self
+pub fn active(mut self, props: impl IntoStateProps) -> Self
 ```
 
 ---
@@ -115,7 +117,6 @@ pub fn font_weight(mut self, weight: impl Into<zenthra_text::prelude::FontWeight
 ```rust
 pub fn glow(mut self, enabled: bool) -> Self
 pub fn scaling(mut self, hover: f32, pressed: f32) -> Self
-pub fn hover_brightness(mut self, b: f32) -> Self
 pub fn disabled(mut self, disabled: bool) -> Self
 ```
 

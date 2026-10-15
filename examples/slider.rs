@@ -279,11 +279,53 @@ fn main() {
                                     .range(0.0, 1.0)
                                     .fill_x()
                                     .track_height(4.0)
+                                    .track_radius_all(2.0)
                                     .track_color(Color::rgb(0.14, 0.16, 0.22))
                                     .thumb_size(12.0, 24.0)
-                                    .thumb_radius(6.0, 6.0, 6.0, 6.0)
+                                    .thumb_radius_all(6.0)
                                     .thumb_color(Color::rgb(0.40, 0.85, 0.90))
                                     .thumb_shadow(Color::rgba(0.30, 0.80, 0.90, 0.40), 0.0, 2.0, 6.0)
+                                    .show();
+                            });
+                        });
+
+                    // ── SECTION 5: CONTAINED SLIDER WITH SIBLING HOVER & ACTIVE ──
+                    ui.container()
+                        .fill_x()
+                        .bg(Color::rgb(0.09, 0.11, 0.15))
+                        .border((Color::rgb(0.18, 0.22, 0.30), 1.0))
+                        .radius_all(10.0)
+                        .padding_all(18.0)
+                        .column()
+                        .gap(18.0)
+                        .show(|ui: &mut Ui| {
+                            ui.h3("5. Contained Surface & Sibling Hover States (.hover(...))")
+                                .color(Color::rgb(0.35, 0.85, 0.75))
+                                .show();
+
+                            ui.column().gap(6.0).show(|ui: &mut Ui| {
+                                ui.text("Enclosed slider card with interactive hover/active surface transitions")
+                                    .size(13.0)
+                                    .color(Color::rgb(0.75, 0.80, 0.90))
+                                    .show();
+
+                                ui.slider(&mut volume, "contained_slider")
+                                    .range(0.0, 1.0)
+                                    .fill_x()
+                                    .bg(Color::rgb(0.12, 0.14, 0.20))
+                                    .border((Color::rgb(0.22, 0.26, 0.36), 1.0))
+                                    .radius_all(8.0)
+                                    .padding_x(14.0)
+                                    .padding_y(12.0)
+                                    .hover(Style::bg(Color::rgb(0.16, 0.19, 0.28)))
+                                    .active(Style::bg(Color::rgb(0.18, 0.22, 0.32)))
+                                    .track_height(6.0)
+                                    .track_radius_all(3.0)
+                                    .track_color(Color::rgb(0.22, 0.26, 0.36))
+                                    .thumb_size(18.0, 18.0)
+                                    .thumb_radius_all(9.0)
+                                    .thumb_color(Color::rgb(0.35, 0.85, 0.75))
+                                    .thumb_shadow(Color::rgba(0.20, 0.75, 0.65, 0.40), 0.0, 2.0, 6.0)
                                     .show();
                             });
                         });

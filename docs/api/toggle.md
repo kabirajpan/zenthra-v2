@@ -137,9 +137,12 @@ pub fn label_right(mut self) -> Self                // Default
 pub fn label_gap(mut self, gap: f32) -> Self        // Default: 10.0
 pub fn size(mut self, size: f32) -> Self            // Default: 14.0 (Label text size)
 pub fn color(mut self, color: Color) -> Self        // Default: Color::WHITE (Label text color)
-pub fn active_label(mut self, color: Color) -> Self // Transition color when toggled ON
 pub fn font_weight(mut self, weight: impl Into<zenthra_text::prelude::FontWeight>) -> Self
 pub fn font_family(mut self, family: impl Into<String>) -> Self
+
+// State Siblings (.active(Text::color(...)) for label transition when ON):
+pub fn hover(mut self, props: impl IntoStateProps) -> Self
+pub fn active(mut self, props: impl IntoStateProps) -> Self
 ```
 
 ---

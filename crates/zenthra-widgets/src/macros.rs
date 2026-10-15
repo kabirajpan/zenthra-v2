@@ -83,6 +83,662 @@ impl<T: IntoDecoration + Copy> IntoDecoration for &[T] {
     }
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// SIBLING INTERACTION & STATE MODIFIERS (Hover, Active, Focus)
+// ─────────────────────────────────────────────────────────────────────────────
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum AnimationCurve {
+    EaseOut,
+    EaseInOut,
+    Linear,
+    Spring,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum AnimationLoop {
+    Pulse,
+    Shimmer,
+    Bounce,
+    Spin,
+}
+
+/// Unified animation configuration for state transitions
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct AnimationConfig {
+    pub duration_ms: u32,
+    pub delay_ms: u32,
+    pub ease: AnimationCurve,
+    pub loop_effect: Option<AnimationLoop>,
+}
+
+impl Default for AnimationConfig {
+    fn default() -> Self {
+        Self {
+            duration_ms: 150,
+            delay_ms: 0,
+            ease: AnimationCurve::EaseOut,
+            loop_effect: None,
+        }
+    }
+}
+
+/// Unified property enum representing any property that can change during interaction states.
+#[derive(Debug, Clone, PartialEq)]
+pub enum StateProp {
+    // 1. Box Style
+    Bg(zenthra_core::Background),
+    Border(zenthra_core::Border, Option<zenthra_core::BorderAlignment>),
+    Shadow(zenthra_core::Color, [f32; 2], f32),
+    Radius([f32; 4]),
+    Padding(zenthra_core::EdgeInsets),
+    Margin(zenthra_core::EdgeInsets),
+    Width(f32),
+    Height(f32),
+    Opacity(f32),
+    BackdropBlur(f32),
+
+    // 2. Typography
+    Color(zenthra_core::Color),
+    FontSize(f32),
+    Underline(bool),
+    FontWeight(zenthra_text::prelude::FontWeight),
+
+    // 3. Transform
+    Scale(f32),
+
+    // 4. Interaction
+    Cursor(crate::text::CursorIcon),
+    Tooltip(String),
+
+    // 5. Animation
+    Animation(AnimationConfig),
+    Duration(u32),
+    Delay(u32),
+    Ease(AnimationCurve),
+    LoopEffect(AnimationLoop),
+}
+
+impl StateProp {
+    #[inline]
+    pub fn delay(mut self, ms: u32) -> Self {
+        match &mut self {
+            StateProp::Animation(ref mut cfg) => cfg.delay_ms = ms,
+            StateProp::Duration(d) => {
+                return StateProp::Animation(AnimationConfig {
+                    duration_ms: *d,
+                    delay_ms: ms,
+                    ease: AnimationCurve::EaseOut,
+                    loop_effect: None,
+                });
+            }
+            _ => return StateProp::Delay(ms),
+        }
+        self
+    }
+
+    #[inline]
+    pub fn ease_out(mut self) -> Self {
+        match &mut self {
+            StateProp::Animation(ref mut cfg) => cfg.ease = AnimationCurve::EaseOut,
+            StateProp::Duration(d) => {
+                return StateProp::Animation(AnimationConfig {
+                    duration_ms: *d,
+                    delay_ms: 0,
+                    ease: AnimationCurve::EaseOut,
+                    loop_effect: None,
+                });
+            }
+            _ => return StateProp::Ease(AnimationCurve::EaseOut),
+        }
+        self
+    }
+
+    #[inline]
+    pub fn ease_in_out(mut self) -> Self {
+        match &mut self {
+            StateProp::Animation(ref mut cfg) => cfg.ease = AnimationCurve::EaseInOut,
+            StateProp::Duration(d) => {
+                return StateProp::Animation(AnimationConfig {
+                    duration_ms: *d,
+                    delay_ms: 0,
+                    ease: AnimationCurve::EaseInOut,
+                    loop_effect: None,
+                });
+            }
+            _ => return StateProp::Ease(AnimationCurve::EaseInOut),
+        }
+        self
+    }
+
+    #[inline]
+    pub fn linear(mut self) -> Self {
+        match &mut self {
+            StateProp::Animation(ref mut cfg) => cfg.ease = AnimationCurve::Linear,
+            StateProp::Duration(d) => {
+                return StateProp::Animation(AnimationConfig {
+                    duration_ms: *d,
+                    delay_ms: 0,
+                    ease: AnimationCurve::Linear,
+                    loop_effect: None,
+                });
+            }
+            _ => return StateProp::Ease(AnimationCurve::Linear),
+        }
+        self
+    }
+
+    #[inline]
+    pub fn spring(mut self) -> Self {
+        match &mut self {
+            StateProp::Animation(ref mut cfg) => cfg.ease = AnimationCurve::Spring,
+            StateProp::Duration(d) => {
+                return StateProp::Animation(AnimationConfig {
+                    duration_ms: *d,
+                    delay_ms: 0,
+                    ease: AnimationCurve::Spring,
+                    loop_effect: None,
+                });
+            }
+            _ => return StateProp::Ease(AnimationCurve::Spring),
+        }
+        self
+    }
+
+    #[inline]
+    pub fn pulse(mut self) -> Self {
+        match &mut self {
+            StateProp::Animation(ref mut cfg) => cfg.loop_effect = Some(AnimationLoop::Pulse),
+            StateProp::Duration(d) => {
+                return StateProp::Animation(AnimationConfig {
+                    duration_ms: *d,
+                    delay_ms: 0,
+                    ease: AnimationCurve::EaseOut,
+                    loop_effect: Some(AnimationLoop::Pulse),
+                });
+            }
+            _ => return StateProp::LoopEffect(AnimationLoop::Pulse),
+        }
+        self
+    }
+
+    #[inline]
+    pub fn shimmer(mut self) -> Self {
+        match &mut self {
+            StateProp::Animation(ref mut cfg) => cfg.loop_effect = Some(AnimationLoop::Shimmer),
+            StateProp::Duration(d) => {
+                return StateProp::Animation(AnimationConfig {
+                    duration_ms: *d,
+                    delay_ms: 0,
+                    ease: AnimationCurve::EaseOut,
+                    loop_effect: Some(AnimationLoop::Shimmer),
+                });
+            }
+            _ => return StateProp::LoopEffect(AnimationLoop::Shimmer),
+        }
+        self
+    }
+
+    #[inline]
+    pub fn bounce(mut self) -> Self {
+        match &mut self {
+            StateProp::Animation(ref mut cfg) => cfg.loop_effect = Some(AnimationLoop::Bounce),
+            StateProp::Duration(d) => {
+                return StateProp::Animation(AnimationConfig {
+                    duration_ms: *d,
+                    delay_ms: 0,
+                    ease: AnimationCurve::EaseOut,
+                    loop_effect: Some(AnimationLoop::Bounce),
+                });
+            }
+            _ => return StateProp::LoopEffect(AnimationLoop::Bounce),
+        }
+        self
+    }
+
+    #[inline]
+    pub fn spin(mut self) -> Self {
+        match &mut self {
+            StateProp::Animation(ref mut cfg) => cfg.loop_effect = Some(AnimationLoop::Spin),
+            StateProp::Duration(d) => {
+                return StateProp::Animation(AnimationConfig {
+                    duration_ms: *d,
+                    delay_ms: 0,
+                    ease: AnimationCurve::EaseOut,
+                    loop_effect: Some(AnimationLoop::Spin),
+                });
+            }
+            _ => return StateProp::LoopEffect(AnimationLoop::Spin),
+        }
+        self
+    }
+}
+
+/// Sibling 1: `Style` (Surfaces, Borders, Shadows, Geometry, Spacing)
+pub struct Style;
+
+impl Style {
+    #[inline]
+    pub fn bg(bg: impl Into<zenthra_core::Background>) -> StateProp {
+        StateProp::Bg(bg.into())
+    }
+
+    #[inline]
+    pub fn border(border: impl zenthra_core::IntoBorder) -> StateProp {
+        let (b, align) = border.into_border();
+        StateProp::Border(b, align)
+    }
+
+    #[inline]
+    pub fn shadow(color: zenthra_core::Color, x: f32, y: f32, blur: f32) -> StateProp {
+        StateProp::Shadow(color, [x, y], blur)
+    }
+
+    #[inline]
+    pub fn radius_all(r: f32) -> StateProp {
+        StateProp::Radius([r; 4])
+    }
+
+    #[inline]
+    pub fn radius(tl: f32, tr: f32, br: f32, bl: f32) -> StateProp {
+        StateProp::Radius([tl, tr, br, bl])
+    }
+
+    #[inline]
+    pub fn radius_top(r: f32) -> StateProp {
+        StateProp::Radius([r, r, 0.0, 0.0])
+    }
+
+    #[inline]
+    pub fn radius_bottom(r: f32) -> StateProp {
+        StateProp::Radius([0.0, 0.0, r, r])
+    }
+
+    #[inline]
+    pub fn radius_left(r: f32) -> StateProp {
+        StateProp::Radius([r, 0.0, 0.0, r])
+    }
+
+    #[inline]
+    pub fn radius_right(r: f32) -> StateProp {
+        StateProp::Radius([0.0, r, r, 0.0])
+    }
+
+    #[inline]
+    pub fn padding_all(p: f32) -> StateProp {
+        StateProp::Padding(zenthra_core::EdgeInsets::all(p))
+    }
+
+    #[inline]
+    pub fn padding(t: f32, r: f32, b: f32, l: f32) -> StateProp {
+        StateProp::Padding(zenthra_core::EdgeInsets { top: t, right: r, bottom: b, left: l })
+    }
+
+    #[inline]
+    pub fn padding_x(p: f32) -> StateProp {
+        StateProp::Padding(zenthra_core::EdgeInsets::symmetric(0.0, p))
+    }
+
+    #[inline]
+    pub fn padding_y(p: f32) -> StateProp {
+        StateProp::Padding(zenthra_core::EdgeInsets::symmetric(p, 0.0))
+    }
+
+    #[inline]
+    pub fn margin_all(m: f32) -> StateProp {
+        StateProp::Margin(zenthra_core::EdgeInsets::all(m))
+    }
+
+    #[inline]
+    pub fn margin(t: f32, r: f32, b: f32, l: f32) -> StateProp {
+        StateProp::Margin(zenthra_core::EdgeInsets { top: t, right: r, bottom: b, left: l })
+    }
+
+    #[inline]
+    pub fn margin_x(m: f32) -> StateProp {
+        StateProp::Margin(zenthra_core::EdgeInsets::symmetric(0.0, m))
+    }
+
+    #[inline]
+    pub fn margin_y(m: f32) -> StateProp {
+        StateProp::Margin(zenthra_core::EdgeInsets::symmetric(m, 0.0))
+    }
+
+    #[inline]
+    pub fn width(w: f32) -> StateProp {
+        StateProp::Width(w)
+    }
+
+    #[inline]
+    pub fn height(h: f32) -> StateProp {
+        StateProp::Height(h)
+    }
+
+    #[inline]
+    pub fn opacity(a: f32) -> StateProp {
+        StateProp::Opacity(a)
+    }
+
+    #[inline]
+    pub fn backdrop_blur(radius: f32) -> StateProp {
+        StateProp::BackdropBlur(radius)
+    }
+}
+
+/// Sibling 2: `Text` (Typography)
+pub struct Text;
+
+impl Text {
+    #[inline]
+    pub fn color(c: zenthra_core::Color) -> StateProp {
+        StateProp::Color(c)
+    }
+
+    #[inline]
+    pub fn size(s: f32) -> StateProp {
+        StateProp::FontSize(s)
+    }
+
+    #[inline]
+    pub fn underline(u: bool) -> StateProp {
+        StateProp::Underline(u)
+    }
+
+    #[inline]
+    pub fn font_weight(w: impl Into<zenthra_text::prelude::FontWeight>) -> StateProp {
+        StateProp::FontWeight(w.into())
+    }
+}
+
+/// Sibling 3: `Transform` (Visual Pop & Physics)
+pub struct Transform;
+
+impl Transform {
+    #[inline]
+    pub fn scale(s: f32) -> StateProp {
+        StateProp::Scale(s)
+    }
+}
+
+/// Sibling 4: `Cursor` (Mouse Cursor Feedback)
+pub struct Cursor;
+
+#[allow(non_upper_case_globals)]
+impl Cursor {
+    pub const Pointer: StateProp = StateProp::Cursor(crate::text::CursorIcon::Pointer);
+    pub const Grab: StateProp = StateProp::Cursor(crate::text::CursorIcon::Grab);
+    pub const Grabbing: StateProp = StateProp::Cursor(crate::text::CursorIcon::Grabbing);
+    pub const Text: StateProp = StateProp::Cursor(crate::text::CursorIcon::Text);
+    pub const Crosshair: StateProp = StateProp::Cursor(crate::text::CursorIcon::Crosshair);
+    pub const ColResize: StateProp = StateProp::Cursor(crate::text::CursorIcon::ColResize);
+    pub const RowResize: StateProp = StateProp::Cursor(crate::text::CursorIcon::RowResize);
+    pub const Default: StateProp = StateProp::Cursor(crate::text::CursorIcon::Default);
+
+    #[inline]
+    pub fn icon(icon: crate::text::CursorIcon) -> StateProp {
+        StateProp::Cursor(icon)
+    }
+}
+
+/// Sibling 5: `Tooltip` (Hover Hint Popups)
+pub struct Tooltip;
+
+impl Tooltip {
+    #[inline]
+    pub fn new(msg: impl Into<String>) -> StateProp {
+        StateProp::Tooltip(msg.into())
+    }
+}
+
+/// Sibling 6: `Animation` (Transitions, Springs & Micro-Effects)
+pub struct Animation;
+
+impl Animation {
+    #[inline]
+    pub fn duration(ms: u32) -> StateProp {
+        StateProp::Animation(AnimationConfig {
+            duration_ms: ms,
+            delay_ms: 0,
+            ease: AnimationCurve::EaseOut,
+            loop_effect: None,
+        })
+    }
+
+    #[inline]
+    pub fn delay(ms: u32) -> StateProp {
+        StateProp::Delay(ms)
+    }
+
+    #[inline]
+    pub fn ease_out() -> StateProp {
+        StateProp::Ease(AnimationCurve::EaseOut)
+    }
+
+    #[inline]
+    pub fn ease_in_out() -> StateProp {
+        StateProp::Ease(AnimationCurve::EaseInOut)
+    }
+
+    #[inline]
+    pub fn linear() -> StateProp {
+        StateProp::Ease(AnimationCurve::Linear)
+    }
+
+    #[inline]
+    pub fn spring() -> StateProp {
+        StateProp::Ease(AnimationCurve::Spring)
+    }
+
+    #[inline]
+    pub fn pulse() -> StateProp {
+        StateProp::LoopEffect(AnimationLoop::Pulse)
+    }
+
+    #[inline]
+    pub fn shimmer() -> StateProp {
+        StateProp::LoopEffect(AnimationLoop::Shimmer)
+    }
+
+    #[inline]
+    pub fn bounce() -> StateProp {
+        StateProp::LoopEffect(AnimationLoop::Bounce)
+    }
+
+    #[inline]
+    pub fn spin() -> StateProp {
+        StateProp::LoopEffect(AnimationLoop::Spin)
+    }
+
+    #[inline]
+    pub fn none() -> StateProp {
+        StateProp::Duration(0)
+    }
+}
+
+/// Free helper to create a tooltip directly: `tooltip("...")`
+#[inline]
+pub fn tooltip(msg: impl Into<String>) -> StateProp {
+    Tooltip::new(msg)
+}
+
+/// Free helper to create a scale directly: `scale(1.03)`
+#[inline]
+pub fn scale(s: f32) -> StateProp {
+    Transform::scale(s)
+}
+
+/// Stored overrides to apply when a widget is in a state (hover, active, focus).
+#[derive(Debug, Clone, PartialEq)]
+pub struct WidgetStateOverrides {
+    pub style: zenthra_core::BoxStyle,
+    pub text_color: Option<zenthra_core::Color>,
+    pub font_size: Option<f32>,
+    pub underline: Option<bool>,
+    pub font_weight: Option<zenthra_text::prelude::FontWeight>,
+    pub scale: f32,
+    pub cursor: Option<crate::text::CursorIcon>,
+    pub tooltip: Option<String>,
+    pub duration_ms: Option<u32>,
+    pub delay_ms: Option<u32>,
+    pub ease: Option<AnimationCurve>,
+    pub loop_effect: Option<AnimationLoop>,
+    pub backdrop_blur: Option<f32>,
+    pub has_overrides: bool,
+}
+
+impl Default for WidgetStateOverrides {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl WidgetStateOverrides {
+    pub fn new() -> Self {
+        Self {
+            style: zenthra_core::BoxStyle::new(),
+            text_color: None,
+            font_size: None,
+            underline: None,
+            font_weight: None,
+            scale: 1.0,
+            cursor: None,
+            tooltip: None,
+            duration_ms: None,
+            delay_ms: None,
+            ease: None,
+            loop_effect: None,
+            backdrop_blur: None,
+            has_overrides: false,
+        }
+    }
+
+    pub fn apply_prop(&mut self, prop: StateProp) {
+        self.has_overrides = true;
+        match prop {
+            StateProp::Bg(bg) => self.style.bg = Some(bg),
+            StateProp::Border(b, align) => {
+                self.style.border = b;
+                if let Some(a) = align {
+                    self.style.border_alignment = a;
+                }
+            }
+            StateProp::Shadow(c, off, blur) => {
+                self.style.shadow_color = Some(c);
+                self.style.shadow_offset = off;
+                self.style.shadow_blur = blur;
+            }
+            StateProp::Radius(r) => self.style.radius = r,
+            StateProp::Padding(p) => self.style.padding = p,
+            StateProp::Margin(m) => self.style.margin = m,
+            StateProp::Width(w) => self.style.width = Some(w),
+            StateProp::Height(h) => self.style.height = Some(h),
+            StateProp::Opacity(o) => self.style.opacity = o,
+            StateProp::BackdropBlur(r) => self.backdrop_blur = Some(r),
+            StateProp::Color(c) => self.text_color = Some(c),
+            StateProp::FontSize(s) => self.font_size = Some(s),
+            StateProp::Underline(u) => self.underline = Some(u),
+            StateProp::FontWeight(w) => self.font_weight = Some(w),
+            StateProp::Scale(s) => self.scale = s,
+            StateProp::Cursor(c) => self.cursor = Some(c),
+            StateProp::Tooltip(t) => self.tooltip = Some(t),
+            StateProp::Animation(cfg) => {
+                self.duration_ms = Some(cfg.duration_ms);
+                self.delay_ms = Some(cfg.delay_ms);
+                self.ease = Some(cfg.ease);
+                self.loop_effect = cfg.loop_effect;
+            }
+            StateProp::Duration(d) => self.duration_ms = Some(d),
+            StateProp::Delay(d) => self.delay_ms = Some(d),
+            StateProp::Ease(e) => self.ease = Some(e),
+            StateProp::LoopEffect(l) => self.loop_effect = Some(l),
+        }
+    }
+}
+
+/// Trait to support single `StateProp`, fixed array `[StateProp; N]`, or `Vec<StateProp>`
+pub trait IntoStateProps {
+    fn apply_to_overrides(self, target: &mut WidgetStateOverrides);
+}
+
+impl IntoStateProps for StateProp {
+    fn apply_to_overrides(self, target: &mut WidgetStateOverrides) {
+        target.apply_prop(self);
+    }
+}
+
+impl<const N: usize> IntoStateProps for [StateProp; N] {
+    fn apply_to_overrides(self, target: &mut WidgetStateOverrides) {
+        for prop in self {
+            target.apply_prop(prop);
+        }
+    }
+}
+
+impl IntoStateProps for Vec<StateProp> {
+    fn apply_to_overrides(self, target: &mut WidgetStateOverrides) {
+        for prop in self {
+            target.apply_prop(prop);
+        }
+    }
+}
+
+impl IntoStateProps for &[StateProp] {
+    fn apply_to_overrides(self, target: &mut WidgetStateOverrides) {
+        for prop in self {
+            target.apply_prop(prop.clone());
+        }
+    }
+}
+
+impl From<crate::text::CursorIcon> for StateProp {
+    fn from(c: crate::text::CursorIcon) -> Self {
+        StateProp::Cursor(c)
+    }
+}
+
+impl From<zenthra_core::Color> for StateProp {
+    fn from(c: zenthra_core::Color) -> Self {
+        StateProp::Bg(zenthra_core::Background::Solid(c))
+    }
+}
+
+/// Implements `.hover(...)` and `.active(...)` methods on builder structs with `hover_state` and `active_state`.
+#[macro_export]
+macro_rules! impl_interaction_state_methods {
+    ($builder:ident) => {
+        $crate::impl_interaction_state_methods!($builder, 'u, 'a);
+    };
+    ($builder:ident, $($lt:lifetime),+) => {
+        impl<$($lt),+> $builder<$($lt),+> {
+            #[inline]
+            pub fn hover(mut self, props: impl $crate::macros::IntoStateProps) -> Self {
+                if self.hover_state.is_none() {
+                    let mut s = $crate::macros::WidgetStateOverrides::new();
+                    s.style = self.style.clone();
+                    self.hover_state = Some(s);
+                }
+                if let Some(ref mut h) = self.hover_state {
+                    props.apply_to_overrides(h);
+                }
+                self
+            }
+
+            #[inline]
+            pub fn active(mut self, props: impl $crate::macros::IntoStateProps) -> Self {
+                if self.active_state.is_none() {
+                    let mut s = $crate::macros::WidgetStateOverrides::new();
+                    s.style = self.style.clone();
+                    self.active_state = Some(s);
+                }
+                if let Some(ref mut a) = self.active_state {
+                    props.apply_to_overrides(a);
+                }
+                self
+            }
+        }
+    };
+}
+
 /// Implements layout dimension builder methods (`width`, `height`, `fill_x`, `fill_y`, etc.) on a builder struct with `self.style`.
 #[macro_export]
 macro_rules! impl_dimensions {

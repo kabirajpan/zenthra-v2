@@ -21,16 +21,14 @@ pub struct CheckboxBuilder<'u, 'a, 'b> {
     check_bg: Color,
     check_color: Color,
 
-    active_label_color: Option<Color>,
-
     // Premium Effects
     glow: bool,
     hover_scale: f32,
     pressed_scale: f32,
 
     // Interaction
-    hover_bg: Option<Color>,
-    active_bg: Option<Color>,
+    pub hover_state: Option<crate::macros::WidgetStateOverrides>,
+    pub active_state: Option<crate::macros::WidgetStateOverrides>,
 }
 
 impl<'u, 'a, 'b> Styleable for CheckboxBuilder<'u, 'a, 'b> {
@@ -50,6 +48,9 @@ impl_box_style_methods!(CheckboxBuilder, 'u, 'a, 'b);
 
 // Single-source macro generates all TextStyle builder methods (.font_size, .text_color, .font_family, .font_weight, .wrap, etc.)
 impl_text_style_methods!(CheckboxBuilder, 'u, 'a, 'b);
+
+// Interaction states (.hover([ ... ]), .active([ ... ]))
+impl_interaction_state_methods!(CheckboxBuilder, 'u, 'a, 'b);
 
 impl<'u, 'a, 'b> CheckboxBuilder<'u, 'a, 'b> {
     pub fn new(ui: &'u mut Ui<'a>, value: &'b mut bool, label: &str) -> Self {
@@ -80,14 +81,13 @@ impl<'u, 'a, 'b> CheckboxBuilder<'u, 'a, 'b> {
 
             check_bg: Color::rgb(0.2, 0.5, 1.0),
             check_color: Color::WHITE,
-            active_label_color: None,
 
             glow: false,
             hover_scale: 1.0,
             pressed_scale: 1.0,
 
-            hover_bg: None,
-            active_bg: None,
+            hover_state: None,
+            active_state: None,
         }
     }
 
@@ -116,11 +116,6 @@ impl<'u, 'a, 'b> CheckboxBuilder<'u, 'a, 'b> {
         self
     }
 
-    #[inline]
-    pub fn active_label(mut self, color: Color) -> Self {
-        self.active_label_color = Some(color);
-        self
-    }
 
     #[inline]
     pub fn glow(mut self, enabled: bool) -> Self {
@@ -135,17 +130,6 @@ impl<'u, 'a, 'b> CheckboxBuilder<'u, 'a, 'b> {
         self
     }
 
-    #[inline]
-    pub fn hover_bg(mut self, color: Color) -> Self {
-        self.hover_bg = Some(color);
-        self
-    }
-
-    #[inline]
-    pub fn active_bg(mut self, color: Color) -> Self {
-        self.active_bg = Some(color);
-        self
-    }
 
     pub fn id(mut self, id: impl std::hash::Hash) -> Self {
         let mut hasher = std::collections::hash_map::DefaultHasher::new();
@@ -286,9 +270,17 @@ impl<'u, 'a, 'b> CheckboxBuilder<'u, 'a, 'b> {
             unchecked_bg
         };
         if is_pressed {
-            if let Some(c) = self.active_bg { current_bg = Background::Solid(c); }
+            if let Some(ref a) = self.active_state {
+                if let Some(ref bg) = a.style.bg {
+                    current_bg = bg.clone();
+                }
+            }
         } else if is_hovered {
-            if let Some(c) = self.hover_bg { current_bg = Background::Solid(c); }
+            if let Some(ref h) = self.hover_state {
+                if let Some(ref bg) = h.style.bg {
+                    current_bg = bg.clone();
+                }
+            }
         }
 
         let start_draw = self.ui.draws.len();
@@ -363,9 +355,9 @@ impl<'u, 'a, 'b> CheckboxBuilder<'u, 'a, 'b> {
         let ly = y + (total_h - text_h) / 2.0;
 
         let mut l_color = self.text_style.color;
-        if let Some(active_c) = self.active_label_color {
-            if final_sel > 0.5 {
-                l_color = active_c;
+        if final_sel > 0.5 {
+            if let Some(c) = self.active_state.as_ref().and_then(|a| a.text_color) {
+                l_color = c;
             }
         }
 

@@ -75,3 +75,15 @@ path = "../../examples/progress_bar.rs"
 [[example]]
 name = "slider"
 path = "../../examples/slider.rs"
+
+[[example]]
+name = "dropdown"
+path = "../../examples/dropdown.rs"
+
+[[example]]
+name = "panel"
+path = "../../examples/panel.rs"
+
+[[example]]
+name = "card"
+path = "../../examples/card.rs"

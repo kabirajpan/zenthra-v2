@@ -94,8 +94,10 @@ fn main() {
                                 .fill_x()
                                 .height(40.0)
                                 .bg(Color::rgb(0.10, 0.12, 0.16))
-                                .hover_bg(Color::rgb(0.15, 0.18, 0.24))
-                                .hover_border((Color::rgb(0.25, 0.30, 0.40), 1.0))
+                                .hover([
+                                    Style::bg(Color::rgb(0.15, 0.18, 0.24)),
+                                    Style::border((Color::rgb(0.25, 0.30, 0.40), 1.0)),
+                                ])
                                 .radius_all(6.0)
                                 .padding_x(12.0)
                                 .row()
@@ -122,8 +124,10 @@ fn main() {
                                 .fill_x()
                                 .height(40.0)
                                 .bg(Color::rgb(0.10, 0.12, 0.16))
-                                .hover_bg(Color::rgb(0.15, 0.18, 0.24))
-                                .hover_border((Color::rgb(0.25, 0.30, 0.40), 1.0))
+                                .hover([
+                                    Style::bg(Color::rgb(0.15, 0.18, 0.24)),
+                                    Style::border((Color::rgb(0.25, 0.30, 0.40), 1.0)),
+                                ])
                                 .radius_all(6.0)
                                 .padding_x(12.0)
                                 .row()
@@ -150,8 +154,10 @@ fn main() {
                                 .fill_x()
                                 .height(40.0)
                                 .bg(Color::rgb(0.10, 0.12, 0.16))
-                                .hover_bg(Color::rgb(0.15, 0.18, 0.24))
-                                .hover_border((Color::rgb(0.25, 0.30, 0.40), 1.0))
+                                .hover([
+                                    Style::bg(Color::rgb(0.15, 0.18, 0.24)),
+                                    Style::border((Color::rgb(0.25, 0.30, 0.40), 1.0)),
+                                ])
                                 .radius_all(6.0)
                                 .padding_x(12.0)
                                 .row()
@@ -178,8 +184,10 @@ fn main() {
                                 .fill_x()
                                 .height(40.0)
                                 .bg(Color::rgb(0.10, 0.12, 0.16))
-                                .hover_bg(Color::rgb(0.15, 0.18, 0.24))
-                                .hover_border((Color::rgb(0.25, 0.30, 0.40), 1.0))
+                                .hover([
+                                    Style::bg(Color::rgb(0.15, 0.18, 0.24)),
+                                    Style::border((Color::rgb(0.25, 0.30, 0.40), 1.0)),
+                                ])
                                 .radius_all(6.0)
                                 .padding_x(12.0)
                                 .row()
@@ -306,7 +314,7 @@ fn main() {
                                                 .height(34.0)
                                                 .bg(Color::rgb(0.12, 0.14, 0.19))
                                                 .border((Color::rgb(0.18, 0.22, 0.28), 1.0))
-                                                .hover_bg(Color::rgb(0.16, 0.20, 0.28))
+                                                .hover(Style::bg(Color::rgb(0.16, 0.20, 0.28)))
                                                 .radius_all(6.0)
                                                 .show(|_| {});
 
@@ -315,7 +323,7 @@ fn main() {
                                                 .width(110.0)
                                                 .height(34.0)
                                                 .bg(Color::rgb(0.20, 0.42, 0.88))
-                                                .hover_bg(Color::rgb(0.25, 0.48, 0.98))
+                                                .hover(Style::bg(Color::rgb(0.25, 0.48, 0.98)))
                                                 .radius_all(6.0)
                                                 .padding_x(12.0)
                                                 .row()
@@ -344,8 +352,10 @@ fn main() {
                                         .height(105.0)
                                         .bg(Color::rgb(0.09, 0.11, 0.15))
                                         .border((Color::rgb(0.16, 0.20, 0.28), 1.0))
-                                        .hover_border((Color::rgb(0.30, 0.55, 1.0), 1.5))
-                                        .hover_scale(1.02)
+                                        .hover([
+                                            Style::border((Color::rgb(0.30, 0.55, 1.0), 1.5)),
+                                            Transform::scale(1.02),
+                                        ])
                                         .radius_all(10.0)
                                         .padding_all(14.0)
                                         .column()
@@ -364,8 +374,10 @@ fn main() {
                                         .height(105.0)
                                         .bg(Color::rgb(0.09, 0.11, 0.15))
                                         .border((Color::rgb(0.16, 0.20, 0.28), 1.0))
-                                        .hover_border((Color::rgb(0.25, 0.70, 0.75), 1.5))
-                                        .hover_scale(1.02)
+                                        .hover([
+                                            Style::border((Color::rgb(0.25, 0.70, 0.75), 1.5)),
+                                            Transform::scale(1.02),
+                                        ])
                                         .radius_all(10.0)
                                         .padding_all(14.0)
                                         .column()
@@ -384,8 +396,10 @@ fn main() {
                                         .height(105.0)
                                         .bg(Color::rgb(0.09, 0.11, 0.15))
                                         .border((Color::rgb(0.16, 0.20, 0.28), 1.0))
-                                        .hover_border((Color::rgb(0.60, 0.35, 0.90), 1.5))
-                                        .hover_scale(1.02)
+                                        .hover([
+                                            Style::border((Color::rgb(0.60, 0.35, 0.90), 1.5)),
+                                            Transform::scale(1.02),
+                                        ])
                                         .radius_all(10.0)
                                         .padding_all(14.0)
                                         .column()
@@ -404,8 +418,10 @@ fn main() {
                                         .height(105.0)
                                         .bg(Color::rgb(0.09, 0.11, 0.15))
                                         .border((Color::rgb(0.16, 0.20, 0.28), 1.0))
-                                        .hover_border((Color::rgb(0.20, 0.75, 0.45), 1.5))
-                                        .hover_scale(1.02)
+                                        .hover([
+                                            Style::border((Color::rgb(0.20, 0.75, 0.45), 1.5)),
+                                            Transform::scale(1.02),
+                                        ])
                                         .radius_all(10.0)
                                         .padding_all(14.0)
                                         .column()
@@ -486,7 +502,7 @@ fn main() {
                                                             (1.0, Color::rgb(0.12, 0.22, 0.55)),
                                                         ],
                                                     ))
-                                                    .hover_bg(Color::rgb(0.35, 0.65, 1.0))
+                                                    .hover(Style::bg(Color::rgb(0.35, 0.65, 1.0)))
                                                     .radius_top(4.0)
                                                     .show(|_| {});
                                             }
@@ -558,7 +574,7 @@ fn main() {
                                                 .height(44.0)
                                                 .bg(Color::rgb(0.12, 0.15, 0.22))
                                                 .border((Color::rgb(0.20, 0.26, 0.38), 1.0))
-                                                .hover_bg(Color::rgb(0.16, 0.20, 0.30))
+                                                .hover(Style::bg(Color::rgb(0.16, 0.20, 0.30)))
                                                 .radius_all(6.0)
                                                 .padding_x(12.0)
                                                 .row()
@@ -574,7 +590,7 @@ fn main() {
                                                 .height(44.0)
                                                 .bg(Color::rgb(0.12, 0.15, 0.22))
                                                 .border((Color::rgb(0.20, 0.26, 0.38), 1.0))
-                                                .hover_bg(Color::rgb(0.16, 0.20, 0.30))
+                                                .hover(Style::bg(Color::rgb(0.16, 0.20, 0.30)))
                                                 .radius_all(6.0)
                                                 .padding_x(12.0)
                                                 .row()

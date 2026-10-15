@@ -42,7 +42,7 @@ Just like `Container`:
 - `.bg(Color)` sets an enclosing surface; `.bg(None)` (default) keeps the container transparent.
 - `.border((Color, width))` sets an enclosing border; `.border(None)` removes it.
 - `.radius_all(f32)` rounds the outer container corners.
-- `.shadow(color, ox, oy, blur)` and `.shadow_opacity(opacity)` elevate the slider container.
+- `.shadow(color, ox, oy, blur)` elevates the slider container.
 
 ```rust
 // ✅ Clean, consistent Zenthra styling:
@@ -85,31 +85,39 @@ pub fn id(mut self, id: impl std::hash::Hash) -> Self
 
 ### 2.2 Dimensions, Width & Fill
 
+Generated via `impl_dimensions!(SliderBuilder, 'u, 'a, 'b)`:
+
 #### Method Signatures
 
 ```rust
 pub fn width(mut self, w: f32) -> Self
 pub fn height(mut self, h: f32) -> Self
-pub fn size(mut self, w: f32, h: f32) -> Self
 pub fn fill_x(mut self) -> Self
+pub fn fill_y(mut self) -> Self
+pub fn fill(mut self) -> Self
+pub fn min_width(mut self, w: f32) -> Self
+pub fn max_width(mut self, w: f32) -> Self
+pub fn min_height(mut self, h: f32) -> Self
+pub fn max_height(mut self, h: f32) -> Self
 ```
 
 #### Defaults
 - Width: If `.width()` is omitted, the slider automatically spans `self.ui.available_width.max(100.0)`.
-- Height: Automatically calculated based on the maximum of thumb and track heights plus vertical padding (`(thumb_h.max(track_h).max(20.0) + padding.vertical())`).
+- Height: Automatically calculated based on the maximum of thumb and track heights plus vertical padding (`(thumb_h.max(track_h).max(20.0) + self.style.padding.vertical())`).
 
 ---
 
-### 2.3 Container Background & Border (Unified Styling)
+### 2.3 Container Background, Border & Visuals (Unified Styling)
+
+Generated via `impl_visuals!(SliderBuilder, 'u, 'a, 'b)`:
 
 #### Method Signatures
 
 ```rust
-pub fn bg(mut self, bg: impl Into<Option<Color>>) -> Self
-pub fn bg_gradient(mut self, start: Color, end: Color, direction: GradientDirection) -> Self
-
-pub fn border(mut self, border: impl Into<zenthra_core::Border>) -> Self
+pub fn bg(mut self, bg: impl Into<zenthra_core::Background>) -> Self
+pub fn border(mut self, border: impl IntoBorder) -> Self
 pub fn opacity(mut self, o: f32) -> Self
+pub fn style(mut self, style: zenthra_core::BoxStyle) -> Self
 ```
 
 #### Behavior & Unified Rules
@@ -144,7 +152,6 @@ pub fn radius_bottom_right(mut self, r: f32) -> Self
 pub fn radius_bottom_left(mut self, r: f32) -> Self
 
 pub fn shadow(mut self, color: Color, ox: f32, oy: f32, blur: f32) -> Self
-pub fn shadow_opacity(mut self, o: f32) -> Self
 ```
 
 ---
@@ -181,7 +188,6 @@ pub fn track_radius(mut self, tl: f32, tr: f32, br: f32, bl: f32) -> Self
 pub fn track_radius_all(mut self, r: f32) -> Self
 
 pub fn track_shadow(mut self, color: Color, ox: f32, oy: f32, blur: f32) -> Self
-pub fn track_shadow_opacity(mut self, o: f32) -> Self
 ```
 
 #### Defaults
@@ -215,7 +221,6 @@ pub fn thumb_radius(mut self, tl: f32, tr: f32, br: f32, bl: f32) -> Self
 pub fn thumb_radius_all(mut self, r: f32) -> Self
 
 pub fn thumb_shadow(mut self, color: Color, ox: f32, oy: f32, blur: f32) -> Self
-pub fn thumb_shadow_opacity(mut self, o: f32) -> Self
 ```
 
 #### Defaults
@@ -230,8 +235,7 @@ ui.slider(&mut volume, "vol")
     .thumb_size(20.0, 20.0)
     .thumb_radius_all(10.0)
     .thumb_color(Color::WHITE)
-    .thumb_shadow(Color::BLACK, 0.0, 2.0, 6.0)
-    .thumb_shadow_opacity(0.4)
+    .thumb_shadow(Color::rgba(0.0, 0.0, 0.0, 0.4), 0.0, 2.0, 6.0)
     .show();
 ```
 

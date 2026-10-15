@@ -254,13 +254,11 @@ ui.text("FEATURED")
 
 ```rust
 pub fn shadow(mut self, color: Color, ox: f32, oy: f32, blur: f32) -> Self
-pub fn shadow_opacity(mut self, opacity: f32) -> Self
 pub fn opacity(mut self, o: f32) -> Self
 ```
 
 #### Description
 - `shadow`: Emits a soft box shadow beneath the decorated text badge.
-- `shadow_opacity`: Alpha multiplier for the shadow color (default: `1.0`).
 - `opacity`: Alpha multiplier for the text and its decorations.
 
 ---

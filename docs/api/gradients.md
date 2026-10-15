@@ -358,8 +358,8 @@ ui.container()
         Color::rgb(0.06, 0.06, 0.08),
     ]))
     // Hover state: vibrant glow
-    .hover_bg(Gradient::linear(135.0, [
+    .hover(Style::bg(Gradient::linear(135.0, [
         Color::rgb(0.20, 0.40, 0.90),
         Color::rgb(0.10, 0.20, 0.60),
-    ]))
+    ])))
 ```

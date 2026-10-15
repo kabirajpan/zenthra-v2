@@ -135,23 +135,21 @@ ui.button("Submit Order")
 pub fn bg(mut self, bg: impl Into<zenthra_core::Background>) -> Self
 pub fn bg_gradient(mut self, start: Color, end: Color, direction: zenthra_core::GradientDirection) -> Self
 
-// Hover State Background:
-pub fn hover_bg(mut self, bg: impl Into<zenthra_core::Background>) -> Self
-
-// Active / Pressed State Background:
-pub fn active_bg(mut self, bg: impl Into<zenthra_core::Background>) -> Self
+// State Overrides (.hover(...) and .active(...)):
+pub fn hover(mut self, props: impl IntoStateProps) -> Self
+pub fn active(mut self, props: impl IntoStateProps) -> Self
 ```
 
 #### Unified Rules & Defaults
 - Default idle background: `Color::rgb(0.2, 0.2, 0.25)`.
 - Pass `.bg(None)` to make the button surface transparent (Ghost button).
-- If `hover_bg` or `active_bg` is omitted, the button automatically tints its idle background using brightness transitions.
+- If hover or active styling is omitted, the button automatically tints its idle background using brightness transitions.
 
 ```rust
 // Gradient button with custom active color:
 ui.button("Get Started")
     .bg_gradient(Color::rgb(0.25, 0.50, 0.95), Color::rgb(0.40, 0.70, 1.00), GradientDirection::LeftToRight)
-    .active_bg(Color::rgb(0.18, 0.40, 0.80))
+    .active(Style::bg(Color::rgb(0.18, 0.40, 0.80)))
     .show();
 ```
 
@@ -164,29 +162,20 @@ ui.button("Get Started")
 ```rust
 // Idle Border:
 pub fn border(mut self, border: impl Into<zenthra_core::Border>) -> Self
-
-// Hover State Border:
-pub fn hover_border(mut self, border: impl Into<zenthra_core::Border>) -> Self
-
-// Active / Pressed State Border:
-pub fn active_border(mut self, border: impl Into<zenthra_core::Border>) -> Self
 ```
 
 #### Behavior & Unified Rules
 - `border(...)`:
   - Accepts `(Color, f32)` (e.g. `(Color::WHITE, 1.0)`) or `Border::Solid(c, w)`.
   - Accepts `None` or `Border::None` to remove the border. Default: 0.0 width.
-- `hover_border(...)` / `active_border(...)`:
-  - Changes the border stroke when hovered or pressed.
-  - Accepts `(Color, f32)` to set an accent outline.
-  - Accepts `None` or `Border::None` to **explicitly turn off** the border during hover/press.
+- Border overrides during hover or press are configured via `.hover(Style::border(...))` and `.active(Style::border(...))`.
 
 ```rust
-// Idle border that illuminates brighter on hover:
+// Idle border that illuminates brighter on hover and press:
 ui.button("Inspect")
     .border((Color::rgb(0.30, 0.33, 0.42), 1.0))
-    .hover_border((Color::rgb(0.50, 0.75, 1.00), 1.5))
-    .active_border((Color::rgb(0.20, 0.50, 0.90), 1.5))
+    .hover(Style::border((Color::rgb(0.50, 0.75, 1.00), 1.5)))
+    .active(Style::border((Color::rgb(0.20, 0.50, 0.90), 1.5)))
     .show();
 ```
 
@@ -220,14 +209,12 @@ pub fn radius_bottom_left(mut self, r: f32) -> Self
 
 ```rust
 pub fn shadow(mut self, color: Color, x: f32, y: f32, blur: f32) -> Self
-pub fn shadow_opacity(mut self, opacity: f32) -> Self
 pub fn opacity(mut self, o: f32) -> Self
 ```
 
 ```rust
 ui.button("Elevated Action")
-    .shadow(Color::BLACK, 0.0, 4.0, 10.0)
-    .shadow_opacity(0.35)
+    .shadow(Color::rgba(0.0, 0.0, 0.0, 0.35), 0.0, 4.0, 10.0)
     .show();
 ```
 
@@ -253,16 +240,20 @@ pub fn padding_right(mut self, r: f32) -> Self
 
 ---
 
-### 2.9 Hover Micro-Interactions
+### 2.9 Unified State Siblings (`.hover(...)` and `.active(...)`)
 
-#### Method Signatures
+Buttons support the unified Sibling system for micro-interactions and visual states:
 
 ```rust
-pub fn hover_scale(mut self, s: f32) -> Self      // Default: 1.0
+// Scale, border, background, cursor, and tooltip via .hover(...)
+ui.button("Pop")
+    .hover([
+        Style::bg(Color::rgb(0.25, 0.50, 0.95)),
+        Transform::scale(1.03),
+        Cursor::Pointer,
+    ])
+    .show();
 ```
-
-#### Description
-- `hover_scale`: Multiplies widget dimensions when hovered (e.g. `1.02` for subtle pop).
 
 ---
 
@@ -307,13 +298,12 @@ A solid raised primary button with comfortable padding and rounded corners:
 ```rust
 if ui.button("Save Project")
     .bg(Color::rgb(0.20, 0.45, 0.90))
-    .hover_bg(Color::rgb(0.25, 0.52, 0.98))
-    .active_bg(Color::rgb(0.16, 0.38, 0.80))
+    .hover(Style::bg(Color::rgb(0.25, 0.52, 0.98)))
+    .active(Style::bg(Color::rgb(0.16, 0.38, 0.80)))
     .border((Color::rgb(0.30, 0.55, 1.00), 1.0))
     .radius_all(6.0)
     .padding(8.0, 16.0, 8.0, 16.0)
-    .shadow(Color::BLACK, 0.0, 3.0, 8.0)
-    .shadow_opacity(0.30)
+    .shadow(Color::rgba(0.0, 0.0, 0.0, 0.30), 0.0, 3.0, 8.0)
     .show()
     .clicked 
 {
@@ -349,7 +339,7 @@ A neutral outline button that lights up on hover:
 ui.button("Export As...")
     .bg(Color::rgb(0.12, 0.13, 0.18))
     .border((Color::rgb(0.26, 0.28, 0.38), 1.0))
-    .hover_border((Color::rgb(0.45, 0.70, 1.00), 1.0))
+    .hover(Style::border((Color::rgb(0.45, 0.70, 1.00), 1.0)))
     .radius_all(6.0)
     .padding(8.0, 14.0, 8.0, 14.0)
     .show();
@@ -366,7 +356,7 @@ ui.button("Upgrade to Pro")
     .bg_gradient(Color::rgb(0.95, 0.40, 0.20), Color::rgb(0.98, 0.65, 0.25), GradientDirection::LeftToRight)
     .radius_all(18.0) // Pill shape
     .padding(8.0, 20.0, 8.0, 20.0)
-    .hover_scale(1.03)
+    .hover(Transform::scale(1.03))
     .show();
 ```
 
@@ -406,7 +396,7 @@ ui.container()
 // ✅ Button has first-class state borders:
 ui.button("Click")
     .border((Color::GRAY, 1.0))
-    .hover_border((Color::BLUE, 1.0))
+    .hover(Style::border((Color::BLUE, 1.0)))
     .show();
 ```
 

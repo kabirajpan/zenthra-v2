@@ -21,16 +21,16 @@ pub struct RadioBuilder<'u, 'a, 'b, T: PartialEq + Clone> {
 
     // Radio dot & ring overrides
     dot_color: Color,
-    active_label_color: Option<Color>,
 
     // Premium Effects
     glow: bool,
     hover_scale: f32,
     pressed_scale: f32,
-    hover_brightness: f32,
 
     // Interaction
     disabled: bool,
+    pub hover_state: Option<crate::macros::WidgetStateOverrides>,
+    pub active_state: Option<crate::macros::WidgetStateOverrides>,
 }
 
 impl<'u, 'a, 'b, T: PartialEq + Clone> Styleable for RadioBuilder<'u, 'a, 'b, T> {
@@ -74,14 +74,13 @@ impl<'u, 'a, 'b, T: PartialEq + Clone> RadioBuilder<'u, 'a, 'b, T> {
 
             gap: 10.0,
             dot_color: Color::rgb(0.2, 0.5, 1.0),
-            active_label_color: None,
 
             glow: false,
             hover_scale: 1.0,
             pressed_scale: 1.0,
-            hover_brightness: 1.2,
-
             disabled: false,
+            hover_state: None,
+            active_state: None,
         }
     }
 
@@ -179,8 +178,24 @@ impl<'u, 'a, 'b, T: PartialEq + Clone> RadioBuilder<'u, 'a, 'b, T> {
     }
 
     #[inline]
-    pub fn active_label(mut self, color: Color) -> Self {
-        self.active_label_color = Some(color);
+    pub fn hover(mut self, props: impl crate::macros::IntoStateProps) -> Self {
+        if self.hover_state.is_none() {
+            self.hover_state = Some(crate::macros::WidgetStateOverrides::new());
+        }
+        if let Some(ref mut h) = self.hover_state {
+            props.apply_to_overrides(h);
+        }
+        self
+    }
+
+    #[inline]
+    pub fn active(mut self, props: impl crate::macros::IntoStateProps) -> Self {
+        if self.active_state.is_none() {
+            self.active_state = Some(crate::macros::WidgetStateOverrides::new());
+        }
+        if let Some(ref mut a) = self.active_state {
+            props.apply_to_overrides(a);
+        }
         self
     }
 
@@ -212,12 +227,6 @@ impl<'u, 'a, 'b, T: PartialEq + Clone> RadioBuilder<'u, 'a, 'b, T> {
     pub fn scaling(mut self, hover: f32, pressed: f32) -> Self {
         self.hover_scale = hover;
         self.pressed_scale = pressed;
-        self
-    }
-
-    #[inline]
-    pub fn hover_brightness(mut self, b: f32) -> Self {
-        self.hover_brightness = b;
         self
     }
 
@@ -398,7 +407,7 @@ impl<'u, 'a, 'b, T: PartialEq + Clone> RadioBuilder<'u, 'a, 'b, T> {
         );
         instance.radius = radius;
         if is_hovered {
-            instance.brightness = self.hover_brightness;
+            instance.brightness = 1.2;
         }
         if self.style.shadow_color.is_none() && self.glow && is_active {
             let mut sc = self.dot_color.to_array();
@@ -437,9 +446,9 @@ impl<'u, 'a, 'b, T: PartialEq + Clone> RadioBuilder<'u, 'a, 'b, T> {
         let ly = y + (total_h - label_h) / 2.0;
 
         let mut l_color = self.text_style.color;
-        if let Some(active_c) = self.active_label_color {
-            if final_sel > 0.5 {
-                l_color = active_c;
+        if final_sel > 0.5 {
+            if let Some(c) = self.active_state.as_ref().and_then(|a| a.text_color) {
+                l_color = c;
             }
         }
 

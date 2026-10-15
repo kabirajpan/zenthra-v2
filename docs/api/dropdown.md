@@ -2,7 +2,7 @@
 
 `Dropdown` is Zenthra's primary single-selection menu control. It binds directly to an immediate-mode generic `&mut T` state (where `T: PartialEq + Clone + ToString`), rendering a compact clickable trigger box with chevron icon and an elevated overlay popover list when open. It features outside-click dismissal, custom placement, scrollable menu bounds, typography control, and full conformance to the unified styling contract.
 
-The `Dropdown` widget strictly adheres to the unified styling contract established in [`docs/api/container.md`](./container.md).
+The `Dropdown` widget strictly adheres to the unified styling contract established in [`docs/api/container.md`](./container.md) and [`docs/api/macros.md`](./macros.md).
 
 ---
 
@@ -11,12 +11,13 @@ The `Dropdown` widget strictly adheres to the unified styling contract establish
 1. [Design Philosophy & Mental Model](#1-design-philosophy--mental-model)
 2. [Complete Dropdown API Reference](#2-complete-dropdown-api-reference)
    - [2.1 Construction & Generic State Binding](#21-construction--generic-state-binding)
-   - [2.2 Dimensions & Layout (.fill_x, .padding_x, .placement)](#22-dimensions--layout-fill_x-padding_x-placement)
-   - [2.3 Trigger Background & Borders (Unified Styling)](#23-trigger-background--borders-unified-styling)
+   - [2.2 Dimensions & Layout (.width, .height, .fill_x, .padding, .margin)](#22-dimensions--layout-width-height-fill_x-padding-margin)
+   - [2.3 Trigger Styling (`BoxStyle` Parity)](#23-trigger-styling-boxstyle-parity)
    - [2.4 Corner Radii & Shadows](#24-corner-radii--shadows)
-   - [2.5 Floating Menu Customization](#25-floating-menu-customization)
-   - [2.6 Typography & Text Styling](#26-typography--text-styling)
-   - [2.7 Event Handling & Response](#27-event-handling--response)
+   - [2.5 Typography & Text Styling](#25-typography--text-styling)
+   - [2.6 Interaction States & Hover/Active Overrides](#26-interaction-states--hoveractive-overrides)
+   - [2.7 Floating Menu Overlay Customization](#27-floating-menu-overlay-customization)
+   - [2.8 Event Handling & Response](#28-event-handling--response)
 3. [Production Recipes & Patterns](#3-production-recipes--patterns)
    - [Recipe 1: Standard Settings Dropdown](#recipe-1-standard-settings-dropdown)
    - [Recipe 2: Borderless / Transparent Surface Dropdown](#recipe-2-borderless--transparent-surface-dropdown)
@@ -33,9 +34,10 @@ The `Dropdown` widget strictly adheres to the unified styling contract establish
 ### The Core Mental Model
 In Zenthra, a `Dropdown`:
 - **Generic State Binding**: Binds directly to an immediate-mode `&mut T` reference where `T: PartialEq + Clone + ToString`. Selection updates mutate `*selected` in-place and return `response.changed == true`.
+- **Unified `BoxStyle` Architecture**: Implements `zenthra_core::Styleable`, storing trigger styling in `self.style: BoxStyle` and typography in `self.text_style: TextStyle`.
+- **State Blending**: State overrides (`.hover([ ... ])` and `.active([ ... ])`) blend seamlessly over the base trigger `BoxStyle`.
 - **Portal Overlay Rendering**: The popup item list is rendered into `ui.overlays`, ensuring menu items hover above sibling and parent widgets without clipping.
-- **Outside-Click Dismissal**: Automatically registers a full-screen transparent hit-catcher to close the menu when clicking anywhere outside.
-- **Table 3.6 Styling Conformance**: Supports `.bg(...)`, `.border(...)`, `.radius_all(...)`, and `.shadow(...)` with both concrete values and `None`.
+- **Outside-Click Dismissal**: Automatically registers an overlay hit-catcher to close the menu when clicking anywhere outside.
 
 ```rust
 // ✅ Clean, consistent Zenthra styling:
@@ -55,8 +57,6 @@ ui.dropdown(&mut fruit, fruits)
 ## 2. Complete Dropdown API Reference
 
 ### 2.1 Construction & Generic State Binding
-
-#### Method Signatures
 
 ```rust
 // On Ui:
@@ -97,159 +97,107 @@ ui.dropdown(&mut current_q, vec![Quality::Low, Quality::Medium, Quality::High]).
 
 ---
 
-### 2.2 Dimensions & Layout (.fill_x, .padding_x, .placement)
+### 2.2 Dimensions & Layout (.width, .height, .fill_x, .padding, .margin)
 
-Controls trigger dimensions, inner horizontal padding, and overlay placement.
+`DropdownBuilder` provides full layout and dimension setters conforming to `macros.md`:
 
-#### Method Signatures
-
-```rust
-/// Sets the fixed width of the dropdown trigger and menu.
-pub fn width(mut self, width: f32) -> Self
-
-/// Expands the trigger width to fill all available horizontal space.
-pub fn fill_x(mut self) -> Self
-
-/// Expands the trigger height to fill all available vertical space in the parent container.
-pub fn fill_y(mut self) -> Self
-
-/// Sets the fixed height of the dropdown trigger (default 32.0).
-pub fn height(mut self, height: f32) -> Self
-
-/// Sets width and height simultaneously.
-pub fn size(mut self, w: f32, h: f32) -> Self
-
-/// Sets horizontal padding for trigger label and chevron (default 10.0).
-pub fn padding_x(mut self, px: f32) -> Self
-
-/// Sets placement direction relative to the trigger (e.g. Bottom, Top).
-pub fn placement(mut self, placement: zenthra_core::Placement) -> Self
-
-/// Sets the vertical/horizontal gap between the trigger and the menu overlay (default 4.0).
-pub fn gap(mut self, gap: f32) -> Self
-```
+| Method | Description |
+| :--- | :--- |
+| `.width(w: f32)` | Fixed trigger width (default: 180.0). Sets `fill_x = false`. |
+| `.height(h: f32)` | Fixed trigger height (default: 32.0). Sets `fill_y = false`. |
+| `.fill_x()` | Expands trigger horizontally to fill available width. |
+| `.fill_y()` | Expands trigger vertically to fill available height. |
+| `.fill()` | Expands both horizontally and vertically. |
+| `.min_width(w)` / `.max_width(w)` | Clamp width bounds. |
+| `.min_height(h)` / `.max_height(h)` | Clamp height bounds. |
+| `.padding(t, r, b, l)` | Per-edge internal padding for trigger content. |
+| `.padding_all(p: f32)` | Uniform padding. Default is `(0.0, 10.0, 0.0, 10.0)`. |
+| `.padding_x(px)` / `.padding_y(py)` | Axis-specific padding. |
+| `.margin(t, r, b, l)` / `.margin_all(m)` | Outer container spacing. |
+| `.placement(Placement)` | Overlay alignment relative to trigger (`Bottom`, `Top`, etc.). |
+| `.gap(f32)` | Gap in logical pixels between trigger and menu overlay (default: 4.0). |
 
 ---
 
-### 2.3 Trigger Background & Borders (Unified Styling)
+### 2.3 Trigger Styling (`BoxStyle` Parity)
 
-Controls the surface color and borders of the dropdown trigger button according to Table 3.6.
+Controls the surface color and borders of the dropdown trigger button according to `macros.md`:
 
-#### Method Signatures
-
-```rust
-/// Sets trigger background color. Accepts Color, Option<Color>, or None (transparent).
-pub fn bg(mut self, bg: impl Into<Option<Color>>) -> Self
-
-/// Sets hover background color. Accepts Color, Option<Color>, or None.
-pub fn hover_bg(mut self, color: impl Into<Option<Color>>) -> Self
-
-/// Sets both background and border color simultaneously.
-pub fn colors(mut self, bg: Color, border: Color) -> Self
-
-/// Sets trigger border stroke. Accepts (Color, width), Option<(Color, width)>, or None.
-pub fn border(mut self, border: impl Into<Border>) -> Self
-```
-
-#### Code Examples
-
-```rust
-// 1. Solid surface with border
-ui.dropdown(&mut selected, options)
-    .bg(Color::rgb(0.12, 0.13, 0.16))
-    .border((Color::rgb(0.28, 0.32, 0.42), 1.0))
-    .show();
-
-// 2. Transparent background (outline dropdown)
-ui.dropdown(&mut selected, options)
-    .bg(None)
-    .border((Color::rgb(0.40, 0.45, 0.60), 1.0))
-    .show();
-
-// 3. Completely borderless surface
-ui.dropdown(&mut selected, options)
-    .border(None)
-    .show();
-```
+| Method | Description |
+| :--- | :--- |
+| `.style(BoxStyle)` | Replaces entire underlying `BoxStyle` at once. |
+| `.bg(impl Into<Background>)` | Sets background (solid `Color`, `Gradient`, or `None`). |
+| `.border(impl IntoBorder)` | Sets border stroke `(Color, width)`, `(Color, width, BorderAlignment)`, or `Border::None`. |
+| `.shadow(color, x, y, blur)` | Adds drop shadow with offset and blur radius. |
+| `.glow(enabled: bool)` | Enables subtle ambient accent glow. |
 
 ---
 
 ### 2.4 Corner Radii & Shadows
 
-Corner radii are accurately mapped to the GPU quad renderer. Drop shadows can be applied with blur, offset, and opacity.
+Corner radii are accurately mapped to the GPU quad renderer:
 
-#### Method Signatures
+| Method | Description |
+| :--- | :--- |
+| `.radius_all(r: f32)` | Uniform radius across all four corners. Default is `4.0`. |
+| `.radius(tl, tr, br, bl)` | Per-corner radii `[tl, tr, br, bl]`. |
+| `.radius_top(r)` / `.radius_bottom(r)` | Top or bottom pair corner radii. |
+| `.radius_left(r)` / `.radius_right(r)` | Left or right pair corner radii. |
+| `.radius_top_left(r)`, `.radius_top_right(r)`, etc. | Specific single-corner radius. |
+
+---
+
+### 2.5 Typography & Text Styling
+
+Controls text size, color, family, and weight across the trigger button and menu items:
+
+| Method | Description |
+| :--- | :--- |
+| `.size(size: f32)` | Sets typography font size (default: 14.0). |
+| `.color(color: Color)` | Sets text glyph color (default: `Color::WHITE`). |
+| `.font_family(impl Into<String>)` | Custom font family (e.g. `"Inter"`, `"Fira Code"`). |
+| `.font_weight(impl Into<FontWeight>)` | Font weight (`FontWeight::Medium`, `600`, etc.). |
+
+---
+
+### 2.6 Interaction States & Hover/Active Overrides
+
+Interactive states use Zenthra's zero-cost Sibling architecture:
 
 ```rust
-/// Sets uniform radius across all four corners.
-pub fn radius_all(mut self, r: f32) -> Self
-
-/// Sets per-corner radii [tl, tr, br, bl].
-pub fn radius(mut self, tl: f32, tr: f32, br: f32, bl: f32) -> Self
-
-pub fn radius_top(mut self, r: f32) -> Self
-pub fn radius_bottom(mut self, r: f32) -> Self
-pub fn radius_left(mut self, r: f32) -> Self
-pub fn radius_right(mut self, r: f32) -> Self
-pub fn radius_top_left(mut self, r: f32) -> Self
-pub fn radius_top_right(mut self, r: f32) -> Self
-pub fn radius_bottom_right(mut self, r: f32) -> Self
-pub fn radius_bottom_left(mut self, r: f32) -> Self
-
-/// Adds drop shadow to dropdown trigger and menu.
-pub fn shadow(mut self, color: Color, x: f32, y: f32, blur: f32) -> Self
-
-/// Multiplies shadow alpha channel.
-pub fn shadow_opacity(mut self, opacity: f32) -> Self
-
-/// Enables subtle primary glow on hover.
-pub fn glow(mut self, enabled: bool) -> Self
+ui.dropdown(&mut current_mode, modes)
+    .bg(Color::rgb(0.12, 0.13, 0.16))
+    .border((Color::rgb(0.25, 0.28, 0.35), 1.0))
+    .hover([
+        Style::bg(Color::rgb(0.16, 0.18, 0.24)),
+        Style::border((Color::rgb(0.35, 0.55, 0.95), 1.5)),
+        Cursor::Pointer,
+    ])
+    .active([
+        Style::border((Color::rgb(0.45, 0.70, 1.0), 1.5)),
+        Transform::scale(0.98),
+    ])
+    .show();
 ```
 
 ---
 
-### 2.5 Floating Menu Customization
+### 2.7 Floating Menu Overlay Customization
 
-Customizes the elevated overlay popup list when the dropdown is opened.
+Customizes the elevated overlay popup list when the dropdown is opened:
 
-#### Method Signatures
-
-```rust
-/// Sets background color of the floating menu overlay (default Color::rgb(0.1, 0.1, 0.12)).
-pub fn menu_bg(mut self, color: Color) -> Self
-
-/// Sets maximum scrollable/clipped height of the menu overlay (default 250.0).
-pub fn menu_max_height(mut self, max_h: f32) -> Self
-
-/// Sets custom border stroke for the menu overlay.
-pub fn menu_border(mut self, border: impl Into<Border>) -> Self
-
-/// Sets uniform corner radius for the floating menu overlay.
-pub fn menu_radius_all(mut self, r: f32) -> Self
-
-/// Sets per-corner radii [tl, tr, br, bl] for the floating menu overlay.
-pub fn menu_radius(mut self, tl: f32, tr: f32, br: f32, bl: f32) -> Self
-```
+| Method | Description |
+| :--- | :--- |
+| `.menu_style(BoxStyle)` | Replaces the entire menu overlay `BoxStyle`. |
+| `.menu_bg(impl Into<Background>)` | Background for the menu overlay (default `Color::rgb(0.1, 0.1, 0.12)`). |
+| `.menu_border(impl IntoBorder)` | Border for the menu overlay (default `(Color::rgb(0.25, 0.25, 0.3), 1.0)`). |
+| `.menu_radius_all(r: f32)` | Corner radius for the menu overlay (default `4.0`). |
+| `.menu_radius(tl, tr, br, bl)` | Per-corner radii for the menu overlay. |
+| `.menu_max_height(max_h: f32)` | Maximum scrollable/clipped height of the popup list (default: 250.0). |
 
 ---
 
-### 2.6 Typography & Text Styling
-
-Controls text size and label colors across both the trigger button and menu items.
-
-#### Method Signatures
-
-```rust
-/// Sets font size for trigger label and menu items (default 14.0).
-pub fn size(mut self, size: f32) -> Self
-
-/// Sets text color for label and chevron.
-pub fn color(mut self, color: Color) -> Self
-```
-
----
-
-### 2.7 Event Handling & Response
+### 2.8 Event Handling & Response
 
 The `.show()` method records layout, emits draw commands, and returns a standard `Response`:
 
@@ -287,9 +235,12 @@ ui.dropdown(&mut selected_format, formats)
 
 ```rust
 ui.dropdown(&mut current_tab, tabs)
-    .bg(None)
-    .border(None)
-    .hover_bg(Color::rgba(1.0, 1.0, 1.0, 0.08))
+    .bg(Background::None)
+    .border(Border::None)
+    .hover([
+        Style::bg(Color::rgba(1.0, 1.0, 1.0, 0.08)),
+        Cursor::Pointer,
+    ])
     .radius_all(4.0)
     .color(Color::rgb(0.85, 0.88, 0.95))
     .show();
@@ -305,8 +256,7 @@ ui.dropdown(&mut target_device, devices)
     .bg(Color::rgb(0.10, 0.11, 0.14))
     .border((Color::rgb(0.20, 0.45, 0.85), 1.0))
     .glow(true)
-    .shadow(Color::rgb(0.10, 0.35, 0.80), 0.0, 4.0, 16.0)
-    .shadow_opacity(0.35)
+    .shadow(Color::rgba(0.10, 0.35, 0.80, 0.35), 0.0, 4.0, 16.0)
     .radius_all(8.0)
     .show();
 ```
@@ -381,41 +331,24 @@ if ui.dropdown(&mut selected, options).show().changed {
 
 ```rust
 pub struct DropdownBuilder<'u, 'a, 'b, T: PartialEq + Clone + ToString> {
-    ui: &'u mut Ui<'a>,
-    selected: &'b mut T,
-    options: Vec<T>,
-    id: Id,
+    pub ui: &'u mut Ui<'a>,
+    pub selected: &'b mut T,
+    pub options: Vec<T>,
+    pub id: Id,
 
-    // Layout
-    width: f32,
-    height: f32,
-    radius: [f32; 4],
-    padding_x: f32,
-    font_size: f32,
+    // Header styling & Typography
+    pub style: BoxStyle,
+    pub text_style: zenthra_text::prelude::TextStyle,
+    pub hover_state: Option<crate::macros::WidgetStateOverrides>,
+    pub active_state: Option<crate::macros::WidgetStateOverrides>,
 
-    // Colors
-    bg: Color,
-    border_color: Color,
-    border_width: f32,
-    text_color: Color,
-    hover_bg: Option<Color>,
+    // Menu Style (Dropdown popup)
+    pub menu_style: BoxStyle,
+    pub menu_max_height: f32,
 
-    // Menu Style
-    menu_bg: Color,
-    menu_max_height: f32,
-    menu_border_color: Option<Color>,
-    menu_border_width: Option<f32>,
-    menu_radius: Option<[f32; 4]>,
-
-    // Styling
-    glow: bool,
-    shadow_color: Color,
-    shadow_offset: [f32; 2],
-    shadow_blur: f32,
-    shadow_opacity: f32,
-    shadow_enabled: bool,
-
-    placement: zenthra_core::Placement,
-    gap: f32,
+    // Styling & Effects
+    pub glow: bool,
+    pub placement: zenthra_core::Placement,
+    pub gap: f32,
 }
 ```

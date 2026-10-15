@@ -113,9 +113,8 @@ pub struct MenuBuilder<'u, 'a> {
 
     // Style properties
     text_color: Option<Color>,
-    hover_text_color: Option<Color>,
+    pub hover_state: Option<crate::macros::WidgetStateOverrides>,
     bg_color: Option<Color>,
-    hover_bg_color: Option<Color>,
     popup_bg: Option<Color>,
     popup_border: Option<(Color, f32)>,
     font_size: f32,
@@ -144,9 +143,8 @@ impl<'u, 'a> MenuBuilder<'u, 'a> {
             item_height: 26.0,
             is_submenu: None,
             text_color: None,
-            hover_text_color: None,
+            hover_state: None,
             bg_color: None,
-            hover_bg_color: None,
             popup_bg: None,
             popup_border: None,
             font_size: 13.0,
@@ -186,18 +184,14 @@ impl<'u, 'a> MenuBuilder<'u, 'a> {
         self
     }
 
-    pub fn hover_text_color(mut self, color: Color) -> Self {
-        self.hover_text_color = Some(color);
-        self
-    }
-
-    pub fn bg(mut self, bg: impl Into<Option<Color>>) -> Self {
-        self.bg_color = bg.into();
-        self
-    }
-
-    pub fn hover_bg(mut self, bg: impl Into<Option<Color>>) -> Self {
-        self.hover_bg_color = bg.into();
+    #[inline]
+    pub fn hover(mut self, props: impl crate::macros::IntoStateProps) -> Self {
+        if self.hover_state.is_none() {
+            self.hover_state = Some(crate::macros::WidgetStateOverrides::new());
+        }
+        if let Some(ref mut h) = self.hover_state {
+            props.apply_to_overrides(h);
+        }
         self
     }
 
@@ -223,7 +217,7 @@ impl<'u, 'a> MenuBuilder<'u, 'a> {
         self
     }
 
-    pub fn radius(mut self, r: f32) -> Self {
+    pub fn radius_all(mut self, r: f32) -> Self {
         self.radius = r;
         self
     }
@@ -324,9 +318,16 @@ impl<'u, 'a> MenuBuilder<'u, 'a> {
         let theme_bg_panel = get_theme_color(self.ui, 999999940, Color::rgb(1.0 / 255.0, 1.0 / 255.0, 1.0 / 255.0));
         let theme_border = get_theme_color(self.ui, 999999930, Color::rgb(3.0 / 255.0, 3.0 / 255.0, 3.0 / 255.0));
 
+        let effective_hover_bg = self.hover_state.as_ref()
+            .and_then(|s| match s.style.bg {
+                Some(zenthra_core::Background::Solid(c)) => Some(c),
+                _ => None,
+            });
+        let effective_hover_text = self.hover_state.as_ref().and_then(|s| s.text_color);
+
         let bg_color = if let Some(custom) = self.bg_color {
             if is_currently_active || is_hovered {
-                self.hover_bg_color.unwrap_or(custom)
+                effective_hover_bg.unwrap_or(custom)
             } else {
                 custom
             }
@@ -334,13 +335,13 @@ impl<'u, 'a> MenuBuilder<'u, 'a> {
             if is_currently_active {
                 Color::rgb(0.80, 0.80, 0.85)
             } else if is_hovered {
-                Color::rgb(0.88, 0.88, 0.90)
+                effective_hover_bg.unwrap_or(Color::rgb(0.88, 0.88, 0.90))
             } else {
                 Color::TRANSPARENT
             }
         } else {
             if is_currently_active || is_hovered {
-                self.hover_bg_color.unwrap_or(theme_highlight)
+                effective_hover_bg.unwrap_or(theme_highlight)
             } else {
                 Color::TRANSPARENT
             }
@@ -348,7 +349,7 @@ impl<'u, 'a> MenuBuilder<'u, 'a> {
 
         let text_color = if let Some(custom) = self.text_color {
             if is_currently_active || is_hovered {
-                self.hover_text_color.unwrap_or(custom)
+                effective_hover_text.unwrap_or(custom)
             } else {
                 custom
             }
@@ -356,7 +357,7 @@ impl<'u, 'a> MenuBuilder<'u, 'a> {
             Color::rgb(0.1, 0.1, 0.15)
         } else {
             if is_currently_active || is_hovered {
-                self.hover_text_color.unwrap_or(theme_accent)
+                effective_hover_text.unwrap_or(theme_accent)
             } else {
                 theme_text_primary
             }
@@ -563,10 +564,16 @@ impl<'u, 'a> MenuBuilder<'u, 'a> {
         let theme_text_muted = get_theme_color(self.ui, 999999950, Color::rgb(136.0 / 255.0, 136.0 / 255.0, 136.0 / 255.0));
         let theme_bg_panel = get_theme_color(self.ui, 999999940, Color::rgb(1.0 / 255.0, 1.0 / 255.0, 1.0 / 255.0));
         let theme_border = get_theme_color(self.ui, 999999930, Color::rgb(3.0 / 255.0, 3.0 / 255.0, 3.0 / 255.0));
+        let effective_hover_bg = self.hover_state.as_ref()
+            .and_then(|s| match s.style.bg {
+                Some(zenthra_core::Background::Solid(c)) => Some(c),
+                _ => None,
+            });
+        let effective_hover_text = self.hover_state.as_ref().and_then(|s| s.text_color);
 
         let bg_color = if let Some(custom) = self.bg_color {
             if is_currently_active || is_hovered {
-                self.hover_bg_color.unwrap_or(custom)
+                effective_hover_bg.unwrap_or(custom)
             } else {
                 custom
             }
@@ -578,7 +585,7 @@ impl<'u, 'a> MenuBuilder<'u, 'a> {
             }
         } else {
             if is_currently_active || is_hovered {
-                self.hover_bg_color.unwrap_or(theme_highlight)
+                effective_hover_bg.unwrap_or(theme_highlight)
             } else {
                 Color::TRANSPARENT
             }
@@ -586,7 +593,7 @@ impl<'u, 'a> MenuBuilder<'u, 'a> {
 
         let text_color = if let Some(custom) = self.text_color {
             if is_currently_active || is_hovered {
-                self.hover_text_color.unwrap_or(custom)
+                effective_hover_text.unwrap_or(custom)
             } else {
                 custom
             }
@@ -594,7 +601,7 @@ impl<'u, 'a> MenuBuilder<'u, 'a> {
             Color::rgb(0.1, 0.1, 0.15)
         } else {
             if is_currently_active || is_hovered {
-                self.hover_text_color.unwrap_or(theme_accent)
+                effective_hover_text.unwrap_or(theme_accent)
             } else {
                 theme_text_primary
             }
@@ -751,9 +758,8 @@ pub struct MenuItemBuilder<'u, 'a> {
     id: Id,
     height: f32,
     text_color: Option<Color>,
-    hover_text_color: Option<Color>,
+    pub hover_state: Option<crate::macros::WidgetStateOverrides>,
     bg_color: Option<Color>,
-    hover_bg_color: Option<Color>,
     font_size: f32,
     radius: f32,
     icon: Option<String>,
@@ -775,9 +781,8 @@ impl<'u, 'a> MenuItemBuilder<'u, 'a> {
             id,
             height: 26.0,
             text_color: None,
-            hover_text_color: None,
+            hover_state: None,
             bg_color: None,
-            hover_bg_color: None,
             font_size: 13.0,
             radius: 3.0,
             icon: None,
@@ -799,18 +804,14 @@ impl<'u, 'a> MenuItemBuilder<'u, 'a> {
         self
     }
 
-    pub fn hover_text_color(mut self, color: Color) -> Self {
-        self.hover_text_color = Some(color);
-        self
-    }
-
-    pub fn bg(mut self, bg: impl Into<Option<Color>>) -> Self {
-        self.bg_color = bg.into();
-        self
-    }
-
-    pub fn hover_bg(mut self, bg: impl Into<Option<Color>>) -> Self {
-        self.hover_bg_color = bg.into();
+    #[inline]
+    pub fn hover(mut self, props: impl crate::macros::IntoStateProps) -> Self {
+        if self.hover_state.is_none() {
+            self.hover_state = Some(crate::macros::WidgetStateOverrides::new());
+        }
+        if let Some(ref mut h) = self.hover_state {
+            props.apply_to_overrides(h);
+        }
         self
     }
 
@@ -819,7 +820,7 @@ impl<'u, 'a> MenuItemBuilder<'u, 'a> {
         self
     }
 
-    pub fn radius(mut self, r: f32) -> Self {
+    pub fn radius_all(mut self, r: f32) -> Self {
         self.radius = r;
         self
     }
@@ -870,9 +871,16 @@ impl<'u, 'a> MenuItemBuilder<'u, 'a> {
         let theme_text_primary = get_theme_color(self.ui, 999999960, Color::rgb(224.0 / 255.0, 224.0 / 255.0, 224.0 / 255.0));
         let theme_text_muted = get_theme_color(self.ui, 999999950, Color::rgb(136.0 / 255.0, 136.0 / 255.0, 136.0 / 255.0));
 
+        let effective_hover_bg = self.hover_state.as_ref()
+            .and_then(|s| match s.style.bg {
+                Some(zenthra_core::Background::Solid(c)) => Some(c),
+                _ => None,
+            });
+        let effective_hover_text = self.hover_state.as_ref().and_then(|s| s.text_color);
+
         let bg_color = if let Some(custom) = self.bg_color {
             if is_hovered {
-                self.hover_bg_color.unwrap_or(custom)
+                effective_hover_bg.unwrap_or(custom)
             } else {
                 custom
             }
@@ -884,7 +892,7 @@ impl<'u, 'a> MenuItemBuilder<'u, 'a> {
             }
         } else {
             if is_hovered {
-                self.hover_bg_color.unwrap_or(theme_highlight)
+                effective_hover_bg.unwrap_or(theme_highlight)
             } else {
                 Color::TRANSPARENT
             }
@@ -892,7 +900,7 @@ impl<'u, 'a> MenuItemBuilder<'u, 'a> {
 
         let text_color = if let Some(custom) = self.text_color {
             if is_hovered {
-                self.hover_text_color.unwrap_or(custom)
+                effective_hover_text.unwrap_or(custom)
             } else {
                 custom
             }
@@ -900,7 +908,7 @@ impl<'u, 'a> MenuItemBuilder<'u, 'a> {
             Color::rgb(0.1, 0.1, 0.15)
         } else {
             if is_hovered {
-                self.hover_text_color.unwrap_or(theme_accent)
+                effective_hover_text.unwrap_or(theme_accent)
             } else {
                 theme_text_primary
             }

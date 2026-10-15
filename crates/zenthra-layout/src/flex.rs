@@ -30,7 +30,7 @@ impl FlexConfig {
         self.gap = g;
         self
     }
-    pub fn padding(mut self, p: f32) -> Self {
+    pub fn padding_all(mut self, p: f32) -> Self {
         self.padding = p;
         self
     }

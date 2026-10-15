@@ -57,7 +57,7 @@ fn main() {
 
                             if ui.button("Reset Counter")
                                 .bg(Color::rgb(0.18, 0.20, 0.26))
-                                .hover_bg(Color::rgb(0.25, 0.28, 0.36))
+                                .hover(Style::bg(Color::rgb(0.25, 0.28, 0.36)))
                                 .border((Color::rgb(0.30, 0.35, 0.45), 1.0))
                                 .radius_all(6.0)
                                 .padding(6.0, 14.0, 6.0, 14.0)
@@ -88,8 +88,8 @@ fn main() {
                                 // Primary Accent Button
                                 if ui.button("Primary Accent")
                                     .bg(Color::rgb(0.15, 0.45, 0.95))
-                                    .hover_bg(Color::rgb(0.25, 0.55, 1.0))
-                                    .active_bg(Color::rgb(0.10, 0.35, 0.80))
+                                    .hover(Style::bg(Color::rgb(0.25, 0.55, 1.0)))
+                                    .active(Style::bg(Color::rgb(0.10, 0.35, 0.80)))
                                     .radius_all(6.0)
                                     .padding(8.0, 18.0, 8.0, 18.0)
                                     .size(14.0)
@@ -104,8 +104,8 @@ fn main() {
                                 // Secondary / Neutral
                                 if ui.button("Secondary")
                                     .bg(Color::rgb(0.16, 0.19, 0.25))
-                                    .hover_bg(Color::rgb(0.22, 0.26, 0.34))
-                                    .active_bg(Color::rgb(0.12, 0.14, 0.19))
+                                    .hover(Style::bg(Color::rgb(0.22, 0.26, 0.34)))
+                                    .active(Style::bg(Color::rgb(0.12, 0.14, 0.19)))
                                     .border((Color::rgb(0.26, 0.31, 0.40), 1.0))
                                     .radius_all(6.0)
                                     .padding(8.0, 18.0, 8.0, 18.0)
@@ -120,8 +120,8 @@ fn main() {
                                 // Success / Confirm
                                 if ui.button("Confirm Changes")
                                     .bg(Color::rgb(0.12, 0.58, 0.34))
-                                    .hover_bg(Color::rgb(0.16, 0.70, 0.40))
-                                    .active_bg(Color::rgb(0.09, 0.48, 0.28))
+                                    .hover(Style::bg(Color::rgb(0.16, 0.70, 0.40)))
+                                    .active(Style::bg(Color::rgb(0.09, 0.48, 0.28)))
                                     .radius_all(6.0)
                                     .padding(8.0, 18.0, 8.0, 18.0)
                                     .size(14.0)
@@ -135,8 +135,8 @@ fn main() {
                                 // Danger / Destructive
                                 if ui.button("Delete Resource")
                                     .bg(Color::rgb(0.75, 0.18, 0.18))
-                                    .hover_bg(Color::rgb(0.88, 0.22, 0.22))
-                                    .active_bg(Color::rgb(0.60, 0.14, 0.14))
+                                    .hover(Style::bg(Color::rgb(0.88, 0.22, 0.22)))
+                                    .active(Style::bg(Color::rgb(0.60, 0.14, 0.14)))
                                     .radius_all(6.0)
                                     .padding(8.0, 18.0, 8.0, 18.0)
                                     .size(14.0)
@@ -150,8 +150,8 @@ fn main() {
                                 // Ghost / Transparent
                                 if ui.button("Ghost Link")
                                     .bg(None)
-                                    .hover_bg(Color::rgba(1.0, 1.0, 1.0, 0.08))
-                                    .active_bg(Color::rgba(1.0, 1.0, 1.0, 0.04))
+                                    .hover(Style::bg(Color::rgba(1.0, 1.0, 1.0, 0.08)))
+                                    .active(Style::bg(Color::rgba(1.0, 1.0, 1.0, 0.04)))
                                     .color(Color::rgb(0.70, 0.85, 1.0))
                                     .radius_all(6.0)
                                     .padding(8.0, 18.0, 8.0, 18.0)
@@ -198,7 +198,7 @@ fn main() {
 
                                 if ui.button("Vibrant Gradient")
                                     .bg(neon_grad)
-                                    .hover_bg(neon_hover_grad)
+                                    .hover(Style::bg(neon_hover_grad))
                                     .radius_all(8.0)
                                     .padding(10.0, 24.0, 10.0, 24.0)
                                     .size(15.0)
@@ -255,9 +255,11 @@ fn main() {
                                 if ui.button("Outline Accent")
                                     .bg(None)
                                     .border((Color::rgb(0.35, 0.65, 1.0), 1.5))
-                                    .hover_border((Color::rgb(0.60, 0.85, 1.0), 2.0))
-                                    .active_border((Color::rgb(0.20, 0.50, 0.90), 2.0))
-                                    .hover_bg(Color::rgba(0.35, 0.65, 1.0, 0.12))
+                                    .hover([
+                                        Style::border((Color::rgb(0.60, 0.85, 1.0), 2.0)),
+                                        Style::bg(Color::rgba(0.35, 0.65, 1.0, 0.12)),
+                                    ])
+                                    .active(Style::border((Color::rgb(0.20, 0.50, 0.90), 2.0)))
                                     .radius_all(6.0)
                                     .padding(8.0, 20.0, 8.0, 20.0)
                                     .color(Color::rgb(0.85, 0.92, 1.0))
@@ -271,8 +273,10 @@ fn main() {
                                 // Button with subtle hover scale micro-interaction
                                 if ui.button("Hover Scale 1.05x")
                                     .bg(Color::rgb(0.22, 0.26, 0.34))
-                                    .hover_bg(Color::rgb(0.28, 0.34, 0.44))
-                                    .hover_scale(1.05)
+                                    .hover([
+                                        Style::bg(Color::rgb(0.28, 0.34, 0.44)),
+                                        Transform::scale(1.05),
+                                    ])
                                     .radius_all(6.0)
                                     .padding(8.0, 20.0, 8.0, 20.0)
                                     .show()
@@ -304,7 +308,7 @@ fn main() {
                                     .width(36.0)
                                     .height(36.0)
                                     .bg(Color::rgb(0.18, 0.20, 0.26))
-                                    .hover_bg(Color::rgb(0.75, 0.20, 0.20))
+                                    .hover(Style::bg(Color::rgb(0.75, 0.20, 0.20)))
                                     .radius_all(6.0)
                                     .size(14.0)
                                     .show()
@@ -321,7 +325,7 @@ fn main() {
                                     .align(Align::Left)
                                     .padding_x(12.0)
                                     .bg(Color::rgb(0.16, 0.19, 0.25))
-                                    .hover_bg(Color::rgb(0.22, 0.26, 0.34))
+                                    .hover(Style::bg(Color::rgb(0.22, 0.26, 0.34)))
                                     .radius_all(6.0)
                                     .show()
                                     .clicked
@@ -337,7 +341,7 @@ fn main() {
                                     .align(Align::Right)
                                     .padding_x(12.0)
                                     .bg(Color::rgb(0.16, 0.19, 0.25))
-                                    .hover_bg(Color::rgb(0.22, 0.26, 0.34))
+                                    .hover(Style::bg(Color::rgb(0.22, 0.26, 0.34)))
                                     .radius_all(6.0)
                                     .show()
                                     .clicked
@@ -352,7 +356,7 @@ fn main() {
                                 .fill_x()
                                 .height(42.0)
                                 .bg(Color::rgb(0.14, 0.18, 0.25))
-                                .hover_bg(Color::rgb(0.20, 0.26, 0.36))
+                                .hover(Style::bg(Color::rgb(0.20, 0.26, 0.36)))
                                 .border((Color::rgb(0.25, 0.32, 0.45), 1.0))
                                 .radius_all(8.0)
                                 .size(15.0)

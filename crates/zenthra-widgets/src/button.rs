@@ -1,7 +1,7 @@
 // crates/zenthra-widgets/src/button.rs
 
 use crate::ui::{DrawCommand, RectDraw, TextDraw, Ui};
-use zenthra_core::{BoxStyle, Color, EdgeInsets, Id, IntoBorder, Rect, Role, SemanticNode, Styleable};
+use zenthra_core::{BoxStyle, Color, EdgeInsets, Id, Rect, Role, SemanticNode, Styleable};
 use crate::style_ext::BoxStyleExt;
 
 pub struct ButtonBuilder<'u, 'a> {
@@ -16,18 +16,12 @@ pub struct ButtonBuilder<'u, 'a> {
     // Typography
     pub text_style: zenthra_text::prelude::TextStyle,
 
-    // States
-    hover_bg: Option<zenthra_core::Background>,
-    active_bg: Option<zenthra_core::Background>,
-
     // Other
     render_mode: Option<zenthra_core::RenderMode>,
-    hover_scale: f32,
-    hover_border_color: Option<Color>,
-    hover_border_width: Option<f32>,
-    active_border_color: Option<Color>,
-    active_border_width: Option<f32>,
     align: zenthra_core::Align,
+
+    pub hover_state: Option<crate::macros::WidgetStateOverrides>,
+    pub active_state: Option<crate::macros::WidgetStateOverrides>,
 }
 
 impl<'u, 'a> Styleable for ButtonBuilder<'u, 'a> {
@@ -47,6 +41,9 @@ impl_box_style_methods!(ButtonBuilder);
 
 // Single-source macro generates all TextStyle builder methods (.font_size, .color, .family, .weight, .wrap, etc.)
 impl_text_style_methods!(ButtonBuilder);
+
+// Sibling interaction state methods (.hover, .active)
+impl_interaction_state_methods!(ButtonBuilder);
 
 impl<'u, 'a> ButtonBuilder<'u, 'a> {
     pub fn new(ui: &'u mut Ui<'a>, label: &str) -> Self {
@@ -68,15 +65,10 @@ impl<'u, 'a> ButtonBuilder<'u, 'a> {
             pos: None,
             style,
             text_style,
-            hover_bg: None,
-            active_bg: None,
             render_mode: None,
-            hover_scale: 1.0,
-            hover_border_color: None,
-            hover_border_width: None,
-            active_border_color: None,
-            active_border_width: None,
             align: zenthra_core::Align::Center,
+            hover_state: None,
+            active_state: None,
         }
     }
 
@@ -93,50 +85,6 @@ impl<'u, 'a> ButtonBuilder<'u, 'a> {
         self
     }
 
-    pub fn hover_bg(mut self, bg: impl Into<zenthra_core::Background>) -> Self {
-        self.hover_bg = Some(bg.into());
-        self
-    }
-
-    pub fn active_bg(mut self, bg: impl Into<zenthra_core::Background>) -> Self {
-        self.active_bg = Some(bg.into());
-        self
-    }
-
-    pub fn hover_scale(mut self, s: f32) -> Self {
-        self.hover_scale = s;
-        self
-    }
-
-    pub fn hover_border(mut self, border: impl IntoBorder) -> Self {
-        let (b, _align) = border.into_border();
-        match b {
-            zenthra_core::Border::None => {
-                self.hover_border_color = Some(Color::TRANSPARENT);
-                self.hover_border_width = Some(0.0);
-            }
-            zenthra_core::Border::Solid(c, w) => {
-                self.hover_border_color = Some(c);
-                self.hover_border_width = Some(w);
-            }
-        }
-        self
-    }
-
-    pub fn active_border(mut self, border: impl IntoBorder) -> Self {
-        let (b, _align) = border.into_border();
-        match b {
-            zenthra_core::Border::None => {
-                self.active_border_color = Some(Color::TRANSPARENT);
-                self.active_border_width = Some(0.0);
-            }
-            zenthra_core::Border::Solid(c, w) => {
-                self.active_border_color = Some(c);
-                self.active_border_width = Some(w);
-            }
-        }
-        self
-    }
 
     pub fn render_mode(mut self, mode: zenthra_core::RenderMode) -> Self {
         self.render_mode = Some(mode);
@@ -252,7 +200,12 @@ impl<'u, 'a> ButtonBuilder<'u, 'a> {
         };
 
         if is_hovered {
-            self.ui.cursor_icon = crate::text::CursorIcon::Pointer;
+            let eff_cursor = self.hover_state.as_ref().and_then(|h| h.cursor).unwrap_or(crate::text::CursorIcon::Pointer);
+            self.ui.cursor_icon = eff_cursor;
+
+            if let Some(ref tip) = self.hover_state.as_ref().and_then(|h| h.tooltip.as_ref()) {
+                self.ui.draw_tooltip(tip);
+            }
         }
 
         let mut clicked = false;
@@ -268,34 +221,52 @@ impl<'u, 'a> ButtonBuilder<'u, 'a> {
             self.ui.dispatch_event(self.id, crate::ui::WidgetEvent::Click);
         }
 
+        let active_overrides = self.active_state.as_ref();
+        let hover_overrides = self.hover_state.as_ref();
+
         // 3. Determine effective background and border based on state
-        let effective_bg = if is_pressed && self.active_bg.is_some() {
-            self.active_bg.as_ref()
-        } else if is_hovered && self.hover_bg.is_some() {
-            self.hover_bg.as_ref()
+        let effective_bg = if is_pressed {
+            active_overrides.and_then(|o| o.style.bg.as_ref())
+                .or(hover_overrides.and_then(|o| o.style.bg.as_ref()))
+                .or(self.style.bg.as_ref())
+        } else if is_hovered {
+            hover_overrides.and_then(|o| o.style.bg.as_ref())
+                .or(self.style.bg.as_ref())
         } else {
             self.style.bg.as_ref()
         };
 
         let effective_border_w = if is_pressed {
-            self.active_border_width.unwrap_or_else(|| self.style.border_width())
+            active_overrides.map(|o| o.style.border_width()).filter(|&w| w > 0.0)
+                .unwrap_or_else(|| self.style.border_width())
         } else if is_hovered {
-            self.hover_border_width.unwrap_or_else(|| self.style.border_width())
+            hover_overrides.map(|o| o.style.border_width()).filter(|&w| w > 0.0)
+                .unwrap_or_else(|| self.style.border_width())
         } else {
             self.style.border_width()
         };
 
         let effective_border_c = if is_pressed {
-            self.active_border_color.or_else(|| self.style.border_color())
+            active_overrides.and_then(|o| o.style.border_color())
+                .or_else(|| self.style.border_color())
         } else if is_hovered {
-            self.hover_border_color.or_else(|| self.style.border_color())
+            hover_overrides.and_then(|o| o.style.border_color())
+                .or_else(|| self.style.border_color())
         } else {
             self.style.border_color()
         };
 
-        if is_hovered {
-            final_w *= self.hover_scale;
-            final_h *= self.hover_scale;
+        let eff_scale = if is_pressed {
+            active_overrides.map(|o| o.scale).filter(|&s| (s - 1.0).abs() > f32::EPSILON).unwrap_or(1.0)
+        } else if is_hovered {
+            hover_overrides.map(|o| o.scale).filter(|&s| (s - 1.0).abs() > f32::EPSILON).unwrap_or(1.0)
+        } else {
+            1.0
+        };
+
+        if eff_scale != 1.0 {
+            final_w *= eff_scale;
+            final_h *= eff_scale;
         }
 
         let start_draw = self.ui.draws.len();
@@ -322,7 +293,18 @@ impl<'u, 'a> ButtonBuilder<'u, 'a> {
         let ty = (y + (final_h - text_h) / 2.0).round();
 
         let mut text_opts = self.text_style.to_options(tx, ty, self.ui.scale_factor, self.ui.font_scale);
-        text_opts.color = self.text_style.color;
+        let effective_text_color = if is_hovered {
+            hover_overrides.and_then(|o| o.text_color).unwrap_or(self.text_style.color)
+        } else {
+            self.text_style.color
+        };
+        text_opts.color = effective_text_color;
+
+        if is_hovered {
+            if let Some(u) = hover_overrides.and_then(|o| o.underline) {
+                text_opts.underline = u;
+            }
+        }
 
         self.ui.draws.push(DrawCommand::Text(TextDraw {
             text: self.label.clone(),
@@ -433,7 +415,7 @@ mod tests {
             }
         }
 
-        // 3. Button with idle border and hover_border(None)
+        // 3. Button with idle border and Style::border(Border::None) hover override
         {
             let mut ui = Ui::new(
                 800, 600, 1.0, None, Vec::new(), None,
@@ -448,13 +430,10 @@ mod tests {
 
             let btn = ui.button("Interactive")
                 .border((Color::WHITE, 1.0))
-                .hover_border(None)
-                .active_border(None);
+                .hover(crate::macros::Style::border(zenthra_core::Border::None));
 
-            assert_eq!(btn.hover_border_width, Some(0.0));
-            assert_eq!(btn.hover_border_color, Some(Color::TRANSPARENT));
-            assert_eq!(btn.active_border_width, Some(0.0));
-            assert_eq!(btn.active_border_color, Some(Color::TRANSPARENT));
+            assert!(btn.hover_state.is_some());
+            assert_eq!(btn.hover_state.as_ref().unwrap().style.border, zenthra_core::Border::None);
         }
 
         // 4. BoxStyle unification on ButtonBuilder

@@ -114,7 +114,7 @@ fn main() {
                                     ui.toggle(&mut dark_theme, "Large Switch (58x28)")
                                         .track_size(58.0, 28.0)
                                         .size(15.0)
-                                        .active_label(Color::rgb(0.40, 0.75, 1.0))
+                                        .active(Text::color(Color::rgb(0.40, 0.75, 1.0)))
                                         .show();
                                 });
                         });
@@ -144,7 +144,7 @@ fn main() {
                                         .off_color(Color::rgb(0.18, 0.20, 0.26))
                                         .glow(true)
                                         .scaling(1.05, 0.95)
-                                        .active_label(Color::rgb(0.20, 0.90, 0.60))
+                                        .active(Text::color(Color::rgb(0.20, 0.90, 0.60)))
                                         .show();
 
                                     // Neon Violet
@@ -154,7 +154,7 @@ fn main() {
                                         .thumb_color(Color::rgb(0.95, 0.90, 1.0))
                                         .glow(true)
                                         .scaling(1.05, 0.95)
-                                        .active_label(Color::rgb(0.75, 0.50, 1.0))
+                                        .active(Text::color(Color::rgb(0.75, 0.50, 1.0)))
                                         .show();
 
                                     // Crimson Danger
@@ -162,7 +162,7 @@ fn main() {
                                         .on_color(Color::rgb(0.95, 0.25, 0.35))
                                         .off_color(Color::rgb(0.22, 0.18, 0.20))
                                         .glow(true)
-                                        .active_label(Color::rgb(1.0, 0.40, 0.50))
+                                        .active(Text::color(Color::rgb(1.0, 0.40, 0.50)))
                                         .show();
                                 });
                         });

@@ -1,7 +1,11 @@
+use crate::style_ext::BoxStyleExt;
 use crate::ui::{DrawCommand, RectDraw, ScrollDrag, TextDraw, Ui};
 use std::collections::HashMap;
 use std::sync::Mutex;
-use zenthra_core::{Align, Color, EdgeInsets, Id, Rect, Response, Role, SemanticNode};
+use zenthra_core::{
+    Align, Background, Border, BoxStyle, Color, EdgeInsets, Id, IntoBorder, Rect, Response, Role,
+    SemanticNode, Styleable,
+};
 use zenthra_platform::event::{KeyCode, PlatformEvent};
 use zenthra_render::RectInstance;
 
@@ -91,41 +95,40 @@ impl_numeric_int!(usize);
 
 /// Builder for interactive scrubbable numeric drag input box
 pub struct DragValueBuilder<'u, 'a, 'b, N: NumericValue> {
-    ui: &'u mut Ui<'a>,
-    value: &'b mut N,
-    id: Id,
+    pub ui: &'u mut Ui<'a>,
+    pub value: &'b mut N,
+    pub id: Id,
 
-    min: Option<f64>,
-    max: Option<f64>,
-    speed: f64,
-    step: Option<f64>,
-    precision: usize,
-    prefix: String,
-    suffix: String,
+    pub min: Option<f64>,
+    pub max: Option<f64>,
+    pub speed: f64,
+    pub step: Option<f64>,
+    pub precision: usize,
+    pub prefix: String,
+    pub suffix: String,
 
-    // Style
-    width: Option<f32>,
-    height: f32,
-    bg: Color,
-    hover_bg: Color,
-    active_bg: Color,
-    custom_hover_bg: bool,
-    custom_active_bg: bool,
-    border_color: Color,
-    border_width: f32,
-    focus_border_color: Color,
-    focus_border_width: f32,
-    shadow_color: Option<Color>,
-    shadow_offset: [f32; 2],
-    shadow_blur: f32,
-    radius: [f32; 4],
-    font_size: f32,
-    font_family: Option<String>,
-    text_color: Color,
-    prefix_color: Option<Color>,
-    suffix_color: Option<Color>,
-    padding: EdgeInsets,
-    align: Align,
+    // Box Style & Typography
+    pub style: BoxStyle,
+    pub text_style: zenthra_text::prelude::TextStyle,
+    pub focus_border: Option<Border>,
+    pub prefix_color: Option<Color>,
+    pub suffix_color: Option<Color>,
+    pub align: Align,
+
+    pub hover_state: Option<crate::macros::WidgetStateOverrides>,
+    pub active_state: Option<crate::macros::WidgetStateOverrides>,
+}
+
+impl<'u, 'a, 'b, N: NumericValue> Styleable for DragValueBuilder<'u, 'a, 'b, N> {
+    #[inline]
+    fn box_style_mut(&mut self) -> &mut BoxStyle {
+        &mut self.style
+    }
+
+    #[inline]
+    fn box_style(&self) -> &BoxStyle {
+        &self.style
+    }
 }
 
 impl<'u, 'a, 'b, N: NumericValue> DragValueBuilder<'u, 'a, 'b, N> {
@@ -134,6 +137,17 @@ impl<'u, 'a, 'b, N: NumericValue> DragValueBuilder<'u, 'a, 'b, N> {
         use std::hash::Hasher;
         id.hash(&mut hasher);
         let id = Id::from_u64(hasher.finish() & 0x00FF_FFFF_FFFF_FFFF);
+
+        let mut style = BoxStyle::new();
+        style.height = Some(24.0);
+        style.bg = Some(Background::Solid(Color::rgb(0.12, 0.13, 0.17)));
+        style.border = Border::Solid(Color::rgb(0.22, 0.25, 0.33), 1.0);
+        style.radius = [4.0; 4];
+        style.padding = EdgeInsets::symmetric(0.0, 8.0);
+
+        let mut text_style = zenthra_text::prelude::TextStyle::default();
+        text_style.font_size = 12.0;
+        text_style.color = Color::rgb(0.92, 0.94, 0.98);
 
         Self {
             ui,
@@ -147,29 +161,15 @@ impl<'u, 'a, 'b, N: NumericValue> DragValueBuilder<'u, 'a, 'b, N> {
             prefix: String::new(),
             suffix: String::new(),
 
-            // Modern creative dark theme defaults (e.g. Blender/After Effects style)
-            width: None,
-            height: 24.0,
-            bg: Color::rgb(0.12, 0.13, 0.17),
-            hover_bg: Color::rgb(0.17, 0.19, 0.25),
-            active_bg: Color::rgb(0.20, 0.24, 0.34),
-            custom_hover_bg: false,
-            custom_active_bg: false,
-            border_color: Color::rgb(0.22, 0.25, 0.33),
-            border_width: 1.0,
-            focus_border_color: Color::rgb(0.35, 0.58, 0.98),
-            focus_border_width: 1.5,
-            shadow_color: None,
-            shadow_offset: [0.0, 0.0],
-            shadow_blur: 0.0,
-            radius: [4.0; 4],
-            font_size: 12.0,
-            font_family: None,
-            text_color: Color::rgb(0.92, 0.94, 0.98),
+            style,
+            text_style,
+            focus_border: Some(Border::Solid(Color::rgb(0.35, 0.58, 0.98), 1.5)),
             prefix_color: Some(Color::rgb(0.55, 0.60, 0.72)),
             suffix_color: Some(Color::rgb(0.50, 0.55, 0.68)),
-            padding: EdgeInsets::symmetric(0.0, 8.0),
             align: Align::Center,
+
+            hover_state: None,
+            active_state: None,
         }
     }
 
@@ -231,133 +231,6 @@ impl<'u, 'a, 'b, N: NumericValue> DragValueBuilder<'u, 'a, 'b, N> {
         self
     }
 
-    /// Widget width (defaults to 75px or available layout)
-    pub fn width(mut self, width: f32) -> Self {
-        self.width = Some(width);
-        self
-    }
-
-    /// Widget height (defaults to 24px)
-    pub fn height(mut self, height: f32) -> Self {
-        self.height = height;
-        self
-    }
-
-    /// Background color in normal state (supports Color, None)
-    pub fn bg(mut self, color: impl Into<Option<Color>>) -> Self {
-        match color.into() {
-            Some(c) => {
-                self.bg = c;
-                if c.a == 0.0 {
-                    if !self.custom_hover_bg {
-                        self.hover_bg = Color::rgba(1.0, 1.0, 1.0, 0.08);
-                    }
-                    if !self.custom_active_bg {
-                        self.active_bg = Color::rgba(1.0, 1.0, 1.0, 0.14);
-                    }
-                }
-            }
-            None => {
-                self.bg = Color::TRANSPARENT;
-                if !self.custom_hover_bg {
-                    self.hover_bg = Color::rgba(1.0, 1.0, 1.0, 0.08);
-                }
-                if !self.custom_active_bg {
-                    self.active_bg = Color::rgba(1.0, 1.0, 1.0, 0.14);
-                }
-            }
-        }
-        self
-    }
-
-    /// Background color when hovered
-    pub fn hover_bg(mut self, color: Color) -> Self {
-        self.hover_bg = color;
-        self.custom_hover_bg = true;
-        self
-    }
-
-    /// Background color when actively dragging
-    pub fn active_bg(mut self, color: Color) -> Self {
-        self.active_bg = color;
-        self.custom_active_bg = true;
-        self
-    }
-
-    /// Border color and width (supports (Color, f32), Border, None)
-    pub fn border(mut self, border: impl Into<zenthra_core::Border>) -> Self {
-        match border.into() {
-            zenthra_core::Border::None => {
-                self.border_color = Color::TRANSPARENT;
-                self.border_width = 0.0;
-            }
-            zenthra_core::Border::Solid(c, w) => {
-                self.border_color = c;
-                self.border_width = w;
-            }
-        }
-        self
-    }
-
-    /// Focused border color and width (when typing text directly)
-    pub fn focus_border(mut self, border: impl Into<zenthra_core::Border>) -> Self {
-        match border.into() {
-            zenthra_core::Border::None => {
-                self.focus_border_color = Color::TRANSPARENT;
-                self.focus_border_width = 0.0;
-            }
-            zenthra_core::Border::Solid(c, w) => {
-                self.focus_border_color = c;
-                self.focus_border_width = w;
-            }
-        }
-        self
-    }
-
-    /// Box shadow
-    pub fn shadow(mut self, color: Color, ox: f32, oy: f32, blur: f32) -> Self {
-        self.shadow_color = Some(color);
-        self.shadow_offset = [ox, oy];
-        self.shadow_blur = blur;
-        self
-    }
-
-    /// Corner radius
-    pub fn radius(mut self, r: f32) -> Self {
-        self.radius = [r; 4];
-        self
-    }
-
-    /// Corner radius for all 4 corners
-    pub fn radius_all(mut self, r: f32) -> Self {
-        self.radius = [r; 4];
-        self
-    }
-
-    /// Specific corner radiuses [top_left, top_right, bottom_right, bottom_left]
-    pub fn radius_corners(mut self, tl: f32, tr: f32, br: f32, bl: f32) -> Self {
-        self.radius = [tl, tr, br, bl];
-        self
-    }
-
-    /// Font size
-    pub fn size(mut self, size: f32) -> Self {
-        self.font_size = size;
-        self
-    }
-
-    /// Font family
-    pub fn font_family(mut self, family: impl Into<String>) -> Self {
-        self.font_family = Some(family.into());
-        self
-    }
-
-    /// Numeric text color
-    pub fn color(mut self, color: Color) -> Self {
-        self.text_color = color;
-        self
-    }
-
     /// Prefix text color
     pub fn prefix_color(mut self, color: Color) -> Self {
         self.prefix_color = Some(color);
@@ -370,27 +243,273 @@ impl<'u, 'a, 'b, N: NumericValue> DragValueBuilder<'u, 'a, 'b, N> {
         self
     }
 
-    /// Padding inside the drag box
-    pub fn padding(mut self, top: f32, right: f32, bottom: f32, left: f32) -> Self {
-        self.padding = EdgeInsets {
-            top,
-            right,
-            bottom,
-            left,
-        };
-        self
-    }
-
-    /// Horizontal padding
-    pub fn padding_x(mut self, px: f32) -> Self {
-        self.padding.left = px;
-        self.padding.right = px;
-        self
-    }
-
     /// Text alignment (Align::Left, Align::Center, Align::Right)
     pub fn align(mut self, align: Align) -> Self {
         self.align = align;
+        self
+    }
+
+    // --- Box Dimensions (impl_dimensions parity) ---
+    pub fn width(mut self, width: f32) -> Self {
+        self.style.width = Some(width);
+        self.style.fill_x = false;
+        self
+    }
+
+    pub fn height(mut self, height: f32) -> Self {
+        self.style.height = Some(height);
+        self.style.fill_y = false;
+        self
+    }
+
+    pub fn fill_x(mut self) -> Self {
+        self.style.fill_x = true;
+        self
+    }
+
+    pub fn fill_y(mut self) -> Self {
+        self.style.fill_y = true;
+        self
+    }
+
+    pub fn fill(mut self) -> Self {
+        self.style.fill_x = true;
+        self.style.fill_y = true;
+        self
+    }
+
+    pub fn min_width(mut self, w: f32) -> Self {
+        self.style.min_width = Some(w);
+        self
+    }
+
+    pub fn max_width(mut self, w: f32) -> Self {
+        self.style.max_width = Some(w);
+        self
+    }
+
+    pub fn min_height(mut self, h: f32) -> Self {
+        self.style.min_height = Some(h);
+        self
+    }
+
+    pub fn max_height(mut self, h: f32) -> Self {
+        self.style.max_height = Some(h);
+        self
+    }
+
+    // --- Padding (impl_padding parity) ---
+    pub fn padding(mut self, t: f32, r: f32, b: f32, l: f32) -> Self {
+        self.style.padding = EdgeInsets { top: t, right: r, bottom: b, left: l };
+        self
+    }
+
+    pub fn padding_all(mut self, p: f32) -> Self {
+        self.style.padding = EdgeInsets::all(p);
+        self
+    }
+
+    pub fn padding_x(mut self, px: f32) -> Self {
+        self.style.padding.left = px;
+        self.style.padding.right = px;
+        self
+    }
+
+    pub fn padding_y(mut self, py: f32) -> Self {
+        self.style.padding.top = py;
+        self.style.padding.bottom = py;
+        self
+    }
+
+    pub fn padding_top(mut self, p: f32) -> Self {
+        self.style.padding.top = p;
+        self
+    }
+
+    pub fn padding_bottom(mut self, p: f32) -> Self {
+        self.style.padding.bottom = p;
+        self
+    }
+
+    pub fn padding_left(mut self, p: f32) -> Self {
+        self.style.padding.left = p;
+        self
+    }
+
+    pub fn padding_right(mut self, p: f32) -> Self {
+        self.style.padding.right = p;
+        self
+    }
+
+    // --- Margin (impl_margin parity) ---
+    pub fn margin(mut self, t: f32, r: f32, b: f32, l: f32) -> Self {
+        self.style.margin = EdgeInsets { top: t, right: r, bottom: b, left: l };
+        self
+    }
+
+    pub fn margin_all(mut self, m: f32) -> Self {
+        self.style.margin = EdgeInsets::all(m);
+        self
+    }
+
+    pub fn margin_x(mut self, mx: f32) -> Self {
+        self.style.margin.left = mx;
+        self.style.margin.right = mx;
+        self
+    }
+
+    pub fn margin_y(mut self, my: f32) -> Self {
+        self.style.margin.top = my;
+        self.style.margin.bottom = my;
+        self
+    }
+
+    // --- Radius (impl_radius parity) ---
+    pub fn radius_all(mut self, r: f32) -> Self {
+        self.style.radius = [r; 4];
+        self
+    }
+
+    pub fn radius(mut self, tl: f32, tr: f32, br: f32, bl: f32) -> Self {
+        self.style.radius = [tl, tr, br, bl];
+        self
+    }
+
+    pub fn radius_corners(mut self, tl: f32, tr: f32, br: f32, bl: f32) -> Self {
+        self.style.radius = [tl, tr, br, bl];
+        self
+    }
+
+    pub fn radius_top(mut self, r: f32) -> Self {
+        self.style.radius[0] = r;
+        self.style.radius[1] = r;
+        self
+    }
+
+    pub fn radius_bottom(mut self, r: f32) -> Self {
+        self.style.radius[2] = r;
+        self.style.radius[3] = r;
+        self
+    }
+
+    pub fn radius_left(mut self, r: f32) -> Self {
+        self.style.radius[0] = r;
+        self.style.radius[3] = r;
+        self
+    }
+
+    pub fn radius_right(mut self, r: f32) -> Self {
+        self.style.radius[1] = r;
+        self.style.radius[2] = r;
+        self
+    }
+
+    pub fn radius_top_left(mut self, r: f32) -> Self {
+        self.style.radius[0] = r;
+        self
+    }
+
+    pub fn radius_top_right(mut self, r: f32) -> Self {
+        self.style.radius[1] = r;
+        self
+    }
+
+    pub fn radius_bottom_right(mut self, r: f32) -> Self {
+        self.style.radius[2] = r;
+        self
+    }
+
+    pub fn radius_bottom_left(mut self, r: f32) -> Self {
+        self.style.radius[3] = r;
+        self
+    }
+
+    // --- Visuals (impl_visuals parity) ---
+    pub fn style(mut self, style: BoxStyle) -> Self {
+        self.style = style;
+        self
+    }
+
+    pub fn bg(mut self, bg: impl Into<Background>) -> Self {
+        match bg.into() {
+            Background::None => self.style.bg = None,
+            other => self.style.bg = Some(other),
+        }
+        self
+    }
+
+    pub fn border(mut self, border: impl IntoBorder) -> Self {
+        let (b, align) = border.into_border();
+        self.style.border = b;
+        if let Some(a) = align {
+            self.style.border_alignment = a;
+        }
+        self
+    }
+
+    pub fn focus_border(mut self, border: impl IntoBorder) -> Self {
+        let (b, _) = border.into_border();
+        self.focus_border = Some(b);
+        self
+    }
+
+    pub fn shadow(mut self, color: Color, ox: f32, oy: f32, blur: f32) -> Self {
+        self.style.shadow_color = Some(color);
+        self.style.shadow_offset = [ox, oy];
+        self.style.shadow_blur = blur;
+        self
+    }
+
+    // --- Typography (impl_font_style_methods parity) ---
+    pub fn size(mut self, size: f32) -> Self {
+        self.text_style.font_size = size;
+        self
+    }
+
+    pub fn font_size(mut self, size: f32) -> Self {
+        self.text_style.font_size = size;
+        self
+    }
+
+    pub fn color(mut self, color: Color) -> Self {
+        self.text_style.color = color;
+        self
+    }
+
+    pub fn font_family(mut self, family: impl Into<String>) -> Self {
+        self.text_style.font_family = Some(family.into());
+        self
+    }
+
+    pub fn font_weight(mut self, weight: impl Into<zenthra_text::prelude::FontWeight>) -> Self {
+        self.text_style.font_weight = weight.into();
+        self
+    }
+
+    // --- Interaction States (impl_interaction_state_methods parity) ---
+    #[inline]
+    pub fn hover(mut self, props: impl crate::macros::IntoStateProps) -> Self {
+        if self.hover_state.is_none() {
+            let mut s = crate::macros::WidgetStateOverrides::new();
+            s.style = self.style.clone();
+            self.hover_state = Some(s);
+        }
+        if let Some(ref mut h) = self.hover_state {
+            props.apply_to_overrides(h);
+        }
+        self
+    }
+
+    #[inline]
+    pub fn active(mut self, props: impl crate::macros::IntoStateProps) -> Self {
+        if self.active_state.is_none() {
+            let mut s = crate::macros::WidgetStateOverrides::new();
+            s.style = self.style.clone();
+            self.active_state = Some(s);
+        }
+        if let Some(ref mut a) = self.active_state {
+            props.apply_to_overrides(a);
+        }
         self
     }
 
@@ -418,10 +537,28 @@ impl<'u, 'a, 'b, N: NumericValue> DragValueBuilder<'u, 'a, 'b, N> {
         let drag_moved_key = Id::from_u64((base_raw << 8) | 0x14);
         let sel_all_key = Id::from_u64((base_raw << 8) | 0x15);
 
-        let w = self.width.unwrap_or(75.0);
-        let h = self.height;
-        let x = self.ui.cursor_x;
-        let y = self.ui.cursor_y;
+        let margin_left = self.style.margin.left;
+        let margin_top = self.style.margin.top;
+        let margin_bottom = self.style.margin.bottom;
+
+        let x = self.ui.cursor_x + margin_left;
+        let y = self.ui.cursor_y + margin_top;
+
+        let mut w = if self.style.fill_x {
+            (self.ui.available_width - self.style.margin.horizontal()).max(0.0)
+        } else {
+            self.style.width.unwrap_or(75.0)
+        };
+        let mut h = if self.style.fill_y {
+            (self.ui.max_y - y - margin_bottom).max(self.style.height.unwrap_or(24.0))
+        } else {
+            self.style.height.unwrap_or(24.0)
+        };
+
+        if let Some(min_w) = self.style.min_width { w = w.max(min_w); }
+        if let Some(max_w) = self.style.max_width { w = w.min(max_w); }
+        if let Some(min_h) = self.style.min_height { h = h.max(min_h); }
+        if let Some(max_h) = self.style.max_height { h = h.min(max_h); }
 
         let (actual_ox, actual_oy, actual_w, actual_h) =
             if let Some(screen_rect) = self.ui.screen_layout_cache.get(&self.id) {
@@ -505,6 +642,9 @@ impl<'u, 'a, 'b, N: NumericValue> DragValueBuilder<'u, 'a, 'b, N> {
         // MODE 1: DIRECT IN-PLACE TEXT EDITING
         // -------------------------------------------------------------
         if is_editing {
+            if is_hovered {
+                self.ui.cursor_icon = crate::text::CursorIcon::Text;
+            }
             let mut buffer = with_edit_buffers(|map| {
                 map.entry(self.id)
                     .or_insert_with(|| Self::format_raw(self.value.to_f64(), self.precision))
@@ -646,23 +786,22 @@ impl<'u, 'a, 'b, N: NumericValue> DragValueBuilder<'u, 'a, 'b, N> {
             // Render in-place edit box
             let start_draw = self.ui.draws.len();
 
-            // Background with focused border
-            self.ui.draws.push(DrawCommand::Rect(RectDraw {
-                instance: RectInstance {
-                    pos: [x, y],
-                    size: [w, h],
-                    color: self.active_bg.to_array(),
-                    radius: self.radius,
-                    border_width: self.focus_border_width,
-                    border_color: self.focus_border_color.to_array(),
-                    shadow_color: self.shadow_color.map(|c| c.to_array()).unwrap_or([0.0; 4]),
-                    shadow_offset: self.shadow_offset,
-                    shadow_blur: self.shadow_blur,
-                    clip_rect: [0.0, 0.0, 9999.0, 9999.0],
-                    opacity: 1.0,
-                    ..Default::default()
-                },
-            }));
+            let mut edit_style = self.style.clone();
+            if let Some(fb) = self.focus_border {
+                edit_style.border = fb;
+            }
+            if let Some(instance) = edit_style.build_rect_styled(
+                x,
+                y,
+                w,
+                h,
+                edit_style.bg.as_ref(),
+                edit_style.border_color(),
+                Some(edit_style.border_width()),
+                1.0,
+            ) {
+                self.ui.draws.push(DrawCommand::Rect(RectDraw { instance }));
+            }
 
             // Text measurement
             let mut text_w = 0.0;
@@ -670,10 +809,10 @@ impl<'u, 'a, 'b, N: NumericValue> DragValueBuilder<'u, 'a, 'b, N> {
             if let Some(fs) = self.ui.font_system.as_ref() {
                 let mut adapter = zenthra_text::prelude::CosmicFontProvider::new_with_system(fs.clone());
                 let mut options = zenthra_text::prelude::TextOptions::new()
-                    .size(self.font_size * self.ui.font_scale)
+                    .size(self.text_style.font_size * self.ui.font_scale)
                     .scale_factor(self.ui.scale_factor)
                     .wrap(zenthra_text::prelude::TextWrap::None);
-                if let Some(ref family) = self.font_family {
+                if let Some(ref family) = self.text_style.font_family {
                     options = options.font_family(family.clone());
                 }
                 let shaped = adapter.shape(&buffer, &options);
@@ -682,8 +821,8 @@ impl<'u, 'a, 'b, N: NumericValue> DragValueBuilder<'u, 'a, 'b, N> {
             }
 
             let tx = match self.align {
-                Align::Left => (x + self.padding.left).round(),
-                Align::Right => (x + w - text_w - self.padding.right).round(),
+                Align::Left => (x + self.style.padding.left).round(),
+                Align::Right => (x + w - text_w - self.style.padding.right).round(),
                 _ => (x + (w - text_w) / 2.0).round(),
             };
             let ty = (y + (h - text_h) / 2.0).round();
@@ -707,12 +846,12 @@ impl<'u, 'a, 'b, N: NumericValue> DragValueBuilder<'u, 'a, 'b, N> {
 
             // Text
             let mut text_opts = zenthra_text::prelude::TextOptions::new()
-                .size(self.font_size * self.ui.font_scale)
+                .size(self.text_style.font_size * self.ui.font_scale)
                 .scale_factor(self.ui.scale_factor)
-                .color(self.text_color)
+                .color(self.text_style.color)
                 .wrap(zenthra_text::prelude::TextWrap::None)
                 .at(tx, ty);
-            if let Some(ref family) = self.font_family {
+            if let Some(ref family) = self.text_style.font_family {
                 text_opts = text_opts.font_family(family.clone());
             }
 
@@ -730,7 +869,7 @@ impl<'u, 'a, 'b, N: NumericValue> DragValueBuilder<'u, 'a, 'b, N> {
                     instance: RectInstance {
                         pos: [cursor_x, ty],
                         size: [1.5, text_h],
-                        color: self.text_color.to_array(),
+                        color: self.text_style.color.to_array(),
                         radius: [0.0; 4],
                         border_width: 0.0,
                         border_color: [0.0; 4],
@@ -742,7 +881,7 @@ impl<'u, 'a, 'b, N: NumericValue> DragValueBuilder<'u, 'a, 'b, N> {
             }
 
             self.ui.record_layout(self.id, Rect::new(x, y, w, h));
-            self.ui.advance(w, h, start_draw);
+            self.ui.advance(w + self.style.margin.horizontal(), h + self.style.margin.vertical(), start_draw);
 
             return Response {
                 clicked: false,
@@ -756,7 +895,18 @@ impl<'u, 'a, 'b, N: NumericValue> DragValueBuilder<'u, 'a, 'b, N> {
         // -------------------------------------------------------------
         // MODE 2: DISPLAY & SCRUBBING
         // -------------------------------------------------------------
-        if is_hovered || is_active_drag {
+        if is_hovered {
+            let eff_cursor = self
+                .hover_state
+                .as_ref()
+                .and_then(|h| h.cursor)
+                .unwrap_or(crate::text::CursorIcon::ColResize);
+            self.ui.cursor_icon = eff_cursor;
+
+            if let Some(ref tip) = self.hover_state.as_ref().and_then(|h| h.tooltip.as_ref()) {
+                self.ui.draw_tooltip(tip);
+            }
+        } else if is_active_drag {
             self.ui.cursor_icon = crate::text::CursorIcon::ColResize;
         }
 
@@ -918,37 +1068,51 @@ impl<'u, 'a, 'b, N: NumericValue> DragValueBuilder<'u, 'a, 'b, N> {
         // -------------------------------------------------------------
         let start_draw = self.ui.draws.len();
 
-        let current_bg = if is_active_drag {
-            self.active_bg
+        // 1. Box background & border with hover/active state blending
+        let hover_overrides = if is_hovered { self.hover_state.as_ref() } else { None };
+        let active_overrides = if is_active_drag { self.active_state.as_ref() } else { None };
+
+        let effective_bg = active_overrides
+            .and_then(|o| o.style.bg.as_ref())
+            .or_else(|| hover_overrides.and_then(|o| o.style.bg.as_ref()))
+            .or_else(|| self.style.bg.as_ref());
+
+        let effective_border_color = active_overrides
+            .and_then(|o| o.style.border_color())
+            .or_else(|| hover_overrides.and_then(|o| o.style.border_color()))
+            .or_else(|| self.style.border_color());
+
+        let effective_border_width = active_overrides
+            .map(|o| o.style.border_width())
+            .filter(|&w| w > 0.0)
+            .or_else(|| hover_overrides.map(|o| o.style.border_width()).filter(|&w| w > 0.0))
+            .unwrap_or_else(|| self.style.border_width());
+
+        let eff_scale = if is_active_drag {
+            active_overrides.map(|o| o.scale).filter(|&s| (s - 1.0).abs() > f32::EPSILON).unwrap_or(1.0)
         } else if is_hovered {
-            self.hover_bg
+            hover_overrides.map(|o| o.scale).filter(|&s| (s - 1.0).abs() > f32::EPSILON).unwrap_or(1.0)
         } else {
-            self.bg
+            1.0
         };
 
-        let current_border = if is_active_drag {
-            self.focus_border_color
-        } else {
-            self.border_color
-        };
+        let effective_text_color = active_overrides
+            .and_then(|o| o.text_color)
+            .or_else(|| hover_overrides.and_then(|o| o.text_color))
+            .unwrap_or(self.text_style.color);
 
-        // 1. Box background & border
-        self.ui.draws.push(DrawCommand::Rect(RectDraw {
-            instance: RectInstance {
-                pos: [x, y],
-                size: [w, h],
-                color: current_bg.to_array(),
-                radius: self.radius,
-                border_width: self.border_width,
-                border_color: current_border.to_array(),
-                shadow_color: self.shadow_color.map(|c| c.to_array()).unwrap_or([0.0; 4]),
-                shadow_offset: self.shadow_offset,
-                shadow_blur: self.shadow_blur,
-                clip_rect: [0.0, 0.0, 9999.0, 9999.0],
-                opacity: 1.0,
-                ..Default::default()
-            },
-        }));
+        if let Some(instance) = self.style.build_rect_styled(
+            x,
+            y,
+            w,
+            h,
+            effective_bg,
+            effective_border_color,
+            Some(effective_border_width),
+            eff_scale,
+        ) {
+            self.ui.draws.push(DrawCommand::Rect(RectDraw { instance }));
+        }
 
         // 2. Measure & Draw Label (prefix + value + suffix)
         let num_str = Self::format_raw(self.value.to_f64(), self.precision);
@@ -965,10 +1129,10 @@ impl<'u, 'a, 'b, N: NumericValue> DragValueBuilder<'u, 'a, 'b, N> {
             let mut adapter =
                 zenthra_text::prelude::CosmicFontProvider::new_with_system(fs.clone());
             let mut options = zenthra_text::prelude::TextOptions::new()
-                .size(self.font_size * self.ui.font_scale)
+                .size(self.text_style.font_size * self.ui.font_scale)
                 .scale_factor(self.ui.scale_factor)
                 .wrap(zenthra_text::prelude::TextWrap::None);
-            if let Some(ref family) = self.font_family {
+            if let Some(ref family) = self.text_style.font_family {
                 options = options.font_family(family.clone());
             }
 
@@ -995,8 +1159,8 @@ impl<'u, 'a, 'b, N: NumericValue> DragValueBuilder<'u, 'a, 'b, N> {
         }
 
         let tx = match self.align {
-            Align::Left => (x + self.padding.left).round(),
-            Align::Right => (x + w - total_w - self.padding.right).round(),
+            Align::Left => (x + self.style.padding.left).round(),
+            Align::Right => (x + w - total_w - self.style.padding.right).round(),
             _ => (x + (w - total_w) / 2.0).round(),
         };
         let ty = (y + (h - text_h) / 2.0).round();
@@ -1005,12 +1169,12 @@ impl<'u, 'a, 'b, N: NumericValue> DragValueBuilder<'u, 'a, 'b, N> {
             let mut cur_x = tx;
             if !self.prefix.is_empty() {
                 let mut p_opts = zenthra_text::prelude::TextOptions::new()
-                    .size(self.font_size * self.ui.font_scale)
+                    .size(self.text_style.font_size * self.ui.font_scale)
                     .scale_factor(self.ui.scale_factor)
-                    .color(self.prefix_color.unwrap_or(self.text_color))
+                    .color(self.prefix_color.unwrap_or(effective_text_color))
                     .wrap(zenthra_text::prelude::TextWrap::None)
                     .at(cur_x, ty);
-                if let Some(ref family) = self.font_family {
+                if let Some(ref family) = self.text_style.font_family {
                     p_opts = p_opts.font_family(family.clone());
                 }
                 self.ui.draws.push(DrawCommand::Text(TextDraw {
@@ -1023,12 +1187,12 @@ impl<'u, 'a, 'b, N: NumericValue> DragValueBuilder<'u, 'a, 'b, N> {
             }
 
             let mut n_opts = zenthra_text::prelude::TextOptions::new()
-                .size(self.font_size * self.ui.font_scale)
+                .size(self.text_style.font_size * self.ui.font_scale)
                 .scale_factor(self.ui.scale_factor)
-                .color(self.text_color)
+                .color(effective_text_color)
                 .wrap(zenthra_text::prelude::TextWrap::None)
                 .at(cur_x, ty);
-            if let Some(ref family) = self.font_family {
+            if let Some(ref family) = self.text_style.font_family {
                 n_opts = n_opts.font_family(family.clone());
             }
             self.ui.draws.push(DrawCommand::Text(TextDraw {
@@ -1041,12 +1205,12 @@ impl<'u, 'a, 'b, N: NumericValue> DragValueBuilder<'u, 'a, 'b, N> {
 
             if !self.suffix.is_empty() {
                 let mut s_opts = zenthra_text::prelude::TextOptions::new()
-                    .size(self.font_size * self.ui.font_scale)
+                    .size(self.text_style.font_size * self.ui.font_scale)
                     .scale_factor(self.ui.scale_factor)
-                    .color(self.suffix_color.unwrap_or(self.text_color))
+                    .color(self.suffix_color.unwrap_or(effective_text_color))
                     .wrap(zenthra_text::prelude::TextWrap::None)
                     .at(cur_x, ty);
-                if let Some(ref family) = self.font_family {
+                if let Some(ref family) = self.text_style.font_family {
                     s_opts = s_opts.font_family(family.clone());
                 }
                 self.ui.draws.push(DrawCommand::Text(TextDraw {
@@ -1058,12 +1222,12 @@ impl<'u, 'a, 'b, N: NumericValue> DragValueBuilder<'u, 'a, 'b, N> {
             }
         } else {
             let mut text_opts = zenthra_text::prelude::TextOptions::new()
-                .size(self.font_size * self.ui.font_scale)
+                .size(self.text_style.font_size * self.ui.font_scale)
                 .scale_factor(self.ui.scale_factor)
-                .color(self.text_color)
+                .color(effective_text_color)
                 .wrap(zenthra_text::prelude::TextWrap::None)
                 .at(tx, ty);
-            if let Some(ref family) = self.font_family {
+            if let Some(ref family) = self.text_style.font_family {
                 text_opts = text_opts.font_family(family.clone());
             }
 
@@ -1084,7 +1248,7 @@ impl<'u, 'a, 'b, N: NumericValue> DragValueBuilder<'u, 'a, 'b, N> {
 
         // 4. Advance Layout
         self.ui.record_layout(self.id, Rect::new(x, y, w, h));
-        self.ui.advance(w, h, start_draw);
+        self.ui.advance(w + self.style.margin.horizontal(), h + self.style.margin.vertical(), start_draw);
 
         Response {
             clicked,
@@ -1480,5 +1644,72 @@ mod tests {
 
         let in_edit_mode_f4 = interaction_state.get(&edit_mode_key).copied().unwrap_or(0.0) > 0.5;
         assert!(in_edit_mode_f4, "box_scale must STAY in edit mode in Frame 4!");
+    }
+
+    #[test]
+    fn test_drag_value_box_style_and_sibling_parity() {
+        use crate::macros::{Cursor, Style, Transform};
+        let mut scroll = std::collections::HashMap::new();
+        let mut cursor = std::collections::HashMap::new();
+        let mut inter = std::collections::HashMap::new();
+        let l_cache = std::collections::HashMap::new();
+        let mut nl_cache = std::collections::HashMap::new();
+        let sl_cache = std::collections::HashMap::new();
+        let mut nsl_cache = std::collections::HashMap::new();
+        let ww_map = std::collections::HashMap::new();
+        let mut nww_map = std::collections::HashMap::new();
+        let img = std::collections::HashMap::new();
+
+        let mut ui = Ui::new(
+            1080, 720, 1.0, None, Vec::new(), None,
+            (0.0, 0.0), false,
+            &mut scroll, &mut cursor, &mut inter,
+            None, None, false, false, 0.0,
+            &l_cache, &mut nl_cache,
+            &sl_cache, &mut nsl_cache,
+            &ww_map, &mut nww_map,
+            &img,
+        );
+
+        let mut val = 42.0f32;
+        let builder = ui
+            .drag_value(&mut val, "test_dv")
+            .width(150.0)
+            .height(28.0)
+            .padding_all(6.0)
+            .margin_all(4.0)
+            .radius_all(8.0)
+            .bg(Color::rgb(0.1, 0.1, 0.15))
+            .border((Color::rgb(0.3, 0.3, 0.4), 1.5))
+            .focus_border((Color::rgb(0.4, 0.6, 1.0), 2.0))
+            .shadow(Color::rgba(0.0, 0.0, 0.0, 0.5), 0.0, 4.0, 12.0)
+            .size(13.0)
+            .color(Color::WHITE)
+            .hover([
+                Style::bg(Color::rgb(0.15, 0.18, 0.25)),
+                Style::border((Color::rgb(0.4, 0.6, 1.0), 2.0)),
+                Cursor::Pointer,
+            ])
+            .active([
+                Style::border((Color::rgb(0.5, 0.7, 1.0), 2.0)),
+                Transform::scale(0.98),
+            ]);
+
+        // Verify Styleable & BoxStyle parity
+        assert_eq!(builder.style.width, Some(150.0));
+        assert_eq!(builder.style.height, Some(28.0));
+        assert_eq!(builder.style.padding.top, 6.0);
+        assert_eq!(builder.style.padding.right, 6.0);
+        assert_eq!(builder.style.margin.top, 4.0);
+        assert_eq!(builder.style.radius, [8.0; 4]);
+        assert_eq!(builder.style.bg, Some(Background::Solid(Color::rgb(0.1, 0.1, 0.15))));
+        assert_eq!(builder.text_style.font_size, 13.0);
+        assert_eq!(builder.text_style.color, Color::WHITE);
+        assert!(builder.hover_state.is_some());
+        assert!(builder.active_state.is_some());
+        assert!(builder.focus_border.is_some());
+
+        let res = builder.show();
+        assert!(!res.changed);
     }
 }

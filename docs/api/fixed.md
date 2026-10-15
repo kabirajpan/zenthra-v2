@@ -42,7 +42,6 @@ It lists:
 | `impl_visuals` | `.bg(impl Into<Background>)` | **Keep** | 🔒 Locked | Unified background setter (`Solid`, `Gradient`, `None`). |
 | `impl_visuals` | `.border(impl Into<Border>)` | **Keep** | 🔒 Locked | Unified border setter (`(Color, width)`, `Border::Solid`, `Border::None`). |
 | `impl_visuals` | `.shadow(color, x, y, blur)` | **Keep** | 🔒 Locked | Canonical drop shadow setter. |
-| `impl_visuals` | `.shadow_opacity(opacity)` | **Keep** | 🔒 Locked | Canonical shadow alpha setter. |
 | `impl_visuals` | `.opacity(o: f32)` | **Keep** | 🔒 Locked | Composite opacity factor. |
 | `impl_font_style_methods` | **`.size(size: f32)`** | **Keep** | 🔒 **Locked** | Canonical font size in points. Prefix-free, no collision. |
 | `impl_font_style_methods` | **`.color(Color)`** | **Keep** | 🔒 **Locked** | Canonical text glyph color. Canonical single method. |
@@ -82,12 +81,8 @@ It lists:
 | `pub fn wheel_fallback_x(self, bool) -> Self` | Scrollbar | **Keep** | Maps vertical wheel to horizontal scroll when `scroll_x` only. |
 | `pub fn clip(self, enabled: bool) -> Self` | Clipping | **Keep** | Force-enables bounding clip. |
 | `pub fn no_clip(self) -> Self` | Clipping | **Keep** | Force-disables bounding clip. |
-| `pub fn hover_bg(self, bg: impl Into<Background>)` | States | **Keep** | Overrides surface background on hover. |
-| `pub fn active_bg(self, bg: impl Into<Background>)` | States | **Keep** | Overrides surface background on press. |
-| `pub fn hover_border(self, border: impl Into<Border>)` | States | **Keep** | Overrides border on hover. |
-| `pub fn active_border(self, border: impl Into<Border>)` | States | **Keep** | Overrides border on press. |
-| `pub fn hover_scale(self, scale: f32) -> Self` | Micro-Interaction | **Keep** | Interactive hover transform scale. |
-| `pub fn active_scale(self, scale: f32) -> Self` | Micro-Interaction | **Keep** | Interactive press transform scale. |
+| `pub fn hover(self, props: impl IntoStateProps) -> Self` | States | **Keep** | Sibling hover interaction overrides (`Style::*`, `Transform::*`, `Cursor::*`, `Tooltip::*`, `Animation::*`). |
+| `pub fn active(self, props: impl IntoStateProps) -> Self` | States | **Keep** | Sibling active press interaction overrides (`Style::*`, `Transform::*`). |
 | `pub fn backdrop_blur(self, radius: f32) -> Self` | Glassmorphism | **Keep** | Frosted glass backdrop blur filter. |
 | `pub fn backdrop_filter(self, filter: BackdropFilter)` | Filter | **Keep** | Advanced composited backdrop filter. |
 | `pub fn cursor(self, icon: CursorIcon) -> Self` | Interaction | **Keep** | Sets hover cursor icon. |
@@ -111,11 +106,8 @@ It lists:
 | `.id(impl Hash)` | **Keep** | Explicit ID override. |
 | `.pos(x, y)` | **Keep** | Explicit coordinate placement override. |
 | `.align(Align)` | **Keep** | Content alignment within button box (`Left`, `Center`, `Right`). |
-| `.hover_bg(impl Into<Background>)` | **Keep** | Hover surface override (supports `Color` and `Gradient`). |
-| `.active_bg(impl Into<Background>)` | **Keep** | Active press surface override (supports `Color` and `Gradient`). |
-| `.hover_border(impl Into<Border>)` | **Keep** | Hover border override. |
-| `.active_border(impl Into<Border>)` | **Keep** | Active press border override. |
-| `.hover_scale(f32)` | **Keep** | Interactive micro-interaction scale factor. |
+| `.hover(impl IntoStateProps)` | **Keep** | Sibling hover overrides (supports `Style::*`, `Transform::*`, `Cursor::*`, `Tooltip::*`, `Animation::*`). |
+| `.active(impl IntoStateProps)` | **Keep** | Sibling active press overrides. |
 | `.render_mode(RenderMode)` | **Keep** | Render mode override. |
 | `.on_click(f)` / `.on_hover(f)` / `.on_event(...)` | **Keep** | Standard event listeners. |
 | `.show() -> Response` | **Keep** | Measures text first, computes exact bounds, handles hit testing. |
@@ -211,7 +203,7 @@ It lists:
 | `.pos(x, y)` | ✅ | ✅ | ✅ | ✅ | ✅ | **100% Unified** |
 | `BoxStyle` (`width`, `height`, `padding`, `radius`, `bg`, `border`, `shadow`) | ✅ | ✅ | ✅ | ✅ | ✅ | **100% Unified** (via macro) |
 | `Typography` (`font_size`, `text_color`, `weight`, `wrap`, etc.) | — | ✅ | ✅ | ✅ | ✅ | **100% Unified** (via macro) |
-| Action states (`.hover_bg`, `.active_bg`, `.hover_border`, `.active_border`) | ✅ | ✅ | — | — | — | **Consistent** (Action surfaces only) |
+| Interaction states (`.hover([ ... ])`, `.active([ ... ])`) | ✅ | ✅ | — | — | — | **100% Unified** (Sibling architecture) |
 | Text entry states (`.focus_border`, `.selection_color`) | — | — | — | ✅ | ✅ | **100% Unified** (Text entry only) |
 | `.scrollable(bool)` | — | — | — | ✅ | ✅ | **100% Unified** |
 | `.select_all(bool)` | — | — | — | ✅ | ✅ | **100% Unified** |

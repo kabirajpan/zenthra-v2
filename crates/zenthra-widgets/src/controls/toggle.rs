@@ -37,7 +37,6 @@ pub struct ToggleBuilder<'u, 'a, 'b> {
     inner_font_size: f32,
 
     // External Label
-    active_label_color: Option<Color>,
     label_gap: f32,
 
     // Premium Effects
@@ -49,6 +48,8 @@ pub struct ToggleBuilder<'u, 'a, 'b> {
     disabled: bool,
     animation_speed: f32,
     is_pill: bool,
+    pub hover_state: Option<crate::macros::WidgetStateOverrides>,
+    pub active_state: Option<crate::macros::WidgetStateOverrides>,
 }
 
 impl<'u, 'a, 'b> Styleable for ToggleBuilder<'u, 'a, 'b> {
@@ -108,7 +109,6 @@ impl<'u, 'a, 'b> ToggleBuilder<'u, 'a, 'b> {
             inner_text_color: Color::WHITE,
             inner_font_size: 10.0,
 
-            active_label_color: None,
             label_gap: 10.0,
 
             glow: false,
@@ -118,6 +118,8 @@ impl<'u, 'a, 'b> ToggleBuilder<'u, 'a, 'b> {
             disabled: false,
             animation_speed: 15.0,
             is_pill: true,
+            hover_state: None,
+            active_state: None,
         }
     }
 
@@ -129,19 +131,20 @@ impl<'u, 'a, 'b> ToggleBuilder<'u, 'a, 'b> {
     }
 
     #[inline]
-    pub fn padding(mut self, p: f32) -> Self {
+    pub fn padding(mut self, t: f32, r: f32, b: f32, l: f32) -> Self {
+        self.style.padding = EdgeInsets { top: t, right: r, bottom: b, left: l };
+        self
+    }
+
+    #[inline]
+    pub fn padding_all(mut self, p: f32) -> Self {
         self.style.padding = EdgeInsets::all(p);
         self
     }
 
     #[inline]
-    pub fn padding_all(self, p: f32) -> Self {
-        self.padding(p)
-    }
-
-    #[inline]
     pub fn track_padding(self, p: f32) -> Self {
-        self.padding(p)
+        self.padding_all(p)
     }
 
     #[inline]
@@ -234,8 +237,24 @@ impl<'u, 'a, 'b> ToggleBuilder<'u, 'a, 'b> {
     }
 
     #[inline]
-    pub fn active_label(mut self, color: Color) -> Self {
-        self.active_label_color = Some(color);
+    pub fn hover(mut self, props: impl crate::macros::IntoStateProps) -> Self {
+        if self.hover_state.is_none() {
+            self.hover_state = Some(crate::macros::WidgetStateOverrides::new());
+        }
+        if let Some(ref mut h) = self.hover_state {
+            props.apply_to_overrides(h);
+        }
+        self
+    }
+
+    #[inline]
+    pub fn active(mut self, props: impl crate::macros::IntoStateProps) -> Self {
+        if self.active_state.is_none() {
+            self.active_state = Some(crate::macros::WidgetStateOverrides::new());
+        }
+        if let Some(ref mut a) = self.active_state {
+            props.apply_to_overrides(a);
+        }
         self
     }
 
@@ -541,9 +560,9 @@ impl<'u, 'a, 'b> ToggleBuilder<'u, 'a, 'b> {
             let ly = y + (total_h - label_h) / 2.0;
 
             let mut l_color = self.text_style.color;
-            if let Some(active_c) = self.active_label_color {
-                if final_pos > 0.5 {
-                    l_color = active_c;
+            if final_pos > 0.5 {
+                if let Some(c) = self.active_state.as_ref().and_then(|a| a.text_color) {
+                    l_color = c;
                 }
             }
             l_color.a *= self.style.opacity;
@@ -615,7 +634,7 @@ mod tests {
             ui.toggle(&mut active, "Airplane Mode")
                 .width(52.0)
                 .height(26.0)
-                .padding(4.0)
+                .padding_all(4.0)
                 .shadow(Color::rgba(0.0, 0.0, 0.0, 0.4), 0.0, 2.0, 6.0)
                 .show();
 

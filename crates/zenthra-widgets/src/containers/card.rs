@@ -1,72 +1,69 @@
 // crates/zenthra-widgets/src/containers/card.rs
 
 use crate::ui::Ui;
-use zenthra_core::{Color, Id};
+use zenthra_core::{Align, Background, Border, BoxStyle, Color, EdgeInsets, Id, Response, Styleable};
 
+/// An interactive surface container widget for grouping content with elevation, hover animations, and unified styling.
+/// Fully conforms to Zenthra's single-source BoxStyle architecture via `impl_box_style_methods!`.
 pub struct CardBuilder<'u, 'a> {
     ui: &'u mut Ui<'a>,
     id: Id,
+    pub style: BoxStyle,
 
-    // Styling
-    width: Option<f32>,
-    height: Option<f32>,
-    padding: f32,
-    bg: Option<zenthra_core::Background>,
-    border_color: Option<Color>,
-    border_width: f32,
-    radius: f32,
-    
     // Layout
     is_row: bool,
-    halign: Option<zenthra_core::Align>,
-    valign: Option<zenthra_core::Align>,
+    halign: Option<Align>,
+    valign: Option<Align>,
+    gap: f32,
 
-    // Shadows
-    shadow_color: Option<Color>,
-    shadow_offset: [f32; 2],
-    shadow_blur: f32,
-
-    // Premium Animations
-    hover_scale: f32,
-    hover_bg: Option<zenthra_core::Background>,
-    hover_border_color: Option<Color>,
-    hover_border: Option<zenthra_core::Border>,
-    active_bg: Option<zenthra_core::Background>,
-    active_border: Option<zenthra_core::Border>,
-    
-    // Backdrop Filter
-    backdrop_filter: Option<zenthra_core::BackdropFilter>,
+    // Sibling Interaction & State Overrides (.hover([ ... ]), .active([ ... ]))
+    pub hover_state: Option<crate::macros::WidgetStateOverrides>,
+    pub active_state: Option<crate::macros::WidgetStateOverrides>,
 }
+
+impl<'u, 'a> Styleable for CardBuilder<'u, 'a> {
+    #[inline]
+    fn box_style_mut(&mut self) -> &mut BoxStyle {
+        &mut self.style
+    }
+
+    #[inline]
+    fn box_style(&self) -> &BoxStyle {
+        &self.style
+    }
+}
+
+// Single-source macro generates all canonical BoxStyle methods:
+// .width(), .height(), .fill_x(), .fill_y(), .fill(), .min/max_width(), .min/max_height(),
+// .padding(), .padding_all(), .padding_x(), .padding_y(), .padding_top/bottom/left/right(),
+// .margin(), .margin_all(), .margin_x(), .margin_y(), .margin_top/bottom/left/right(),
+// .radius(), .radius_all(), .radius_top/bottom/left/right(), .bg(), .border(), .shadow(), .style()
+impl_box_style_methods!(CardBuilder, 'u, 'a);
+impl_interaction_state_methods!(CardBuilder, 'u, 'a);
 
 impl<'u, 'a> CardBuilder<'u, 'a> {
     pub fn new(ui: &'u mut Ui<'a>) -> Self {
         let id = ui.id();
+        let mut style = BoxStyle::new();
+        style.padding = EdgeInsets::all(16.0);
+        style.radius = [10.0; 4];
+        style.bg = Some(Background::Solid(Color::rgb(0.09, 0.11, 0.15)));
+        style.border = Border::Solid(Color::rgb(0.18, 0.22, 0.30), 1.0);
+
         Self {
             ui,
             id,
-            width: None,
-            height: None,
-            padding: 0.0,
-            bg: None,
-            border_color: None,
-            border_width: 0.0,
-            radius: 0.0,
+            style,
             is_row: false,
             halign: None,
             valign: None,
-            shadow_color: None,
-            shadow_offset: [0.0, 0.0],
-            shadow_blur: 0.0,
-            hover_scale: 1.0,
-            hover_bg: None,
-            hover_border_color: None,
-            hover_border: None,
-            active_bg: None,
-            active_border: None,
-            backdrop_filter: None,
+            gap: 0.0,
+            hover_state: None,
+            active_state: None,
         }
     }
 
+    #[inline]
     pub fn id(mut self, id: impl std::hash::Hash) -> Self {
         let mut hasher = std::collections::hash_map::DefaultHasher::new();
         use std::hash::Hasher;
@@ -75,127 +72,50 @@ impl<'u, 'a> CardBuilder<'u, 'a> {
         self
     }
 
-    pub fn width(mut self, w: f32) -> Self {
-        self.width = Some(w);
-        self
-    }
-
-
-    pub fn height(mut self, h: f32) -> Self {
-        self.height = Some(h);
-        self
-    }
-
-    pub fn size(mut self, w: f32, h: f32) -> Self {
-        self.width = Some(w);
-        self.height = Some(h);
-        self
-    }
-
-    pub fn padding(mut self, p: f32) -> Self {
-        self.padding = p;
-        self
-    }
-
-    pub fn bg(mut self, bg: impl Into<zenthra_core::Background>) -> Self {
-        match bg.into() {
-            zenthra_core::Background::None => self.bg = None,
-            other => self.bg = Some(other),
-        }
-        self
-    }
-
+    #[inline]
     pub fn row(mut self) -> Self {
         self.is_row = true;
         self
     }
 
+    #[inline]
     pub fn column(mut self) -> Self {
         self.is_row = false;
         self
     }
 
-    pub fn halign(mut self, align: zenthra_core::Align) -> Self {
+    #[inline]
+    pub fn halign(mut self, align: Align) -> Self {
         self.halign = Some(align);
         self
     }
 
-    pub fn valign(mut self, align: zenthra_core::Align) -> Self {
+    #[inline]
+    pub fn valign(mut self, align: Align) -> Self {
         self.valign = Some(align);
         self
     }
 
-    pub fn border(mut self, border: impl Into<zenthra_core::Border>) -> Self {
-        match border.into() {
-            zenthra_core::Border::None => {
-                self.border_color = None;
-                self.border_width = 0.0;
-            }
-            zenthra_core::Border::Solid(c, w) => {
-                self.border_color = Some(c);
-                self.border_width = w;
-            }
-        }
+    #[inline]
+    pub fn align(mut self, align: Align) -> Self {
+        self.halign = Some(align);
+        self.valign = Some(align);
         self
     }
 
-    pub fn radius(mut self, r: f32) -> Self {
-        self.radius = r;
+    #[inline]
+    pub fn gap(mut self, gap: f32) -> Self {
+        self.gap = gap;
         self
     }
 
-    pub fn radius_all(mut self, r: f32) -> Self {
-        self.radius = r;
-        self
-    }
-
-    pub fn shadow(mut self, color: Color, x: f32, y: f32, blur: f32) -> Self {
-        self.shadow_color = Some(color);
-        self.shadow_offset = [x, y];
-        self.shadow_blur = blur;
-        self
-    }
-
-    pub fn hover_scale(mut self, scale: f32) -> Self {
-        self.hover_scale = scale;
-        self
-    }
-
-    pub fn hover_bg(mut self, bg: impl Into<zenthra_core::Background>) -> Self {
-        self.hover_bg = Some(bg.into());
-        self
-    }
-
-    pub fn hover_border(mut self, border: impl Into<zenthra_core::Border>) -> Self {
-        self.hover_border = Some(border.into());
-        self
-    }
-
-    pub fn hover_border_color(mut self, color: Color) -> Self {
-        self.hover_border_color = Some(color);
-        self
-    }
-
-    pub fn active_bg(mut self, bg: impl Into<zenthra_core::Background>) -> Self {
-        self.active_bg = Some(bg.into());
-        self
-    }
-
-    pub fn active_border(mut self, border: impl Into<zenthra_core::Border>) -> Self {
-        self.active_border = Some(border.into());
-        self
-    }
-
-    pub fn backdrop_filter(mut self, filter: zenthra_core::BackdropFilter) -> Self {
-        self.backdrop_filter = Some(filter);
-        self
-    }
-
-    pub fn show<F>(self, f: F)
-    where F: FnOnce(&mut Ui) {
+    pub fn show<F>(self, f: F) -> Response
+    where
+        F: FnOnce(&mut Ui),
+    {
         let mut container = self.ui.container()
             .id(self.id)
-            .padding_all(self.padding);
+            .style(self.style);
 
         if self.is_row {
             container = container.row();
@@ -209,48 +129,142 @@ impl<'u, 'a> CardBuilder<'u, 'a> {
         if let Some(va) = self.valign {
             container = container.valign(va);
         }
-
-        if let Some(bg) = self.bg {
-            container = container.bg(bg);
-        }
-        if let Some(bc) = self.border_color {
-            container = container.border((bc, self.border_width));
-        }
-        if self.radius != 0.0 {
-            container = container.radius_all(self.radius);
-        }
-        if let Some(sc) = self.shadow_color {
-            container = container.shadow(sc, self.shadow_offset[0], self.shadow_offset[1], self.shadow_blur);
-        }
-        if let Some(w) = self.width {
-            container = container.width(w);
-        }
-        if let Some(h) = self.height {
-            container = container.height(h);
-        }
-        if let Some(hb) = self.hover_bg {
-            container = container.hover_bg(hb);
-        }
-        if let Some(hb) = self.hover_border {
-            container = container.hover_border(hb);
-        } else if let Some(hbc) = self.hover_border_color {
-            container = container.hover_border((hbc, self.border_width));
-        }
-        if let Some(abg) = self.active_bg {
-            container = container.active_bg(abg);
-        }
-        if let Some(ab) = self.active_border {
-            container = container.active_border(ab);
-        }
-        if self.hover_scale != 1.0 {
-            container = container.hover_scale(self.hover_scale);
-        }
-        if let Some(filter) = self.backdrop_filter {
-            container = container.backdrop_filter(filter);
+        if self.gap > 0.0 {
+            container = container.gap(self.gap);
         }
 
-        container.show(|ui: &mut Ui| {
-            f(ui);
-        });
+        container.hover_state = self.hover_state;
+        container.active_state = self.active_state;
+
+        container.show(f)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::collections::HashMap;
+    use zenthra_core::{BorderAlignment, Rect};
+
+    fn create_test_ui<'a>(
+        scroll_state: &'a mut HashMap<Id, (f32, f32)>,
+        cursor_state: &'a mut HashMap<Id, usize>,
+        interaction_state: &'a mut HashMap<Id, f32>,
+        layout_cache: &'a HashMap<Id, (Rect, u64)>,
+        next_layout_cache: &'a mut HashMap<Id, (Rect, u64)>,
+        screen_layout_cache: &'a HashMap<Id, Rect>,
+        next_screen_layout_cache: &'a mut HashMap<Id, Rect>,
+        widget_window_map: &'a HashMap<Id, Id>,
+        next_widget_window_map: &'a mut HashMap<Id, Id>,
+        image_sizes: &'a HashMap<zenthra_core::ImageSource, (u32, u32)>,
+    ) -> Ui<'a> {
+        let mut ui = Ui::new(
+            800, 600, 1.0, None, Vec::new(), None,
+            (0.0, 0.0), false,
+            scroll_state, cursor_state, interaction_state,
+            None, None, false, false, 0.0,
+            layout_cache, next_layout_cache,
+            screen_layout_cache, next_screen_layout_cache,
+            widget_window_map, next_widget_window_map,
+            image_sizes,
+        );
+        ui.mouse_x = 50.0;
+        ui.mouse_y = 50.0;
+        ui
+    }
+
+    #[test]
+    fn test_card_box_style_methods_parity() {
+        let mut scroll_state = HashMap::new();
+        let mut cursor_state = HashMap::new();
+        let mut interaction_state = HashMap::new();
+        let layout_cache = HashMap::new();
+        let mut next_layout_cache = HashMap::new();
+        let screen_layout_cache = HashMap::new();
+        let mut next_screen_layout_cache = HashMap::new();
+        let widget_window_map = HashMap::new();
+        let mut next_widget_window_map = HashMap::new();
+        let image_sizes = HashMap::new();
+
+        let mut ui = create_test_ui(
+            &mut scroll_state, &mut cursor_state, &mut interaction_state,
+            &layout_cache, &mut next_layout_cache,
+            &screen_layout_cache, &mut next_screen_layout_cache,
+            &widget_window_map, &mut next_widget_window_map,
+            &image_sizes,
+        );
+
+        let card = ui.card()
+            .width(320.0)
+            .height(200.0)
+            .fill_x()
+            .padding(12.0, 16.0, 12.0, 16.0)
+            .margin(8.0, 10.0, 8.0, 10.0)
+            .radius(12.0, 12.0, 8.0, 8.0)
+            .bg(Color::rgb(0.1, 0.15, 0.2))
+            .border((Color::rgb(0.3, 0.4, 0.6), 1.5, BorderAlignment::Inside))
+            .shadow(Color::rgba(0.0, 0.0, 0.0, 0.4), 0.0, 4.0, 12.0)
+            .gap(10.0)
+            .row();
+
+        assert_eq!(card.style.width, Some(320.0));
+        assert_eq!(card.style.height, Some(200.0));
+        assert!(card.style.fill_x);
+        assert_eq!(card.style.padding.top, 12.0);
+        assert_eq!(card.style.padding.right, 16.0);
+        assert_eq!(card.style.margin.top, 8.0);
+        assert_eq!(card.style.radius, [12.0, 12.0, 8.0, 8.0]);
+        assert_eq!(card.is_row, true);
+        assert_eq!(card.gap, 10.0);
+    }
+
+    #[test]
+    fn test_card_sibling_interaction_states() {
+        use crate::macros::{Style, Transform, Cursor, Tooltip, Animation};
+
+        let mut scroll_state = HashMap::new();
+        let mut cursor_state = HashMap::new();
+        let mut interaction_state = HashMap::new();
+        let layout_cache = HashMap::new();
+        let mut next_layout_cache = HashMap::new();
+        let screen_layout_cache = HashMap::new();
+        let mut next_screen_layout_cache = HashMap::new();
+        let widget_window_map = HashMap::new();
+        let mut next_widget_window_map = HashMap::new();
+        let image_sizes = HashMap::new();
+
+        let mut ui = create_test_ui(
+            &mut scroll_state, &mut cursor_state, &mut interaction_state,
+            &layout_cache, &mut next_layout_cache,
+            &screen_layout_cache, &mut next_screen_layout_cache,
+            &widget_window_map, &mut next_widget_window_map,
+            &image_sizes,
+        );
+
+        let card = ui.card()
+            .bg(Color::rgb(0.1, 0.1, 0.1))
+            .hover([
+                Style::bg(Color::rgb(0.2, 0.2, 0.2)),
+                Style::border((Color::WHITE, 1.0)),
+                Transform::scale(1.05),
+                Cursor::Pointer,
+                Tooltip::new("Hovered Card"),
+                Animation::duration(200).ease_out(),
+            ])
+            .active([
+                Style::bg(Color::rgb(0.05, 0.05, 0.05)),
+                Transform::scale(0.95),
+            ]);
+
+        assert!(card.hover_state.is_some());
+        let h = card.hover_state.as_ref().unwrap();
+        assert_eq!(h.scale, 1.05);
+        assert_eq!(h.cursor, Some(crate::text::CursorIcon::Pointer));
+        assert_eq!(h.tooltip.as_deref(), Some("Hovered Card"));
+        assert_eq!(h.duration_ms, Some(200));
+
+        assert!(card.active_state.is_some());
+        let a = card.active_state.as_ref().unwrap();
+        assert_eq!(a.scale, 0.95);
     }
 }
