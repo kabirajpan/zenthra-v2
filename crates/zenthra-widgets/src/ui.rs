@@ -156,7 +156,7 @@ pub struct Ui<'a> {
     pub resize_active: bool,
 }
 
-pub fn copy_to_system_clipboard(text: &str) {
+pub fn copy_to_system_clipboard(_text: &str) {
     #[cfg(target_os = "linux")]
     {
         if std::env::var_os("WAYLAND_DISPLAY").is_some() {
@@ -166,7 +166,7 @@ pub fn copy_to_system_clipboard(text: &str) {
                 .spawn()
             {
                 if let Some(mut stdin) = child.stdin.take() {
-                    let _ = stdin.write_all(text.as_bytes());
+                    let _ = stdin.write_all(_text.as_bytes());
                 }
                 let _ = child.wait();
             }
@@ -178,14 +178,15 @@ pub fn copy_to_system_clipboard(text: &str) {
             .spawn()
         {
             if let Some(mut stdin) = child.stdin.take() {
-                let _ = stdin.write_all(text.as_bytes());
+                let _ = stdin.write_all(_text.as_bytes());
             }
             let _ = child.wait();
         }
     }
 
+    #[cfg(not(target_os = "android"))]
     if let Ok(mut cb) = arboard::Clipboard::new() {
-        let _ = cb.set_text(text.to_string());
+        let _ = cb.set_text(_text.to_string());
     }
 }
 
@@ -896,6 +897,16 @@ impl<'a> Ui<'a> {
         crate::controls::menu::MenuItemBuilder::new(self, label)
     }
 
+    pub fn menu_separator(&mut self) {
+        self.spacing(3.0);
+        self.container()
+            .fill_x()
+            .height(1.0)
+            .bg(Color::rgb(0.20, 0.24, 0.32))
+            .show(|_| {});
+        self.spacing(3.0);
+    }
+
     pub fn popover(&mut self, anchor_id: zenthra_core::Id) -> crate::controls::popover::PopoverBuilder<'_, 'a> {
         crate::controls::popover::PopoverBuilder::new(self, anchor_id)
     }
@@ -980,19 +991,19 @@ impl<'a> Ui<'a> {
     }
 
     pub fn h1(&mut self, content: &str) -> TextBuilder<'_, 'a> {
-        self.text(content).size(40.0).font_weight(crate::text::FontWeight::Bold)
+        self.text(content).size(40.0).font_weight(crate::text::FontWeight::Bold).wrap(crate::text::TextWrap::Word)
     }
 
     pub fn h2(&mut self, content: &str) -> TextBuilder<'_, 'a> {
-        self.text(content).size(32.0).font_weight(crate::text::FontWeight::Bold)
+        self.text(content).size(32.0).font_weight(crate::text::FontWeight::Bold).wrap(crate::text::TextWrap::Word)
     }
 
     pub fn h3(&mut self, content: &str) -> TextBuilder<'_, 'a> {
-        self.text(content).size(24.0).font_weight(crate::text::FontWeight::Bold)
+        self.text(content).size(24.0).font_weight(crate::text::FontWeight::Bold).wrap(crate::text::TextWrap::Word)
     }
 
     pub fn h4(&mut self, content: &str) -> TextBuilder<'_, 'a> {
-        self.text(content).size(20.0).font_weight(crate::text::FontWeight::Bold)
+        self.text(content).size(20.0).font_weight(crate::text::FontWeight::Bold).wrap(crate::text::TextWrap::Word)
     }
 
     pub fn card(&mut self) -> crate::containers::card::CardBuilder<'_, 'a> {
@@ -1008,6 +1019,7 @@ impl<'a> Ui<'a> {
         self.container()
             .fill_x()
             .row()
+            .wrap(crate::container::Wrap::Wrap)
             .halign(zenthra_core::Align::SpaceBetween)
             .valign(zenthra_core::Align::Center)
             .padding_bottom(8.0)
@@ -1016,6 +1028,7 @@ impl<'a> Ui<'a> {
                     .column()
                     .show(|ui| {
                         ui.text(title)
+                            .wrap(crate::text::TextWrap::Word)
                             .size(16.0)
                             .font_weight(crate::text::FontWeight::Bold)
                             .color(Color::WHITE)
@@ -1023,6 +1036,7 @@ impl<'a> Ui<'a> {
                         if !subtitle.is_empty() {
                             ui.spacing(2.0);
                             ui.text(subtitle)
+                                .wrap(crate::text::TextWrap::Word)
                                 .size(12.0)
                                 .color(Color::rgb(0.6, 0.6, 0.6))
                                 .show();

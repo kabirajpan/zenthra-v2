@@ -133,6 +133,9 @@ impl App {
             pending_events: Vec::new(),
             next_wakeup: None,
             active_touch_id: None,
+            touch_start_pos: None,
+            touch_last_pos: None,
+            touch_is_scroll: false,
         };
         if let Err(err) = event_loop.run_app(&mut runner) {
             match err {
@@ -161,6 +164,9 @@ struct AppRunner {
     pending_events: Vec<PlatformEvent>,
     next_wakeup: Option<std::time::Instant>,
     active_touch_id: Option<u64>,
+    touch_start_pos: Option<(f64, f64)>,
+    touch_last_pos: Option<(f64, f64)>,
+    touch_is_scroll: bool,
 }
 
 impl AppRunner {
@@ -292,7 +298,7 @@ impl ApplicationHandler for AppRunner {
             }
             WindowEvent::MouseWheel { delta, .. } => {
                 let (x, y) = match delta {
-                    winit::event::MouseScrollDelta::LineDelta(x, y) => (x, y),
+                    winit::event::MouseScrollDelta::LineDelta(x, y) => (x * 38.0, y * 38.0),
                     winit::event::MouseScrollDelta::PixelDelta(pos) => (pos.x as f32, pos.y as f32),
                 };
                 self.pending_events.push(PlatformEvent::MouseWheel { delta_x: x, delta_y: y });
@@ -306,9 +312,12 @@ impl ApplicationHandler for AppRunner {
                     y: touch.location.y,
                 });
 
-                // Map primary touch to mouse for basic interaction support
+                // Map primary touch to mouse interaction and smooth touch scrolling
                 if touch.phase == winit::event::TouchPhase::Started && self.active_touch_id.is_none() {
                     self.active_touch_id = Some(touch.id);
+                    self.touch_start_pos = Some((touch.location.x, touch.location.y));
+                    self.touch_last_pos = Some((touch.location.x, touch.location.y));
+                    self.touch_is_scroll = false;
                 }
 
                 if self.active_touch_id == Some(touch.id) {
@@ -321,15 +330,45 @@ impl ApplicationHandler for AppRunner {
                             });
                         }
                         winit::event::TouchPhase::Moved => {
+                            let (lx, ly) = self.touch_last_pos.unwrap_or((touch.location.x, touch.location.y));
+                            let (sx, sy) = self.touch_start_pos.unwrap_or((touch.location.x, touch.location.y));
+                            let sf = self.window.as_ref().map(|w| w.winit_window.scale_factor() as f32).unwrap_or(1.0);
+                            let dx = (touch.location.x - lx) as f32 / sf;
+                            let dy = (touch.location.y - ly) as f32 / sf;
+                            let total_dist = (touch.location.x - sx).hypot(touch.location.y - sy) / sf as f64;
+
+                            if !self.touch_is_scroll && total_dist > 8.0 {
+                                self.touch_is_scroll = true;
+                                // Release mouse button so dragging to scroll doesn't hold button clicks
+                                self.pending_events.push(PlatformEvent::MouseButton { 
+                                    button: winit::event::MouseButton::Left, 
+                                    state: winit::event::ElementState::Released 
+                                });
+                            }
+
                             self.pending_events.push(PlatformEvent::MouseMoved { x: touch.location.x, y: touch.location.y });
+
+                            if self.touch_is_scroll {
+                                self.pending_events.push(PlatformEvent::MouseWheel {
+                                    delta_x: dx,
+                                    delta_y: dy,
+                                });
+                            }
+                            self.touch_last_pos = Some((touch.location.x, touch.location.y));
                         }
                         winit::event::TouchPhase::Ended | winit::event::TouchPhase::Cancelled => {
                             self.pending_events.push(PlatformEvent::MouseMoved { x: touch.location.x, y: touch.location.y });
-                            self.pending_events.push(PlatformEvent::MouseButton { 
-                                button: winit::event::MouseButton::Left, 
-                                state: winit::event::ElementState::Released 
-                            });
+                            if !self.touch_is_scroll {
+                                // Tap completed: release mouse button
+                                self.pending_events.push(PlatformEvent::MouseButton { 
+                                    button: winit::event::MouseButton::Left, 
+                                    state: winit::event::ElementState::Released 
+                                });
+                            }
                             self.active_touch_id = None;
+                            self.touch_start_pos = None;
+                            self.touch_last_pos = None;
+                            self.touch_is_scroll = false;
                         }
                     }
                 }

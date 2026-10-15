@@ -1,7 +1,10 @@
 // crates/zenthra-widgets/src/controls/popover.rs
 
 use crate::ui::Ui;
-use zenthra_core::{BackdropFilter, Color, Id, Placement, Point, PopoverAlign, Rect, Response, Size};
+use zenthra_core::{
+    BackdropFilter, Background, Border, BoxStyle, Color, EdgeInsets, Id, Placement, Point,
+    PopoverAlign, Rect, Response, Size, Styleable,
+};
 
 /// Computes the (x, y) coordinates for a floating element relative to an anchor rect.
 pub fn compute_placement_pos(
@@ -96,37 +99,51 @@ pub fn compute_placement_pos(
 
 /// A floating container anchored to any widget on screen with Placement options.
 pub struct PopoverBuilder<'u, 'a> {
-    ui: &'u mut Ui<'a>,
-    anchor_id: Id,
-    id: Id,
+    pub ui: &'u mut Ui<'a>,
+    pub anchor_id: Id,
+    pub id: Id,
 
     // Placement
-    placement: Placement,
-    align: PopoverAlign,
-    gap: f32,
-    auto_flip: bool,
+    pub placement: Placement,
+    pub align: PopoverAlign,
+    pub gap: f32,
+    pub auto_flip: bool,
 
-    // Dimensions
-    width: f32,
-    height: Option<f32>,
+    // Unified Box Surface Style
+    pub style: BoxStyle,
 
-    // Styling
-    bg: Option<Color>,
-    border_color: Option<Color>,
-    border_width: f32,
-    radius: [f32; 4],
-    shadow: bool,
-    shadow_color: Color,
-    shadow_blur: f32,
-    shadow_offset: [f32; 2],
-    padding: [f32; 4],
-    backdrop_filter: Option<BackdropFilter>,
-    backdrop_blur: Option<f32>,
+    // Backdrop effects
+    pub backdrop_filter: Option<BackdropFilter>,
+    pub backdrop_blur: Option<f32>,
 }
+
+impl<'u, 'a> Styleable for PopoverBuilder<'u, 'a> {
+    #[inline]
+    fn box_style_mut(&mut self) -> &mut BoxStyle {
+        &mut self.style
+    }
+
+    #[inline]
+    fn box_style(&self) -> &BoxStyle {
+        &self.style
+    }
+}
+
+impl_box_style_methods!(PopoverBuilder);
 
 impl<'u, 'a> PopoverBuilder<'u, 'a> {
     pub fn new(ui: &'u mut Ui<'a>, anchor_id: Id) -> Self {
         let id = ui.id_from(anchor_id.raw().wrapping_add(888000));
+        let mut style = BoxStyle::new();
+        style.width = Some(200.0);
+        style.radius = [6.0; 4];
+        style.padding = EdgeInsets::all(4.0);
+        style.bg = Some(Background::Solid(Color::rgb(0.10, 0.10, 0.12)));
+        style.border = Border::Solid(Color::rgb(0.20, 0.20, 0.24), 1.0);
+        style.shadow_color = Some(Color::rgba(0.0, 0.0, 0.0, 0.5));
+        style.shadow_offset = [0.0, 4.0];
+        style.shadow_blur = 16.0;
+
         Self {
             ui,
             anchor_id,
@@ -135,17 +152,7 @@ impl<'u, 'a> PopoverBuilder<'u, 'a> {
             align: PopoverAlign::Start,
             gap: 4.0,
             auto_flip: true,
-            width: 200.0,
-            height: None,
-            bg: None,
-            border_color: None,
-            border_width: 1.0,
-            radius: [6.0; 4],
-            shadow: true,
-            shadow_color: Color::rgba(0.0, 0.0, 0.0, 0.5),
-            shadow_blur: 16.0,
-            shadow_offset: [0.0, 4.0],
-            padding: [4.0, 4.0, 4.0, 4.0],
+            style,
             backdrop_filter: None,
             backdrop_blur: None,
         }
@@ -173,53 +180,6 @@ impl<'u, 'a> PopoverBuilder<'u, 'a> {
 
     pub fn auto_flip(mut self, auto_flip: bool) -> Self {
         self.auto_flip = auto_flip;
-        self
-    }
-
-    pub fn width(mut self, w: f32) -> Self {
-        self.width = w;
-        self
-    }
-
-    pub fn height(mut self, h: f32) -> Self {
-        self.height = Some(h);
-        self
-    }
-
-    pub fn bg(mut self, bg: impl Into<Option<Color>>) -> Self {
-        self.bg = bg.into();
-        self
-    }
-
-    pub fn border(mut self, border: impl Into<zenthra_core::Border>) -> Self {
-        match border.into() {
-            zenthra_core::Border::None => {
-                self.border_color = None;
-                self.border_width = 0.0;
-            }
-            zenthra_core::Border::Solid(c, w) => {
-                self.border_color = Some(c);
-                self.border_width = w;
-            }
-        }
-        self
-    }
-
-    pub fn radius_all(mut self, r: f32) -> Self {
-        self.radius = [r; 4];
-        self
-    }
-
-    pub fn shadow(mut self, color: Color, x: f32, y: f32, blur: f32) -> Self {
-        self.shadow = true;
-        self.shadow_color = color;
-        self.shadow_offset = [x, y];
-        self.shadow_blur = blur;
-        self
-    }
-
-    pub fn padding(mut self, top: f32, right: f32, bottom: f32, left: f32) -> Self {
-        self.padding = [top, right, bottom, left];
         self
     }
 
@@ -257,7 +217,8 @@ impl<'u, 'a> PopoverBuilder<'u, 'a> {
             });
 
         // 2. Measure content dimensions (use measured height from last frame if not explicitly given)
-        let estimated_h = self.height.unwrap_or_else(|| {
+        let content_w = self.style.width.unwrap_or(200.0);
+        let estimated_h = self.style.height.unwrap_or_else(|| {
             self.ui
                 .screen_layout_cache
                 .get(&self.id)
@@ -268,7 +229,7 @@ impl<'u, 'a> PopoverBuilder<'u, 'a> {
         // 3. Compute position based on placement and alignment
         let (pos_x, pos_y) = compute_placement_pos(
             anchor_rect,
-            self.width,
+            content_w,
             estimated_h,
             self.placement,
             self.align,
@@ -278,7 +239,6 @@ impl<'u, 'a> PopoverBuilder<'u, 'a> {
             self.ui.height,
         );
 
-        let content_w = self.width;
         let content_h = estimated_h;
         let mut clicked_inside = false;
         let is_content_hovered = self.ui.mouse_in_rect(pos_x, pos_y, content_w, content_h);
@@ -291,20 +251,12 @@ impl<'u, 'a> PopoverBuilder<'u, 'a> {
         let is_hovered = is_content_hovered || is_anchor_hovered;
 
         // 4. Render as an overlay container
-        let bg_color = self.bg.unwrap_or(Color::rgb(0.10, 0.10, 0.12));
-        let border_color = self.border_color.unwrap_or(Color::rgb(0.20, 0.20, 0.24));
-        let border_width = self.border_width;
-        let radius = self.radius;
-        let shadow_color = self.shadow_color;
-        let shadow_offset = self.shadow_offset;
-        let shadow_blur = self.shadow_blur;
-        let padding = self.padding;
-        let backdrop_filter = self.backdrop_filter;
-        let backdrop_blur = self.backdrop_blur;
         let popover_id = self.id;
-        let has_explicit_h = self.height;
 
-        let anchor_win = self.ui.widget_window_map.get(&self.anchor_id)
+        let anchor_win = self
+            .ui
+            .widget_window_map
+            .get(&self.anchor_id)
             .or_else(|| self.ui.next_widget_window_map.get(&self.anchor_id))
             .copied()
             .or(self.ui.modal_window_id);
@@ -313,26 +265,17 @@ impl<'u, 'a> PopoverBuilder<'u, 'a> {
             self.ui.current_window_id = Some(win);
         }
 
+        let backdrop_filter = self.backdrop_filter;
+        let backdrop_blur = self.backdrop_blur;
+
         self.ui.overlay(|ui| {
             let mut container = ui
                 .container()
                 .raw_id(popover_id)
                 .pos(pos_x, pos_y)
                 .overlay()
-                .width(content_w)
-                .bg(bg_color)
-                .border((border_color, border_width))
-                .radius(radius[0], radius[1], radius[2], radius[3])
-                .padding(padding[0], padding[1], padding[2], padding[3])
+                .style(self.style.clone())
                 .column();
-
-            if let Some(h) = has_explicit_h {
-                container = container.height(h);
-            }
-
-            if self.shadow {
-                container = container.shadow(shadow_color, shadow_offset[0], shadow_offset[1], shadow_blur);
-            }
 
             if let Some(bf) = backdrop_filter {
                 container = container.backdrop_filter(bf);
@@ -370,5 +313,54 @@ impl<'u, 'a> PopoverBuilder<'u, 'a> {
             *is_open = false;
         }
         resp
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::collections::HashMap;
+
+    #[test]
+    fn test_popover_box_style_parity() {
+        let mut scroll = HashMap::new();
+        let mut cursor = HashMap::new();
+        let mut inter = HashMap::new();
+        let l_cache = HashMap::new();
+        let mut nl_cache = HashMap::new();
+        let sl_cache = HashMap::new();
+        let mut nsl_cache = HashMap::new();
+        let ww_map = HashMap::new();
+        let mut nww_map = HashMap::new();
+        let img = HashMap::new();
+
+        let mut ui = Ui::new(
+            800, 600, 1.0, None, Vec::new(), None,
+            (0.0, 0.0), false,
+            &mut scroll, &mut cursor, &mut inter,
+            None, None, false, false, 0.0,
+            &l_cache, &mut nl_cache,
+            &sl_cache, &mut nsl_cache,
+            &ww_map, &mut nww_map,
+            &img,
+        );
+
+        let anchor = Id::from_u64(12345);
+        let popover = ui.popover(anchor)
+            .width(260.0)
+            .height(180.0)
+            .bg(Color::rgb(0.12, 0.13, 0.18))
+            .border((Color::rgb(0.3, 0.4, 0.6), 1.5))
+            .radius_all(10.0)
+            .padding_all(12.0)
+            .shadow(Color::rgba(0.0, 0.0, 0.0, 0.6), 0.0, 8.0, 24.0);
+
+        assert_eq!(popover.style.width, Some(260.0));
+        assert_eq!(popover.style.height, Some(180.0));
+        assert_eq!(popover.style.bg, Some(Background::Solid(Color::rgb(0.12, 0.13, 0.18))));
+        assert_eq!(popover.style.border, Border::Solid(Color::rgb(0.3, 0.4, 0.6), 1.5));
+        assert_eq!(popover.style.radius, [10.0; 4]);
+        assert_eq!(popover.style.padding.top, 12.0);
+        assert_eq!(popover.style.shadow_blur, 24.0);
     }
 }

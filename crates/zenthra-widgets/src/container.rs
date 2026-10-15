@@ -555,8 +555,8 @@ impl<'u, 'a> ContainerBuilder<'u, 'a> {
                     let mut keep = true;
                     if let zenthra_platform::event::PlatformEvent::MouseWheel { delta_y, delta_x, .. } = event {
                         let mut consumed = false;
-                        let step_y = if delta_y.abs() <= 5.0 { *delta_y * 38.0 } else { *delta_y };
-                        let step_x = if delta_x.abs() <= 5.0 { *delta_x * 38.0 } else { *delta_x };
+                        let step_y = if delta_y.abs() <= 1.0 { *delta_y * 38.0 } else { *delta_y };
+                        let step_x = if delta_x.abs() <= 1.0 { *delta_x * 38.0 } else { *delta_x };
                         if self.scroll_y && *delta_y != 0.0 {
                             let can_up = sy > 0.0 && *delta_y > 0.0;
                             let can_down = sy < max_sy && *delta_y < 0.0;

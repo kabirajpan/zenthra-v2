@@ -1158,3 +1158,138 @@ macro_rules! impl_text_style_methods {
         $crate::impl_text_decorations!($builder, $($lt),+);
     };
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use zenthra_core::{BoxStyle, Color, Styleable};
+    use zenthra_text::prelude::{FontWeight, TextStyle};
+
+    #[allow(dead_code)]
+    struct TestBoxWidget<'u, 'a> {
+        _marker: std::marker::PhantomData<(&'u (), &'a ())>,
+        pub style: BoxStyle,
+        pub hover_state: Option<WidgetStateOverrides>,
+        pub active_state: Option<WidgetStateOverrides>,
+    }
+
+    impl<'u, 'a> Styleable for TestBoxWidget<'u, 'a> {
+        fn box_style_mut(&mut self) -> &mut BoxStyle { &mut self.style }
+        fn box_style(&self) -> &BoxStyle { &self.style }
+    }
+
+    impl_box_style_methods!(TestBoxWidget);
+    impl_interaction_state_methods!(TestBoxWidget);
+
+    #[allow(dead_code)]
+    struct TestTextWidget<'u, 'a> {
+        _marker: std::marker::PhantomData<(&'u (), &'a ())>,
+        pub text_style: TextStyle,
+    }
+
+    impl_text_style_methods!(TestTextWidget);
+
+    #[test]
+    fn test_box_style_methods_and_siblings() {
+        let mut widget = TestBoxWidget {
+            _marker: std::marker::PhantomData,
+            style: BoxStyle::new(),
+            hover_state: None,
+            active_state: None,
+        };
+
+        widget = widget
+            .style(BoxStyle::new())
+            .width(200.0)
+            .height(100.0)
+            .fill_x()
+            .fill_y()
+            .fill()
+            .min_width(50.0)
+            .max_width(500.0)
+            .min_height(30.0)
+            .max_height(300.0)
+            .padding(10.0, 15.0, 20.0, 25.0)
+            .padding_all(8.0)
+            .padding_x(12.0)
+            .padding_y(16.0)
+            .padding_top(2.0)
+            .padding_bottom(4.0)
+            .padding_left(6.0)
+            .padding_right(8.0)
+            .margin(1.0, 2.0, 3.0, 4.0)
+            .margin_all(5.0)
+            .margin_x(10.0)
+            .margin_y(15.0)
+            .margin_top(1.0)
+            .margin_bottom(2.0)
+            .margin_left(3.0)
+            .margin_right(4.0)
+            .radius(1.0, 2.0, 3.0, 4.0)
+            .radius_all(8.0)
+            .radius_top_left(2.0)
+            .radius_top_right(3.0)
+            .radius_bottom_right(4.0)
+            .radius_bottom_left(5.0)
+            .radius_top(6.0)
+            .radius_bottom(7.0)
+            .radius_left(8.0)
+            .radius_right(9.0)
+            .bg(Color::rgb(0.1, 0.2, 0.3))
+            .border((Color::WHITE, 2.0))
+            .shadow(Color::rgba(0.0, 0.0, 0.0, 0.5), 0.0, 4.0, 8.0)
+            .hover([
+                Style::bg(Color::rgb(0.2, 0.3, 0.4)),
+                Style::border((Color::YELLOW, 3.0)),
+                Style::shadow(Color::BLACK, 0.0, 8.0, 16.0),
+                Style::radius_all(12.0),
+                Transform::scale(1.05),
+                Cursor::Pointer,
+                Tooltip::new("Hover tooltip"),
+            ])
+            .active([
+                Transform::scale(0.95),
+                Style::opacity(0.8),
+            ]);
+
+        assert_eq!(widget.style.min_width, Some(50.0));
+        assert_eq!(widget.style.max_width, Some(500.0));
+        assert_eq!(widget.style.min_height, Some(30.0));
+        assert_eq!(widget.style.max_height, Some(300.0));
+        assert!(widget.hover_state.is_some());
+        assert!(widget.active_state.is_some());
+
+        let hover = widget.hover_state.unwrap();
+        assert_eq!(hover.scale, 1.05);
+        assert_eq!(hover.cursor, Some(crate::text::CursorIcon::Pointer));
+        assert_eq!(hover.tooltip, Some("Hover tooltip".to_string()));
+
+        let active = widget.active_state.unwrap();
+        assert_eq!(active.scale, 0.95);
+        assert_eq!(active.style.opacity, 0.8);
+    }
+
+    #[test]
+    fn test_text_style_methods() {
+        let mut widget = TestTextWidget {
+            _marker: std::marker::PhantomData,
+            text_style: TextStyle::default(),
+        };
+
+        widget = widget
+            .size(16.0)
+            .color(Color::rgb(0.9, 0.9, 0.9))
+            .font_family("Inter")
+            .font_weight(FontWeight::Bold)
+            .wrap(zenthra_text::prelude::TextWrap::Word)
+            .ellipsis(true)
+            .decoration(TextDecoration::Underline);
+
+        assert_eq!(widget.text_style.font_size, 16.0);
+        assert_eq!(widget.text_style.color, Color::rgb(0.9, 0.9, 0.9));
+        assert_eq!(widget.text_style.font_family, Some("Inter".to_string()));
+        assert_eq!(widget.text_style.font_weight, FontWeight::Bold);
+        assert!(widget.text_style.ellipsis);
+        assert!(widget.text_style.underline);
+    }
+}

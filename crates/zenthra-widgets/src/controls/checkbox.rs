@@ -238,7 +238,9 @@ impl<'u, 'a, 'b> CheckboxBuilder<'u, 'a, 'b> {
         let current_sel = *self.ui.interaction_state.entry(self.id).or_insert(sel_target);
 
         let hover_id = Id::from_u64(self.id.raw().wrapping_add(2000000));
-        let hover_target = if is_pressed { self.pressed_scale } else if is_hovered { self.hover_scale } else { 1.0 };
+        let eff_hover_scale = self.hover_state.as_ref().map(|h| h.scale).filter(|&s| (s - 1.0).abs() > 0.001).unwrap_or(self.hover_scale);
+        let eff_pressed_scale = self.active_state.as_ref().map(|a| a.scale).filter(|&s| (s - 1.0).abs() > 0.001).unwrap_or(self.pressed_scale);
+        let hover_target = if is_pressed { eff_pressed_scale } else if is_hovered { eff_hover_scale } else { 1.0 };
         let current_scale = *self.ui.interaction_state.entry(hover_id).or_insert(1.0);
 
         let mut final_sel = current_sel;

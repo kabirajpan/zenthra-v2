@@ -87,3 +87,13 @@ path = "../../examples/panel.rs"
 [[example]]
 name = "card"
 path = "../../examples/card.rs"
+
+[[example]]
+name = "drag_value"
+path = "../../examples/drag_value.rs"
+
+[[example]]
+name = "menu"
+path = "../../examples/menu.rs"
+
+

@@ -19,4 +19,5 @@ zenthra-platform = { workspace = true }
 winit            = { workspace = true }
 glam           = { workspace = true }
 log            = { workspace = true }
+[target.'cfg(not(target_os = "android"))'.dependencies]
 arboard        = { version = "3.6.1", features = ["wayland-data-control"] }

@@ -11,6 +11,9 @@ struct ZenthraFallback;
 impl cosmic_text::Fallback for ZenthraFallback {
     fn common_fallback(&self) -> &[&'static str] {
         &[
+            "Roboto",
+            "Noto Sans",
+            "Moderniz",
             "Symbols Nerd Font",
             "Noto Color Emoji",
             "Apple Color Emoji",
@@ -18,6 +21,7 @@ impl cosmic_text::Fallback for ZenthraFallback {
             "DejaVu Sans",
             "Liberation Sans",
             "Arial",
+            "sans-serif",
         ]
     }
 
@@ -38,7 +42,15 @@ pub struct CosmicFontProvider {
 impl CosmicFontProvider {
     pub fn new() -> Self {
         let temp = FontSystem::new();
-        let (locale, db) = temp.into_locale_and_db();
+        let (locale, mut db) = temp.into_locale_and_db();
+
+        #[cfg(target_os = "android")]
+        {
+            let _ = db.load_font_file("/system/fonts/Roboto-Regular.ttf");
+            let _ = db.load_fonts_dir("/system/fonts");
+        }
+        let _ = db.load_font_data(include_bytes!("../../assets/fonts/Moderniz.otf").to_vec());
+
         let font_system = Arc::new(Mutex::new(FontSystem::new_with_locale_and_db_and_fallback(
             locale,
             db,

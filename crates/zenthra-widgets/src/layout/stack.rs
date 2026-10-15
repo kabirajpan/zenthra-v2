@@ -1,39 +1,40 @@
 // crates/zenthra-widgets/src/layout/stack.rs
 
-use crate::ui::{DrawCommand, RectDraw, Ui};
-use zenthra_core::{Color, Id, Rect, Align};
-use zenthra_render::RectInstance;
 use crate::container::Direction;
+use crate::style_ext::BoxStyleExt;
+use crate::ui::{DrawCommand, RectDraw, Ui};
+use zenthra_core::{Align, BoxStyle, Id, Rect, Styleable};
 
+/// Builder for layered, overlapping stack layouts (`ui.stack()`)
 pub struct StackBuilder<'u, 'a> {
-    ui: &'u mut Ui<'a>,
-    id: Id,
-    child_origins: Vec<(f32, f32)>,
+    pub ui: &'u mut Ui<'a>,
+    pub id: Id,
+    pub child_origins: Vec<(f32, f32)>,
 
-    // Layout
-    width: Option<f32>,
-    height: Option<f32>,
-    fill_x: bool,
-    fill_y: bool,
-    padding_top: f32,
-    padding_bottom: f32,
-    padding_left: f32,
-    padding_right: f32,
-    halign: Align,
-    valign: Align,
+    // Unified Box Surface Style
+    pub style: BoxStyle,
 
-    // Styling
-    bg: Option<zenthra_core::Background>,
-    border_color: Option<Color>,
-    border_width: f32,
-    radius: [f32; 4],
-    shadow_color: Option<Color>,
-    shadow_offset: [f32; 2],
-    shadow_blur: f32,
-    clip: bool,
-    is_overlay: bool,
-    is_absolute: bool,
+    // Stack Alignment & Behavior
+    pub halign: Align,
+    pub valign: Align,
+    pub clip: bool,
+    pub is_overlay: bool,
+    pub is_absolute: bool,
 }
+
+impl<'u, 'a> Styleable for StackBuilder<'u, 'a> {
+    #[inline]
+    fn box_style_mut(&mut self) -> &mut BoxStyle {
+        &mut self.style
+    }
+
+    #[inline]
+    fn box_style(&self) -> &BoxStyle {
+        &self.style
+    }
+}
+
+impl_box_style_methods!(StackBuilder);
 
 impl<'u, 'a> StackBuilder<'u, 'a> {
     pub fn new(ui: &'u mut Ui<'a>) -> Self {
@@ -42,23 +43,9 @@ impl<'u, 'a> StackBuilder<'u, 'a> {
             ui,
             id,
             child_origins: Vec::new(),
-            width: None,
-            height: None,
-            fill_x: false,
-            fill_y: false,
-            padding_top: 0.0,
-            padding_bottom: 0.0,
-            padding_left: 0.0,
-            padding_right: 0.0,
+            style: BoxStyle::new(),
             halign: Align::Left,
             valign: Align::Top,
-            bg: None,
-            border_color: None,
-            border_width: 0.0,
-            radius: [0.0; 4],
-            shadow_color: None,
-            shadow_offset: [0.0, 0.0],
-            shadow_blur: 0.0,
             clip: false,
             is_overlay: false,
             is_absolute: false,
@@ -70,91 +57,6 @@ impl<'u, 'a> StackBuilder<'u, 'a> {
         use std::hash::Hasher;
         id.hash(&mut hasher);
         self.id = Id::from_u64(hasher.finish());
-        self
-    }
-
-    pub fn width(mut self, w: f32) -> Self {
-        self.width = Some(w);
-        self
-    }
-
-    pub fn height(mut self, h: f32) -> Self {
-        self.height = Some(h);
-        self
-    }
-
-
-
-    pub fn fill(mut self) -> Self {
-        self.fill_x = true;
-        self.fill_y = true;
-        self
-    }
-
-    pub fn padding(mut self, t: f32, r: f32, b: f32, l: f32) -> Self {
-        self.padding_top = t;
-        self.padding_bottom = b;
-        self.padding_left = l;
-        self.padding_right = r;
-        self
-    }
-
-    pub fn padding_all(mut self, p: f32) -> Self {
-        self.padding_top = p;
-        self.padding_bottom = p;
-        self.padding_left = p;
-        self.padding_right = p;
-        self
-    }
-
-    pub fn padding_x(mut self, p: f32) -> Self {
-        self.padding_left = p;
-        self.padding_right = p;
-        self
-    }
-
-    pub fn padding_y(mut self, p: f32) -> Self {
-        self.padding_top = p;
-        self.padding_bottom = p;
-        self
-    }
-
-    pub fn bg(mut self, bg: impl Into<zenthra_core::Background>) -> Self {
-        match bg.into() {
-            zenthra_core::Background::None => self.bg = None,
-            other => self.bg = Some(other),
-        }
-        self
-    }
-
-    pub fn border(mut self, border: impl Into<zenthra_core::Border>) -> Self {
-        match border.into() {
-            zenthra_core::Border::None => {
-                self.border_color = None;
-                self.border_width = 0.0;
-            }
-            zenthra_core::Border::Solid(c, w) => {
-                self.border_color = Some(c);
-                self.border_width = w;
-            }
-        }
-        self
-    }
-
-    pub fn radius(mut self, tl: f32, tr: f32, br: f32, bl: f32) -> Self {
-        self.radius = [tl, tr, br, bl];
-        self
-    }
-
-    pub fn radius_all(mut self, r: f32) -> Self {
-        self.radius = [r, r, r, r];
-        self
-    }
-
-    pub fn shadow(mut self, color: Color, x: f32, y: f32, blur: f32) -> Self {
-        self.shadow_color = Some(color);
-        self.shadow_offset = [x, y];
-        self.shadow_blur = blur;
         self
     }
 
@@ -170,6 +72,12 @@ impl<'u, 'a> StackBuilder<'u, 'a> {
 
     pub fn valign(mut self, align: Align) -> Self {
         self.valign = align;
+        self
+    }
+
+    pub fn align(mut self, h: Align, v: Align) -> Self {
+        self.halign = h;
+        self.valign = v;
         self
     }
 
@@ -211,30 +119,32 @@ impl<'u, 'a> StackBuilder<'u, 'a> {
         let prev_max_x = self.ui.max_x;
         let prev_max_y = self.ui.max_y;
 
+        let border_w = self.style.border_width();
+
         // Isolate stack bounds limits
-        if let Some(w) = self.width {
-            self.ui.max_x = (ox + w - self.padding_right).min(prev_max_x);
+        if let Some(w) = self.style.width {
+            self.ui.max_x = (ox + w - self.style.padding.right).min(prev_max_x);
         }
-        if let Some(h) = self.height {
-            self.ui.max_y = (oy + h - self.padding_bottom).min(prev_max_y);
+        if let Some(h) = self.style.height {
+            self.ui.max_y = (oy + h - self.style.padding.bottom).min(prev_max_y);
         }
 
         self.ui.direction = Direction::Stack;
         self.ui.line_height = 0.0;
 
-        let avail_w = if let Some(w) = self.width {
-            w - self.padding_left - self.padding_right - 2.0 * self.border_width
+        let avail_w = if let Some(w) = self.style.width {
+            w - self.style.padding.horizontal() - 2.0 * border_w
         } else {
-            (prev_max_x - ox - self.padding_left - self.padding_right - 2.0 * self.border_width).max(0.0)
+            (prev_max_x - ox - self.style.padding.horizontal() - 2.0 * border_w).max(0.0)
         };
-        let avail_h = if let Some(h) = self.height {
-            h - self.padding_top - self.padding_bottom - 2.0 * self.border_width
+        let avail_h = if let Some(h) = self.style.height {
+            h - self.style.padding.vertical() - 2.0 * border_w
         } else {
-            (prev_max_y - oy - self.padding_top - self.padding_bottom - 2.0 * self.border_width).max(0.0)
+            (prev_max_y - oy - self.style.padding.vertical() - 2.0 * border_w).max(0.0)
         };
 
-        self.ui.max_x = ox + self.padding_left + self.border_width + avail_w;
-        self.ui.max_y = oy + self.padding_top + self.border_width + avail_h;
+        self.ui.max_x = ox + self.style.padding.left + border_w + avail_w;
+        self.ui.max_y = oy + self.style.padding.top + border_w + avail_h;
 
         self.ui.semantic_stack.push(id);
         self.ui.register_semantic(zenthra_core::SemanticNode::new(
@@ -245,28 +155,17 @@ impl<'u, 'a> StackBuilder<'u, 'a> {
 
         let parent_draws = std::mem::take(&mut self.ui.draws);
 
-        self.ui.base_x = ox + self.padding_left + self.border_width;
-        self.ui.base_y = oy + self.padding_top + self.border_width;
+        self.ui.base_x = ox + self.style.padding.left + border_w;
+        self.ui.base_y = oy + self.style.padding.top + border_w;
         self.ui.cursor_x = self.ui.base_x;
         self.ui.cursor_y = self.ui.base_y;
 
-        // Update viewport for children if clipping is enabled
+        // Apply clip rect if requested
         if self.clip {
-            if let Some((rect, _)) = self.ui.get_recorded_layout(id) {
-                let my_screen_rect = [
-                    rect.origin.x + prev_offset_x,
-                    rect.origin.y + prev_offset_y,
-                    rect.size.width,
-                    rect.size.height,
-                ];
-                let parent_rect = [
-                    prev_viewport.origin.x,
-                    prev_viewport.origin.y,
-                    prev_viewport.size.width,
-                    prev_viewport.size.height,
-                ];
-                let intersected = intersect_rects(my_screen_rect, parent_rect);
-                self.ui.current_viewport = Rect::new(intersected[0], intersected[1], intersected[2], intersected[3]);
+            if let Some(w) = self.style.width {
+                if let Some(h) = self.style.height {
+                    self.ui.current_viewport = Rect::new(ox + prev_offset_x, oy + prev_offset_y, w, h);
+                }
             }
         }
 
@@ -299,16 +198,21 @@ impl<'u, 'a> StackBuilder<'u, 'a> {
         let content_w = child_sizes.iter().map(|(cw, _)| *cw).fold(0.0f32, f32::max);
         let content_h = child_sizes.iter().map(|(_, ch)| *ch).fold(0.0f32, f32::max);
 
-        let w = if self.fill_x {
+        let mut w = if self.style.fill_x {
             self.ui.max_x - ox
         } else {
-            self.width.unwrap_or(content_w + self.padding_left + self.padding_right + 2.0 * self.border_width)
+            self.style.width.unwrap_or(content_w + self.style.padding.horizontal() + 2.0 * border_w)
         };
-        let h = if self.fill_y {
+        let mut h = if self.style.fill_y {
             self.ui.max_y - oy
         } else {
-            self.height.unwrap_or(content_h + self.padding_top + self.padding_bottom + 2.0 * self.border_width)
+            self.style.height.unwrap_or(content_h + self.style.padding.vertical() + 2.0 * border_w)
         };
+
+        if let Some(min_w) = self.style.min_width { w = w.max(min_w); }
+        if let Some(max_w) = self.style.max_width { w = w.min(max_w); }
+        if let Some(min_h) = self.style.min_height { h = h.max(min_h); }
+        if let Some(max_h) = self.style.max_height { h = h.min(max_h); }
 
         self.ui.record_layout(id, Rect::new(ox, oy, w, h));
 
@@ -321,42 +225,24 @@ impl<'u, 'a> StackBuilder<'u, 'a> {
 
         // Background / Border visual Rect
         let mut target_draws = Vec::new();
-        if self.bg.is_some() {
-            let bw = self.border_width;
-            let bc = self.border_color.unwrap_or(Color::TRANSPARENT);
-
-            let (color, color2, _color3, _color4, gradient_params, _gradient_stops, _is_visible) = crate::style_ext::resolve_background(&self.bg);
-
-            target_draws.push(DrawCommand::Rect(RectDraw {
-                instance: RectInstance {
-                    pos: [ox, oy],
-                    size: [w, h],
-                    color,
-                    radius: [
-                        self.radius[3], // Bottom-Left -> Top-Left
-                        self.radius[2], // Bottom-Right -> Top-Right
-                        self.radius[1], // Top-Right -> Bottom-Right
-                        self.radius[0], // Top-Left -> Bottom-Left
-                    ],
-                    border_width: bw,
-                    border_color: bc.to_array(),
-                    shadow_color: self.shadow_color.map(|c| c.to_array()).unwrap_or([0.0, 0.0, 0.0, 0.0]),
-                    shadow_offset: self.shadow_offset,
-                    shadow_blur: self.shadow_blur,
-                    clip_rect: [-100000.0, -100000.0, 2000000.0, 2000000.0],
-                    grayscale: 0.0,
-                    brightness: 1.0,
-                    opacity: 1.0,
-                    color2,
-                    gradient_params,
-                    ..Default::default()
-                }
-            }));
+        if self.style.bg.is_some() || border_w > 0.0 {
+            if let Some(instance) = self.style.build_rect_styled(
+                ox,
+                oy,
+                w,
+                h,
+                self.style.bg.as_ref(),
+                self.style.border_color(),
+                Some(border_w),
+                1.0,
+            ) {
+                target_draws.push(DrawCommand::Rect(RectDraw { instance }));
+            }
         }
 
         // Process children layout and shifting
-        let inner_w = w - self.padding_left - self.padding_right - 2.0 * self.border_width;
-        let inner_h = h - self.padding_top - self.padding_bottom - 2.0 * self.border_width;
+        let inner_w = w - self.style.padding.horizontal() - 2.0 * border_w;
+        let inner_h = h - self.style.padding.vertical() - 2.0 * border_w;
 
         let clip = [ox + prev_offset_x, oy + prev_offset_y, w, h];
 
@@ -366,13 +252,13 @@ impl<'u, 'a> StackBuilder<'u, 'a> {
             if i >= child_sizes.len() { break; }
             let (cw, ch) = child_sizes[i];
 
-            let tx = ox + self.padding_left + self.border_width + match self.halign {
+            let tx = ox + self.style.padding.left + border_w + match self.halign {
                 Align::Center => (inner_w - cw).max(0.0) / 2.0,
                 Align::Right => inner_w - cw,
                 _ => 0.0,
             };
 
-            let ty = oy + self.padding_top + self.border_width + match self.valign {
+            let ty = oy + self.style.padding.top + border_w + match self.valign {
                 Align::Center => (inner_h - ch).max(0.0) / 2.0,
                 Align::Bottom => inner_h - ch,
                 _ => 0.0,
@@ -382,7 +268,7 @@ impl<'u, 'a> StackBuilder<'u, 'a> {
                 children_draws_mut
                     .get(*start)
                     .map(|d| draw_origin(d))
-                    .unwrap_or((ox + self.padding_left + self.border_width, oy + self.padding_top + self.border_width))
+                    .unwrap_or((ox + self.style.padding.left + border_w, oy + self.style.padding.top + border_w))
             });
 
             let dx = tx - origin_x;
@@ -426,7 +312,7 @@ impl<'u, 'a> StackBuilder<'u, 'a> {
 
         // Bubble IDs up to parent's scope
         self.ui.id_log.extend(child_ids_only);
-        
+
         if !self.is_absolute {
             self.ui.advance(adv_w, adv_h, advance_draw_start);
         }
@@ -502,9 +388,63 @@ fn intersect_rects(a: [f32; 4], b: [f32; 4]) -> [f32; 4] {
     let y1 = a[1].max(b[1]);
     let x2 = (a[0] + a[2]).min(b[0] + b[2]);
     let y2 = (a[1] + a[3]).min(b[1] + b[3]);
-    
+
     let w = (x2 - x1).max(0.0);
     let h = (y2 - y1).max(0.0);
-    
+
     [x1, y1, w, h]
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::collections::HashMap;
+    use zenthra_core::{Background, Border, Color};
+
+    #[test]
+    fn test_stack_box_style_parity() {
+        let mut scroll = HashMap::new();
+        let mut cursor = HashMap::new();
+        let mut inter = HashMap::new();
+        let l_cache = HashMap::new();
+        let mut nl_cache = HashMap::new();
+        let sl_cache = HashMap::new();
+        let mut nsl_cache = HashMap::new();
+        let ww_map = HashMap::new();
+        let mut nww_map = HashMap::new();
+        let img = HashMap::new();
+
+        let mut ui = Ui::new(
+            800, 600, 1.0, None, Vec::new(), None,
+            (0.0, 0.0), false,
+            &mut scroll, &mut cursor, &mut inter,
+            None, None, false, false, 0.0,
+            &l_cache, &mut nl_cache,
+            &sl_cache, &mut nsl_cache,
+            &ww_map, &mut nww_map,
+            &img,
+        );
+
+        let stack = ui.stack()
+            .width(300.0)
+            .height(200.0)
+            .padding_all(10.0)
+            .margin_all(5.0)
+            .radius_all(8.0)
+            .bg(Color::rgb(0.1, 0.12, 0.15))
+            .border((Color::rgb(0.3, 0.4, 0.5), 2.0))
+            .shadow(Color::rgba(0.0, 0.0, 0.0, 0.5), 0.0, 4.0, 12.0)
+            .halign(Align::Center)
+            .valign(Align::Center);
+
+        assert_eq!(stack.style.width, Some(300.0));
+        assert_eq!(stack.style.height, Some(200.0));
+        assert_eq!(stack.style.padding.top, 10.0);
+        assert_eq!(stack.style.margin.top, 5.0);
+        assert_eq!(stack.style.radius, [8.0; 4]);
+        assert_eq!(stack.style.bg, Some(Background::Solid(Color::rgb(0.1, 0.12, 0.15))));
+        assert_eq!(stack.style.border, Border::Solid(Color::rgb(0.3, 0.4, 0.5), 2.0));
+        assert_eq!(stack.halign, Align::Center);
+        assert_eq!(stack.valign, Align::Center);
+    }
 }

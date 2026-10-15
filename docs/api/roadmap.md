@@ -42,10 +42,10 @@ Unify all widgets and controls in `zenthra-widgets` to strictly conform to **[`d
 | **Numeric & Ranges** | `ProgressBar` | ✅ Complete | `BoxStyle` | Track & fill box styling, shimmer, and interaction states |
 | **Form Controls** | `Dropdown` | ✅ Complete | `BoxStyle` + `TextStyle` | Header box, item list, selection styling, portal overlay |
 | **Form Controls** | `DragValue` | ✅ Complete | `BoxStyle` + `TextStyle` | Interactive numeric drag field, modifier keys, in-place edit |
-| **Overlays** | `Menu` | ⏳ **Next Up** | `BoxStyle` + `TextStyle` | Menu bar, popup items |
-| **Overlays** | `Popover` | 📋 Scheduled | `BoxStyle` | Popover floating box |
-| **Layout & Media** | `Stack` | 📋 Scheduled | `BoxStyle` | Layered absolute / z-index stack |
-| **Layout & Media** | `Image` | 📋 Scheduled | `BoxStyle` | Border, radius, shadow for image elements |
+| **Overlays** | `Menu` | ✅ Complete | `BoxStyle` + `TextStyle` | Menu bar, cascading menus, flyout popup items |
+| **Overlays** | `Popover` | ✅ Complete | `BoxStyle` | Popover floating box |
+| **Layout & Media** | `Stack` | ✅ Complete | `BoxStyle` | Layered absolute / z-index stack |
+| **Layout & Media** | `Image` | ✅ Complete | `BoxStyle` | Border, radius, shadow for image elements |
 
 ---
 
@@ -71,6 +71,10 @@ Unify all widgets and controls in `zenthra-widgets` to strictly conform to **[`d
 * **`ProgressBar`**: Modernized with `BoxStyle` parity, granular radii, solid/gradient track & fill, shimmer, and hover/active states.
 * **`Dropdown`**: Header box migrated to `BoxStyle` + `TextStyle`, portal menu styling to `BoxStyle`, outside-click dismissal, and hover/active sibling state overrides.
 * **`DragValue`**: Numeric box migrated to `BoxStyle` + `TextStyle`, `focus_border`, modifier keys (Shift/Ctrl), and hover/active sibling state overrides.
+* **`Menu`**: `MenuBarBuilder`, `MenuBuilder`, and `MenuItemBuilder` unified with `BoxStyle` + `TextStyle` parity, popup styling, and Sibling hover/active state overrides.
+* **`Popover`**: Floating overlay container unified with `BoxStyle` + `Styleable` parity, adaptive placement engine, auto-flipping, and backdrop blur.
+* **`Stack`**: Multi-layer layout container unified with `BoxStyle` parity, child alignment (`halign`, `valign`), clipping, and backdrop blur.
+* **`Image`**: Hardware-accelerated image widget unified with `BoxStyle` parity, object-fit scaling, 3D perspective tilts, UV manipulation, and Sibling hover/active states.
 
 ### 3. Documentation Updated
 * [`docs/api/macros.md`](./macros.md) (Master Specification)
@@ -88,6 +92,10 @@ Unify all widgets and controls in `zenthra-widgets` to strictly conform to **[`d
 * [`docs/api/progress_bar.md`](./progress_bar.md)
 * [`docs/api/dropdown.md`](./dropdown.md)
 * [`docs/api/drag_value.md`](./drag_value.md)
+* [`docs/api/menu.md`](./menu.md)
+* [`docs/api/popover.md`](./popover.md)
+* [`docs/api/stack.md`](./stack.md)
+* [`docs/api/image.md`](./image.md)
 
 ---
 

@@ -168,6 +168,7 @@ fn get_clipboard_text() -> Option<String> {
         }
     }
 
+    #[cfg(not(target_os = "android"))]
     if let Ok(mut cb) = arboard::Clipboard::new() {
         if let Ok(text) = cb.get_text() {
             if !text.is_empty() {
@@ -195,7 +196,7 @@ fn get_clipboard_text() -> Option<String> {
     None
 }
 
-fn set_clipboard_text(text: &str) {
+fn set_clipboard_text(_text: &str) {
     #[cfg(target_os = "linux")]
     {
         if std::env::var_os("WAYLAND_DISPLAY").is_some() {
@@ -205,15 +206,16 @@ fn set_clipboard_text(text: &str) {
                 .spawn()
             {
                 if let Some(mut stdin) = child.stdin.take() {
-                    let _ = stdin.write_all(text.as_bytes());
+                    let _ = stdin.write_all(_text.as_bytes());
                 }
                 let _ = child.wait();
             }
         }
     }
 
+    #[cfg(not(target_os = "android"))]
     if let Ok(mut cb) = arboard::Clipboard::new() {
-        let _ = cb.set_text(text);
+        let _ = cb.set_text(_text);
     }
 }
 
