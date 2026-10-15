@@ -35,6 +35,7 @@ log               = { workspace = true }
 wgpu              = { workspace = true }
 winit             = { workspace = true }
 bytemuck          = { workspace = true }
+image             = { workspace = true }
 
 [[example]]
 name = "button"
@@ -96,4 +97,14 @@ path = "../../examples/drag_value.rs"
 name = "menu"
 path = "../../examples/menu.rs"
 
+[[example]]
+name = "popover"
+path = "../../examples/popover.rs"
 
+[[example]]
+name = "stack"
+path = "../../examples/stack.rs"
+
+[[example]]
+name = "image"
+path = "../../examples/image.rs"

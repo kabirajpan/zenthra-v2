@@ -379,7 +379,7 @@ impl<'a> Ui<'a> {
         let mut hasher = std::collections::hash_map::DefaultHasher::new();
         use std::hash::Hasher;
         id.hash(&mut hasher);
-        Id::from_u64(hasher.finish() & 0x00FF_FFFF_FFFF_FFFF)
+        Id::from_u64(hasher.finish())
     }
 
     pub fn overlay_key(&self, id: Id) -> Id {

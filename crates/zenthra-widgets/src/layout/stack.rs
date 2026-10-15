@@ -53,10 +53,7 @@ impl<'u, 'a> StackBuilder<'u, 'a> {
     }
 
     pub fn id(mut self, id: impl std::hash::Hash) -> Self {
-        let mut hasher = std::collections::hash_map::DefaultHasher::new();
-        use std::hash::Hasher;
-        id.hash(&mut hasher);
-        self.id = Id::from_u64(hasher.finish());
+        self.id = self.ui.id_from(id);
         self
     }
 
@@ -275,7 +272,9 @@ impl<'u, 'a> StackBuilder<'u, 'a> {
             let dy = ty - origin_y;
 
             for draw in &mut children_draws_mut[*start..*end] {
-                set_clip(draw, clip);
+                if self.clip {
+                    set_clip(draw, clip);
+                }
                 offset_draw(draw, dx, dy);
             }
 
@@ -284,6 +283,10 @@ impl<'u, 'a> StackBuilder<'u, 'a> {
                 for j in ids_start..ids_end {
                     let cid = child_ids_only[j];
                     if let Some((rect, _)) = self.ui.next_layout_cache.get_mut(&cid) {
+                        rect.origin.x += dx;
+                        rect.origin.y += dy;
+                    }
+                    if let Some(rect) = self.ui.next_screen_layout_cache.get_mut(&cid) {
                         rect.origin.x += dx;
                         rect.origin.y += dy;
                     }

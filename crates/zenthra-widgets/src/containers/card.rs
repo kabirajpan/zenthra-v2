@@ -65,10 +65,7 @@ impl<'u, 'a> CardBuilder<'u, 'a> {
 
     #[inline]
     pub fn id(mut self, id: impl std::hash::Hash) -> Self {
-        let mut hasher = std::collections::hash_map::DefaultHasher::new();
-        use std::hash::Hasher;
-        id.hash(&mut hasher);
-        self.id = Id::from_u64(hasher.finish());
+        self.id = self.ui.id_from(id);
         self
     }
 

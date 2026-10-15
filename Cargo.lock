@@ -3369,6 +3369,7 @@ name = "zenthra"
 version = "0.2.4"
 dependencies = [
  "bytemuck",
+ "image 0.24.9",
  "log",
  "wgpu",
  "winit",
