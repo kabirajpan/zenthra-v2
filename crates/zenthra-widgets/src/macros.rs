@@ -555,18 +555,6 @@ impl Animation {
     }
 }
 
-/// Free helper to create a tooltip directly: `tooltip("...")`
-#[inline]
-pub fn tooltip(msg: impl Into<String>) -> StateProp {
-    Tooltip::new(msg)
-}
-
-/// Free helper to create a scale directly: `scale(1.03)`
-#[inline]
-pub fn scale(s: f32) -> StateProp {
-    Transform::scale(s)
-}
-
 /// Stored overrides to apply when a widget is in a state (hover, active, focus).
 #[derive(Debug, Clone, PartialEq)]
 pub struct WidgetStateOverrides {

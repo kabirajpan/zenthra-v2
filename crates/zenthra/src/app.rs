@@ -482,6 +482,10 @@ impl App {
                                 zenthra_core::ImageSource::Bytes(b) => {
                                     zenthra_render::texture::create_texture_bind_group(&device, queue, &ip.texture_bgl, b).ok()
                                 }
+                                zenthra_core::ImageSource::Rgba { width, height, pixels, .. } => {
+                                    let (bg, w, h) = zenthra_render::texture::create_raw_rgba_bind_group(&device, queue, &ip.texture_bgl, pixels, *width, *height);
+                                    Some((bg, w, h))
+                                }
                                 _ => None,
                             };
                             if let Some((bg, w, h)) = sync_res {
@@ -765,6 +769,10 @@ impl App {
                                                 }
                                                 zenthra_core::ImageSource::Bytes(b) => {
                                                     zenthra_render::texture::create_texture_bind_group(&device2, &queue2, &bgl2, b).map_err(|e| format!("{e:?}"))
+                                                }
+                                                zenthra_core::ImageSource::Rgba { width, height, pixels, .. } => {
+                                                    let (bg, w, h) = zenthra_render::texture::create_raw_rgba_bind_group(&device2, &queue2, &bgl2, pixels, *width, *height);
+                                                    Ok((bg, w, h))
                                                 }
                                             };
                                             let _ = tx2.send((source2, result));

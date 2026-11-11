@@ -1385,8 +1385,8 @@ impl<'u, 'a, 'b> TextAreaBuilder<'u, 'a, 'b> {
         if self.scrollable || effective_scrollable {
             self.ui.scroll_state.insert(self.id, (scroll_x, scroll_y));
 
-            // --- 5.5 Render Scroll Bar ---
-            if h_content > h_box - self.style.padding.vertical() {
+            // --- 5.5 Render Scroll Bar (only if content has been entered by user) ---
+            if !self.buffer.is_empty() && h_content > h_box - self.style.padding.vertical() {
                 let usable_h = h_box - self.style.padding.vertical();
                 let scroll_bar_w = 3.0;
                 let scroll_bar_x = self.x + actual_width - scroll_bar_w - 2.0;

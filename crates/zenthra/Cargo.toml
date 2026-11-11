@@ -108,3 +108,7 @@ path = "../../examples/stack.rs"
 [[example]]
 name = "image"
 path = "../../examples/image.rs"
+
+[[example]]
+name = "splitter"
+path = "../../examples/splitter.rs"

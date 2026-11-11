@@ -1074,6 +1074,10 @@ impl<'a> Ui<'a> {
     pub fn stack(&mut self) -> crate::layout::StackBuilder<'_, 'a> {
         crate::layout::StackBuilder::new(self)
     }
+
+    pub fn splitter<'b>(&mut self, value: &'b mut f32, range: std::ops::RangeInclusive<f32>) -> crate::layout::SplitterBuilder<'_, 'a, 'b> {
+        crate::layout::SplitterBuilder::new(self, value, range)
+    }
 }
 
 /// A helper to get the default Zentype shaper for the current font system.

@@ -5,6 +5,12 @@ pub enum ImageSource {
     Path(PathBuf),
     Bytes(std::sync::Arc<[u8]>),
     Thumbnail(PathBuf),
+    Rgba {
+        id: u64,
+        width: u32,
+        height: u32,
+        pixels: std::sync::Arc<[u8]>,
+    },
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]

@@ -12,10 +12,10 @@ pub use zenthra_widgets::text::{FontWeight, CursorIcon, TextWrap, FontStyle};
 pub use zenthra_widgets::{
     Ui, ButtonBuilder, ContainerBuilder, InputBuilder, SliderBuilder, TextBuilder,
     TextAreaBuilder, FloatingWindowBuilder, ImageBuilder, CardBuilder, PanelBuilder,
-    StackBuilder, ProgressBarBuilder, CheckboxBuilder, ToggleBuilder, RadioBuilder, DropdownBuilder,
+    StackBuilder, SplitterBuilder, ProgressBarBuilder, CheckboxBuilder, ToggleBuilder, RadioBuilder, DropdownBuilder,
     MenuBarBuilder, MenuBuilder, MenuItemBuilder, PopoverBuilder, DragValueBuilder, NumericValue, icons,
     TextDecoration, IntoDecoration, StateProp, Style, Text, Transform, Cursor, Tooltip, Animation,
-    IntoStateProps, tooltip, scale,
+    IntoStateProps,
 };
 pub use zenthra_platform::app::WindowAction;
 pub use zenthra_platform::event::{PlatformEvent, KeyCode};
@@ -38,10 +38,10 @@ pub mod prelude {
     pub use zenthra_widgets::{
         Ui, ButtonBuilder, ContainerBuilder, InputBuilder, SliderBuilder, TextBuilder,
         TextAreaBuilder, FloatingWindowBuilder, ImageBuilder, CardBuilder, PanelBuilder,
-        StackBuilder, ProgressBarBuilder, CheckboxBuilder, ToggleBuilder, RadioBuilder, DropdownBuilder,
+        StackBuilder, SplitterBuilder, ProgressBarBuilder, CheckboxBuilder, ToggleBuilder, RadioBuilder, DropdownBuilder,
         MenuBarBuilder, MenuBuilder, MenuItemBuilder, PopoverBuilder, DragValueBuilder, NumericValue, icons,
         TextDecoration, IntoDecoration, StateProp, Style, Text, Transform, Cursor, Tooltip, Animation,
-        IntoStateProps, tooltip, scale, AnimationCurve, AnimationLoop, AnimationConfig,
+        IntoStateProps, AnimationCurve, AnimationLoop, AnimationConfig,
     };
     pub use zenthra_platform::app::WindowAction;
     pub use zenthra_platform::event::{PlatformEvent, KeyCode};

@@ -2,3 +2,6 @@
 
 pub mod stack;
 pub use stack::StackBuilder;
+
+pub mod splitter;
+pub use splitter::SplitterBuilder;

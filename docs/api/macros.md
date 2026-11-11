@@ -192,9 +192,9 @@ ui.card()
 | :--- | :--- | :--- | :--- |
 | **`Style`** | Surfaces & Box Geometry | `.bg(...)`<br>`.border(...)`<br>`.shadow(color, x, y, blur)`<br>`.radius(...)`, `.radius_all(...)`<br>`.padding(...)`, `.padding_all(...)`<br>`.margin(...)`, `.margin_all(...)`<br>`.width(...)`, `.height(...)`<br>`.opacity(f32)`<br>`.backdrop_blur(f32)` | `Style::bg(Color::rgb(0.2, 0.2, 0.3))`<br>`Style::border((Color::WHITE, 1.0))` |
 | **`Text`** | Typography & Glyphs | `.color(Color)`<br>`.size(f32)`<br>`.underline(bool)`<br>`.font_weight(FontWeight)` | `Text::color(Color::rgb(0.9, 0.9, 1.0))`<br>`Text::underline(true)` |
-| **`Transform`** | Spatial Coordinates & Micro-motion | `.scale(f32)`<br>`Transform::scale(1.03)` or `scale(1.03)` | `Transform::scale(1.04)` |
+| **`Transform`** | Spatial Coordinates & Micro-motion | `Transform::scale(f32)` | `Transform::scale(1.03)` |
 | **`Cursor`** | Mouse Cursor Visual Feedback | `Cursor::Pointer`<br>`Cursor::Grab`<br>`Cursor::Grabbing`<br>`Cursor::Text`<br>`Cursor::Crosshair`<br>`Cursor::ColResize`<br>`Cursor::RowResize`<br>`Cursor::Default`<br>`.icon(CursorIcon)` | `Cursor::Pointer` |
-| **`Tooltip`** | Floating Context Hints | `Tooltip::new(&str)`<br>or `tooltip(&str)` | `Tooltip::new("Click to open")`<br>`tooltip("Helpful tip")` |
+| **`Tooltip`** | Floating Context Hints | `Tooltip::new(&str)` | `Tooltip::new("Click to open")` |
 | **`Animation`** | Motion Timing & Transitions | `.duration(ms)`<br>`.delay(ms)`<br>`.ease_out()`, `.ease_in()`, `.ease_in_out()`, `.linear()`<br>`.spring()`, `.spring_bouncy()`, `.spring_smooth()`<br>`.pulse()`, `.shimmer()`<br>`.none()` | `Animation::duration(200).ease_out()`<br>`Animation::spring()` |
 
 #### Zero Allocation Guarantee
@@ -230,6 +230,7 @@ The table below catalogs every primary user-facing endpoint on `Ui`, which macro
 | **`ui.panel()`** | `PanelBuilder` | `impl_box_style_methods!` | **Box**: Full BoxStyle methods<br>**Header**: `.title()`, `.subtitle()`, `.header_bg()`, `.header_padding()`<br>**Collapsible**: `.collapsed(&mut bool)` | `.show(\|ui\| { ... })` | `Response` |
 | **`ui.slider(&mut val, range)`** | `SliderBuilder` | `impl_box_style_methods!`<br>`impl_interaction_state_methods!` | **Box**: Full BoxStyle methods<br>**Track**: `.track_height()`, `.track_radius_all()`, `.track_bg()`, `.track_color()`, `.track_gradient()`, `.track_shadow()`<br>**Thumb**: `.thumb_width()`, `.thumb_height()`, `.thumb_radius_all()`, `.thumb_bg()`, `.thumb_gradient()`, `.thumb_shadow()`<br>**Interactions**: `.hover([ ... ])`, `.active([ ... ])` | `.show()` | `Response` |
 | **`ui.progress_bar(val)`** | `ProgressBarBuilder` | `impl_box_style_methods!`<br>`impl_interaction_state_methods!` | **Box**: Full BoxStyle methods<br>**Track**: `.track_height()`, `.track_radius_all()`, `.track_bg()`, `.track_color()`, `.track_gradient()`, `.track_shadow()`<br>**Fill**: `.fill_color()`, `.fill_gradient()`, `.fill_bg()`, `.fill_radius_all()`, `.fill_shadow()`<br>**Effects**: `.shimmer(bool)`<br>**Interactions**: `.hover([ ... ])`, `.active([ ... ])` | `.show()` | `Response` |
+| **`ui.splitter(&mut val, range)`** | `SplitterBuilder` | `impl_box_style_methods!`<br>`impl_interaction_state_methods!` | **Box**: `.width()`, `.height()`, `.fill_x()`, `.fill_y()`, `.bg()`, `.border()`, `.radius()`<br>**Interactions**: `.hover([ ... ])`, `.active([ ... ])`<br>**Mechanics**: `.invert(bool)` | `.show()` | `Response` |
 
 ---
 
@@ -391,6 +392,28 @@ ui.text_area(&mut code_buffer)
     .scrollable(true)
     .show();
 ```
+
+#### 6. Splitter Endpoint (`ui.splitter(&mut val, range)`)
+```rust
+// A. Resizable sidebar divider (vertical line dividing horizontally):
+ui.splitter(&mut sidebar_w, 160.0..=480.0)
+    .width(4.0)
+    .fill_y()
+    .bg(Color::rgb(0.15, 0.17, 0.23))
+    .hover(Style::bg(Color::rgb(0.35, 0.60, 1.0)))
+    .active(Style::bg(Color::rgb(0.50, 0.75, 1.0)))
+    .show();
+
+// B. Resizable bottom terminal divider (horizontal line dividing vertically):
+ui.splitter(&mut terminal_h, 80.0..=500.0)
+    .fill_x()
+    .height(4.0)
+    .bg(Color::rgb(0.15, 0.17, 0.23))
+    .hover(Style::bg(Color::rgb(0.35, 0.60, 1.0)))
+    .invert(true) // Dragging up expands bottom panel
+    .show();
+```
+
 
 ---
 
