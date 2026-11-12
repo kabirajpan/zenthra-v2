@@ -233,6 +233,11 @@ impl<'u, 'a> MenuBuilder<'u, 'a> {
         self
     }
 
+    pub fn popup_width(mut self, width: f32) -> Self {
+        self.popup_style.width = Some(width);
+        self
+    }
+
     pub fn popup_bg(mut self, bg: impl Into<Background>) -> Self {
         match bg.into() {
             Background::None => self.popup_style.bg = None,
