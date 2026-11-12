@@ -54,6 +54,19 @@ impl App {
         self.platform = self.platform.title(t);
         self
     }
+    pub fn app_id(mut self, id: impl Into<String>) -> Self {
+        self.platform = self.platform.app_id(id);
+        self
+    }
+    pub fn icon(mut self, icon: winit::window::Icon) -> Self {
+        self.platform = self.platform.icon(icon);
+        self
+    }
+    pub fn icon_from_rgba(mut self, rgba: Vec<u8>, width: u32, height: u32) -> Result<Self, winit::window::BadIcon> {
+        let icon = winit::window::Icon::from_rgba(rgba, width, height)?;
+        self.platform = self.platform.icon(icon);
+        Ok(self)
+    }
     pub fn size(mut self, w: u32, h: u32) -> Self {
         self.platform = self.platform.size(w, h);
         self

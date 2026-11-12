@@ -46,6 +46,8 @@ pub struct App {
     decorations: bool,
     transparent: bool,
     blur: bool,
+    app_id: Option<String>,
+    icon: Option<winit::window::Icon>,
     draw_fn: Option<Box<dyn FnMut(&mut Frame) -> bool + 'static>>,
     cursor_filter: Option<Box<dyn FnMut(f64, f64) -> bool + 'static>>,
 }
@@ -59,6 +61,8 @@ impl App {
             decorations: true,
             transparent: false,
             blur: false,
+            app_id: None,
+            icon: None,
             draw_fn: None,
             cursor_filter: None,
         }
@@ -67,6 +71,22 @@ impl App {
     pub fn title(mut self, t: &str) -> Self {
         self.title = t.to_string();
         self
+    }
+
+    pub fn app_id(mut self, id: impl Into<String>) -> Self {
+        self.app_id = Some(id.into());
+        self
+    }
+
+    pub fn icon(mut self, icon: winit::window::Icon) -> Self {
+        self.icon = Some(icon);
+        self
+    }
+
+    pub fn icon_from_rgba(mut self, rgba: Vec<u8>, width: u32, height: u32) -> Result<Self, winit::window::BadIcon> {
+        let icon = winit::window::Icon::from_rgba(rgba, width, height)?;
+        self.icon = Some(icon);
+        Ok(self)
     }
 
     pub fn size(mut self, w: u32, h: u32) -> Self {
@@ -127,6 +147,8 @@ impl App {
             decorations: self.decorations,
             transparent: self.transparent,
             blur: self.blur,
+            app_id: self.app_id,
+            icon: self.icon,
             draw_fn: self.draw_fn,
             cursor_filter: self.cursor_filter,
             window: None,
@@ -158,6 +180,8 @@ struct AppRunner {
     decorations: bool,
     transparent: bool,
     blur: bool,
+    app_id: Option<String>,
+    icon: Option<winit::window::Icon>,
     draw_fn: Option<Box<dyn FnMut(&mut Frame) -> bool + 'static>>,
     cursor_filter: Option<Box<dyn FnMut(f64, f64) -> bool + 'static>>,
     window: Option<Window>,
@@ -255,6 +279,8 @@ impl ApplicationHandler for AppRunner {
                 self.decorations,
                 self.transparent,
                 self.transparent && self.blur,
+                self.app_id.as_deref(),
+                self.icon.clone(),
             ));
             window.request_redraw();
             self.window = Some(window);

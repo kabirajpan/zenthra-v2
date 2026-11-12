@@ -16,17 +16,36 @@ impl Window {
         decorations: bool,
         transparent: bool,
         blur: bool,
+        app_id: Option<&str>,
+        icon: Option<winit::window::Icon>,
     ) -> Self {
-        let attrs = winit::window::Window::default_attributes()
+        #[allow(unused_mut)]
+        let mut attrs = winit::window::Window::default_attributes()
             .with_title(title)
             .with_inner_size(winit::dpi::LogicalSize::new(width, height))
             .with_decorations(decorations)
             .with_transparent(transparent)
             .with_blur(blur);
 
+        #[cfg(target_os = "linux")]
+        {
+            use winit::platform::wayland::WindowAttributesExtWayland;
+            use winit::platform::x11::WindowAttributesExtX11;
+            let id = app_id.unwrap_or("zenthree");
+            attrs = WindowAttributesExtWayland::with_name(attrs, id, id);
+            attrs = WindowAttributesExtX11::with_name(attrs, id, id);
+        }
+
+        if let Some(ref icon) = icon {
+            attrs = attrs.with_window_icon(Some(icon.clone()));
+        }
+
         let winit_window = Arc::new(event_loop.create_window(attrs).unwrap());
         if blur {
             winit_window.set_blur(true);
+        }
+        if let Some(icon) = icon {
+            winit_window.set_window_icon(Some(icon));
         }
         let gpu = GpuContext::new(winit_window.clone()).await;
 
